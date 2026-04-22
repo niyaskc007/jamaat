@@ -1,0 +1,47 @@
+{
+  "app": {
+    "name": "Jamaat",
+    "tagline": "Donation, Receipt, Payment & Accounting"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "print": "Print",
+    "preview": "Preview",
+    "reset": "Reset",
+    "newReceipt": "New Receipt",
+    "newVoucher": "New Voucher"
+  },
+  "nav": {
+    "sectionOperations": "Operations",
+    "sectionAccounting": "Accounting",
+    "sectionAdmin": "Administration",
+    "dashboard": "Dashboard",
+    "members": "Members",
+    "receipts": "Receipts",
+    "vouchers": "Payment Vouchers",
+    "ledger": "Ledger",
+    "reports": "Reports",
+    "users": "Users & Roles",
+    "masterData": "Master Data",
+    "integrations": "Integrations",
+    "audit": "Audit Log",
+    "errorLogs": "Error Logs",
+    "profile": "Profile",
+    "logout": "Logout",
+    "settings": "Settings"
+  },
+  "status": {
+    "loading": "Loading…",
+    "empty": "No records",
+    "error": "Something went wrong"
+  },
+  "search": {
+    "placeholder": "Search members, receipts, vouchers…"
+  }
+}

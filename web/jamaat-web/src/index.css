@@ -1,0 +1,43 @@
+@import './app/tokens.css';
+
+/* Fonts — Inter & Inter Tight (variable) via Google Fonts.
+   Harmless in dev without CDN; font-display:swap falls back cleanly. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap');
+
+html, body, #root {
+  block-size: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: var(--jm-font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--jm-gray-800);
+  background: var(--jm-surface-sunken);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--jm-font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* Focus ring — accessible + branded */
+:focus-visible { outline: 2px solid var(--jm-primary-500); outline-offset: 2px; }
+
+/* Selection colour */
+::selection { background: var(--jm-primary-100); color: var(--jm-primary-800); }
+
+/* Scrollbar (subtle) */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--jm-gray-300); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--jm-gray-400); background-clip: padding-box; }
+::-webkit-scrollbar-track { background: transparent; }

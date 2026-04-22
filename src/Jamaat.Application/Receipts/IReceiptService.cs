@@ -1,0 +1,25 @@
+using Jamaat.Application.Common;
+using Jamaat.Contracts.Receipts;
+using Jamaat.Domain.Common;
+
+namespace Jamaat.Application.Receipts;
+
+public interface IReceiptService
+{
+    Task<PagedResult<ReceiptListItemDto>> ListAsync(ReceiptListQuery q, CancellationToken ct = default);
+    Task<Result<ReceiptDto>> GetAsync(Guid id, CancellationToken ct = default);
+    Task<Result<ReceiptDto>> CreateAndConfirmAsync(CreateReceiptDto dto, CancellationToken ct = default);
+    Task<Result<ReceiptDto>> CancelAsync(Guid id, CancelReceiptDto dto, CancellationToken ct = default);
+    Task<Result<ReceiptDto>> ReverseAsync(Guid id, ReverseReceiptDto dto, CancellationToken ct = default);
+    Task<Result> LogReprintAsync(Guid id, ReprintReceiptDto dto, CancellationToken ct = default);
+    Task<Result<byte[]>> RenderPdfAsync(Guid id, bool reprint, CancellationToken ct = default);
+}
+
+public interface IReceiptRepository
+{
+    Task<Domain.Entities.Receipt?> GetByIdAsync(Guid id, CancellationToken ct = default);
+    Task<Domain.Entities.Receipt?> GetWithLinesAsync(Guid id, CancellationToken ct = default);
+    Task<PagedResult<ReceiptListItemDto>> ListAsync(ReceiptListQuery q, CancellationToken ct = default);
+    Task AddAsync(Domain.Entities.Receipt e, CancellationToken ct = default);
+    void Update(Domain.Entities.Receipt e);
+}

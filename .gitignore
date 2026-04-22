@@ -1,0 +1,65 @@
+# Build output
+bin/
+obj/
+out/
+dist/
+build/
+
+# VS / Rider / VSCode
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+.npm/
+.pnp.*
+coverage/
+.eslintcache
+
+# Vite
+.vite/
+*.local
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.development
+
+# EF Core
+*.mdf
+*.ldf
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Docker
+.dockerignore
+
+# Claude Code session state
+.claude/
+
+# Runtime uploads (member photos, event assets, etc.)
+App_Data/
+src/Jamaat.Api/App_Data/
+
+# Secrets / local overrides
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+*.user.json

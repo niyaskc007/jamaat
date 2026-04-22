@@ -1,0 +1,6 @@
+@Jamaat.Api_HostAddress = http://localhost:5174
+
+GET {{Jamaat.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

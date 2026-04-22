@@ -1,0 +1,150 @@
+===== SHEET: User Login =====
+===== SHEET: User Profile =====
+R1: ITS_ID | 40498894 | 40466076 | 40913038 | 40162521 | 40211225
+R2: HOF_FM_TYPE | HOF | FM | FM | FM | FM
+R3: HOF_ID | 40498894 | 40498894 | 40498894 | 40498894 | 40498894
+R4: Family_ID | 40498894 | 40498894 | 40498894 | 40498894 | 40498894
+R5: Father_ITS_ID | 20367767 | 20388913 | 40498894 | 40498894 | 40498894
+R6: Mother_ITS_ID | 40498893 | 40466074 | 40466076 | 40466076 | 40466076
+R7: Spouse_ITS_ID | 40466076 | 40498894
+R8: TanzeemFile_No | 147 | 147 | 147 | 147 | 147
+R9: Full_Name | Mulla Husain bhai Saifuddin bhai Chawalwala | Sarrah bai Mulla Husain bhai Chawalwala | Alaqmar bhai Mulla Husain bhai Chawalwala | Mohammed bhai Mulla Husain bhai Chawalwala | Taher bhai Mulla Husain bhai Chawalwala
+R10: Full_Name_Arabic | ملا حسين بهائي  سيف الدين بهائي ححاول والا | سارة بائي ملا حسين بهائي ححاول والا | الاقمر بهائي ملا حسين بهائي ححاول والا | محمد بهائي ملا حسين بهائي ححاول والا | طاهر بهائي ملا حسين بهائي ححاول والا
+R11: First_Prefix | Mulla
+R12: Prefix_Year | 1444
+R13: First_Name | Husain | Sarrah | Alaqmar | Mohammed | Taher
+R14: Father_Prefix |  |  | Mulla | Mulla | Mulla
+R15: Father_Name | Saifuddin | Fidahusain | Husain | Husain | Husain
+R16: Father_Surname | Chawalwala | Shaikhbhai | Chawalwala | Chawalwala | Chawalwala
+R17: Husband_Prefix |  | Mulla
+R18: Husband_Name |  | Husain
+R19: Surname | Chawalwala | Chawalwala | Chawalwala | Chawalwala | Chawalwala
+R20: Age | 42 | 40 | 13 | 9 | 5
+R21: Gender | Male | Female | Male | Male | Male
+R22: Misaq | Done | Done | Not Done | Not Done | Not Done
+R23: Marital_Status | Married | Married | Single | Single | Single
+R24: Blood_Group | B +ve | A +ve | B +ve | O +ve | B +ve
+R25: Warakatul_Tarkhis | Green | Green | Not Obtained | Not Obtained | Not Obtained
+R26: Date_Of_Nikah | 30-Mar-2010 | 30-Mar-2010
+R27: Date_Of_Nikah_Hijri | 15 Rabiul Akhar 1431H. | 15 Rabiul Akhar 1431H.
+R28: Mobile | +971503764552 | +971554718482 | +971503764552 | +971503764552 | +971503764552
+R29: Email | hussainsaifuddin@gmail.com | hussainsaifuddin@gmail.com | hussainsaifuddin@gmail.com | hussainsaifuddin@gmail.com | hussainsaifuddin@gmail.com
+R30: WhatsApp_No | +971503764552 | +971554718482 | +971503764552 | +971503764552 | +971503764552
+R31: Title | NKD
+R32: Category
+R33: Idara
+R34: Organisation | Shababil Eidz-Zahabi | Alaqeeq | Zakereen
+R35: Organisation_CSV | Shababil Eidz-Zahabi - Member, Tanzeem Committee - Member, Nazafat / Environment Committee  - Member | Bunayyaat ul Eid iz Zahabi - Treasurer, Alaqeeq - Maliyah_Member | Zakereen - R, Hizb ul Watan - Member | Hizb ul Watan - Member | Hizb ul Watan - Member
+R36: Vatan | Karachi | Karachi | Karachi | Karachi | Karachi
+R37: Nationality | Pakistani | Pakistani | Pakistani | Pakistani | Pakistani
+R38: Jamaat | AJMAN | AJMAN | AJMAN | AJMAN | AJMAN
+R39: Jamiaat | Khaleej | Khaleej | Khaleej | Khaleej | Khaleej
+R40: Qualification | Graduate | Graduate | Secondary | Primary | Primary
+R41: Languages | Lisaan -ud- Dawat, English, Urdu | English, Arabic, Urdu | Lisaan -ud- Dawat, English, Arabic, Urdu | Lisaan -ud- Dawat, English, Arabic, Urdu | Lisaan -ud- Dawat, English
+R42: Hunars | Cricket, Fitness / Bootcamp | Cooking, Fruit Sculpturing | - | - | -
+R43: Occupation | Service | Home Industry | Student | Student | Student
+R44: Sub_Occupation | IT | Rida Designing | Student | Student | Student
+R45: Sub_Occupation2 | IT Manager
+R46: Quran_Sanad |  |  | Marhala Ula
+R47: Qadambosi_Sharaf | Yes | Yes | Yes | Yes | Yes
+R48: Raudat_Tahera_Ziyarat | Yes | Yes | Yes | Yes | Yes
+R49: Karbala_Ziyarat | Yes | Yes | Yes | No | No
+R50: Ashara_Mubaraka | 10 | 7 | 6 | 6 | 3
+R51: Housing | Ownership | Ownership | Ownership | Ownership | Ownership
+R52: Type_of_House | Flat | Flat | Flat | Flat | Flat
+R53: Address | 203 Hatemi Apt. Opposite Ajman Hakimi Masjid | 203 Hatemi Apt. Opposite Ajman Hakimi Masjid | 203 Hatemi Apt. Opposite Ajman Hakimi Masjid | 203 Hatemi Apt. Opposite Ajman Hakimi Masjid | 203 Hatemi Apt. Opposite Ajman Hakimi Masjid
+R54: Building | Hatemi Apartments | Hatemi Apartments | Hatemi Apartments | Hatemi Apartments | Hatemi Apartments
+R55: Street
+R56: Area
+R57: State | Ajman | Ajman | Ajman | Ajman | Ajman
+R58: City | Ajman | Ajman | Ajman | Ajman | Ajman
+R59: Pincode | 00000 | 00000 | 00000 | 00000 | 00000
+R60: Sector | HATEMI | HATEMI | HATEMI | HATEMI | HATEMI
+R61: Sub_Sector | 2nd Floor | 2nd Floor | 2nd Floor | 2nd Floor | 2nd Floor
+R62: Inactive_Status
+R63: Data_Verifcation_Status | Verified | Verified | Verified | Verified | Verified
+R64: Data_Verification_Date | 30 Dec 24 | 12 Feb 25 | 12 Feb 25 | 21 Feb 25 | 21 Feb 25
+R65: Photo_Verifcation_Status | Verfied | Verfied | Verfied | Verfied | Verfied
+R66: Photo_Verification_Date | 12 Apr 21 | 28 Feb 25 | 04 Mar 25 | 28 Feb 25 | 10 Jun 21
+R67: Last_Scanned_Event | Urs Mubarak, 47th al-Dai al-Mutlaq Syedna AbdulQadir Najmuddin RA | 19mi Raat - Urs Mubarak, 51st al-Dai al-Mutlaq Syedna Taher Saifuddin RA | 19mi Raat - Urs Mubarak, 51st al-Dai al-Mutlaq Syedna Taher Saifuddin RA | 19mi Raat - Urs Mubarak, 51st al-Dai al-Mutlaq Syedna Taher Saifuddin RA | 19mi Raat - Urs Mubarak, 51st al-Dai al-Mutlaq Syedna Taher Saifuddin RA
+R68: Last_Scanned_Place | AJMAN | AJMAN | AJMAN | AJMAN | AJMAN
+R69: Sector_Incharge_ITSID | 40459344 | 40459344 | 40459344 | 40459344 | 40459344
+R70: Sector_Incharge_Name | Shaikh Mufaddal bhai Idris bhai Partabgadhwala | Shaikh Mufaddal bhai Idris bhai Partabgadhwala | Shaikh Mufaddal bhai Idris bhai Partabgadhwala | Shaikh Mufaddal bhai Idris bhai Partabgadhwala | Shaikh Mufaddal bhai Idris bhai Partabgadhwala
+R71: Sector_Incharge_Female_ITSID | 40436037 | 40436037 | 40436037 | 40436037 | 40436037
+R72: Sector_Incharge_Female_Name | Farida bai Hatim bhai Al yamani | Farida bai Hatim bhai Al yamani | Farida bai Hatim bhai Al yamani | Farida bai Hatim bhai Al yamani | Farida bai Hatim bhai Al yamani
+R73: Sub_Sector_Incharge_ITSID | 20354878 | 20354878 | 20354878 | 20354878 | 20354878
+R74: Sub_Sector_Incharge_Name | Mulla Shabbir bhai Ghulamhusain bhai Mhowwala | Mulla Shabbir bhai Ghulamhusain bhai Mhowwala | Mulla Shabbir bhai Ghulamhusain bhai Mhowwala | Mulla Shabbir bhai Ghulamhusain bhai Mhowwala | Mulla Shabbir bhai Ghulamhusain bhai Mhowwala
+R75: Sub_Sector_Incharge_Female_ITSID | 30460418 | 30460418 | 30460418 | 30460418 | 30460418
+R76: Sub_Sector_Incharge_Female_Name | Sakina bai Mulla Shabbir bhai Mhowwala | Sakina bai Mulla Shabbir bhai Mhowwala | Sakina bai Mulla Shabbir bhai Mhowwala | Sakina bai Mulla Shabbir bhai Mhowwala | Sakina bai Mulla Shabbir bhai Mhowwala
+===== SHEET: Sabil Account =====
+R1: Sabil ID | AJM_01
+R2: Sabil_Type
+R3: ITS_ID | 40498894
+R4: Full_Name | Mulla Husain bhai Saifuddin bhai Chawalwala
+R5: Recurrance Type | Yearly
+R6: Account Start Date
+R7: Account End Date
+R8: Created Date
+R9: Created By
+R10: Approver Name
+R11: Approver Date
+===== SHEET: Wajebaat Account =====
+R1: WAJ ID
+R2: WAJ_Type
+R3: ITS_ID
+R4: Full_Name
+R5: Recurrance Type
+R6: Account Start Date
+R7: Account End Date
+R8: Created Date
+R9: Created By
+R10: Approver Name
+R11: Approver Date
+===== SHEET: Mutafariq Account =====
+R1: MUT ID
+R2: MUT_Type
+R3: ITS_ID
+R4: Full_Name
+R5: Recurrance Type
+R6: Account Start Date
+R7: Account End Date
+R8: Created Date
+R9: Created By
+R10: Approver Name
+R11: Approver Date
+===== SHEET: QH Account =====
+R1: QH ID
+R2: QH_Type
+R3: ITS_ID
+R4: Full_Name
+R5: QH Start Date
+R6: QH End Date
+R7: Amount Requested
+R8: Amount Approved
+R9: Instalments Requested
+R10: Instalments Approved
+R11: Gold Amount
+R12: Guarantee Name 01
+R13: Guarantee Name 02
+R14: Documents Attachments | Cashflow | Gold Slip
+R15: Created Date
+R16: Created By
+R17: Approver Level 01
+R18: Approver Level 01 Date
+R19: Approver Level 02
+R20: Approver Level 02 Date
+===== SHEET: Receipt =====
+R1: Date | Receipt_ID | ITS No | Account Type | Account Name List | Payment Type | Amount | Created By | Created date
+R2:  |  |  | Receipt | Sabeel | Bank / Cash
+R3:  |  |  |  | Wajebaat
+R4:  |  |  |  | QH
+R5:  |  |  |  | Mutafariq
+R6:  |  |  |  | Niyaz 
+===== SHEET: Payment =====
+===== SHEET: Lookups =====
+R1: Payment Type |  | Sabil Type |  |  | Voucher Type
+R2: Bank |  | Individual |  |  | Sabeel | Professional | Indivdual | Establishment
+R3: Cash |  | Profesional |  |  | Wajebaat | Local | International
+R4:  |  | Establishment |  |  | Qarzan Hasana | Mohammadi Scheme | Hussain Scheme
+R5:  |  |  |  |  | Niyaz | Local | International | LQ
+R6:  |  |  |  |  | Mutafariq

@@ -1,0 +1,30 @@
+root = true
+
+[*]
+indent_style = space
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+charset = utf-8
+
+[*.{cs,csproj,props,targets}]
+indent_size = 4
+
+[*.{ts,tsx,js,jsx,json,yml,yaml,html,css,md}]
+indent_size = 2
+
+[*.cs]
+# Analyzer severities aligned with Directory.Build.props NoWarn list
+dotnet_diagnostic.CA1716.severity = none
+dotnet_diagnostic.CA1724.severity = none
+dotnet_diagnostic.CA1725.severity = none
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA2007.severity = none
+dotnet_diagnostic.CA1062.severity = none
+dotnet_diagnostic.CA1861.severity = none
+
+csharp_new_line_before_open_brace = all
+csharp_prefer_braces = true:suggestion
+csharp_style_namespace_declarations = file_scoped:suggestion
+csharp_using_directive_placement = outside_namespace:suggestion
+dotnet_diagnostic.IDE0161.severity = suggestion

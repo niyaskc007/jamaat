@@ -1,0 +1,101 @@
+/* =============================================================
+   Jamaat design tokens
+   Palette: deep teal + soft gold + warm neutrals
+   ============================================================= */
+
+:root {
+  /* Brand */
+  --jm-primary-50:  #EAF5F2;
+  --jm-primary-100: #CFE6DF;
+  --jm-primary-200: #9FCDBF;
+  --jm-primary-300: #5FAE98;
+  --jm-primary-400: #22907A;
+  --jm-primary-500: #0B6E63;  /* brand */
+  --jm-primary-600: #09574F;
+  --jm-primary-700: #06403A;
+  --jm-primary-800: #042B27;
+  --jm-primary-900: #021C19;
+
+  --jm-accent-500: #C9A34B;   /* soft gold */
+  --jm-accent-600: #A7873A;
+  --jm-accent-100: #FAF1DB;
+
+  /* Semantic */
+  --jm-success: #0A8754;
+  --jm-warning: #D97706;
+  --jm-danger:  #DC2626;
+  --jm-info:    #2563EB;
+
+  /* Neutrals (warm) */
+  --jm-gray-50:  #F8FAFC;
+  --jm-gray-100: #F1F4F7;
+  --jm-gray-200: #E5E9EF;
+  --jm-gray-300: #CBD3DD;
+  --jm-gray-400: #94A1B2;
+  --jm-gray-500: #64748B;
+  --jm-gray-600: #475569;
+  --jm-gray-700: #334155;
+  --jm-gray-800: #1E293B;
+  --jm-gray-900: #0F172A;
+
+  /* Sidebar (dark chrome) */
+  --jm-sider-bg: #0E1B26;
+  --jm-sider-fg: #CBD3DD;
+  --jm-sider-fg-muted: #64748B;
+  --jm-sider-active-bg: rgba(11, 110, 99, 0.22);
+  --jm-sider-active-fg: #7DDAC6;
+  --jm-sider-hover-bg: rgba(255, 255, 255, 0.04);
+  --jm-sider-border: rgba(255, 255, 255, 0.06);
+
+  /* Surfaces */
+  --jm-surface:          #FFFFFF;
+  --jm-surface-muted:    #F8FAFC;
+  --jm-surface-sunken:   #F1F4F7;
+  --jm-border:           #E5E9EF;
+  --jm-border-strong:    #CBD3DD;
+
+  /* Shadows (elevation ramp) */
+  --jm-shadow-1: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.03);
+  --jm-shadow-2: 0 2px 4px rgba(15, 23, 42, 0.06), 0 4px 8px rgba(15, 23, 42, 0.04);
+  --jm-shadow-3: 0 8px 16px rgba(15, 23, 42, 0.08), 0 4px 8px rgba(15, 23, 42, 0.04);
+  --jm-shadow-glow: 0 0 0 4px rgba(11, 110, 99, 0.15);
+
+  /* Radius */
+  --jm-radius-sm: 4px;
+  --jm-radius:    6px;
+  --jm-radius-lg: 10px;
+  --jm-radius-xl: 14px;
+
+  /* Spacing (8px grid) */
+  --jm-space-1: 4px;
+  --jm-space-2: 8px;
+  --jm-space-3: 12px;
+  --jm-space-4: 16px;
+  --jm-space-5: 20px;
+  --jm-space-6: 24px;
+  --jm-space-8: 32px;
+  --jm-space-10: 40px;
+  --jm-space-12: 48px;
+
+  /* Typography */
+  --jm-font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --jm-font-display: 'Inter Tight', 'Inter', system-ui, sans-serif;
+  --jm-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Chrome (top + sider heights) */
+  --jm-header-h: 56px;
+  --jm-sider-w: 240px;
+  --jm-sider-w-collapsed: 72px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
+}
+
+/* Utility: tabular figures — CRITICAL for money columns */
+.jm-tnum { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+
+/* Utility: RTL-ready helpers (use logical props everywhere) */
+.jm-stack { display: flex; flex-direction: column; gap: var(--jm-space-4); }
+.jm-row { display: flex; align-items: center; gap: var(--jm-space-3); }

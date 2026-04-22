@@ -1,0 +1,384 @@
+using FluentValidation;
+using Jamaat.Application.Accounting;
+using Jamaat.Application.Common;
+using Jamaat.Contracts.Receipts;
+using Jamaat.Domain.Abstractions;
+using Jamaat.Domain.Common;
+using Jamaat.Domain.Entities;
+using Jamaat.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Jamaat.Application.Receipts;
+
+public sealed class ReceiptService(
+    IReceiptRepository repo,
+    IUnitOfWork uow,
+    ITenantContext tenant,
+    ICurrentUser currentUser,
+    IClock clock,
+    INumberingService numbering,
+    IPostingService posting,
+    IFxConverter fx,
+    IServiceProvider services,
+    IValidator<CreateReceiptDto> createV) : IReceiptService
+{
+    public Task<PagedResult<ReceiptListItemDto>> ListAsync(ReceiptListQuery q, CancellationToken ct = default) => repo.ListAsync(q, ct);
+
+    public async Task<Result<ReceiptDto>> GetAsync(Guid id, CancellationToken ct = default)
+    {
+        var e = await repo.GetWithLinesAsync(id, ct);
+        if (e is null) return Error.NotFound("receipt.not_found", "Receipt not found.");
+        return await MapAsync(e, ct);
+    }
+
+    public async Task<Result<ReceiptDto>> CreateAndConfirmAsync(CreateReceiptDto dto, CancellationToken ct = default)
+    {
+        await createV.ValidateAndThrowAsync(dto, ct);
+
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        var member = await db.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == dto.MemberId, ct);
+        if (member is null) return Error.NotFound("member.not_found", "Member not found.");
+
+        // Resolve optional family context — either explicit or inferred from member
+        Family? family = null;
+        var familyId = dto.FamilyId ?? member.FamilyId;
+        if (familyId is Guid fid)
+        {
+            family = await db.Families.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fid, ct);
+            if (family is null && dto.FamilyId is not null)
+                return Error.NotFound("family.not_found", "Family not found.");
+        }
+
+        var period = await ResolvePeriodAsync(dto.ReceiptDate, ct);
+        if (period is null) return Error.Business("period.not_open", "No open financial period covers this date. Create or reopen a period.");
+
+        // Resolve transaction currency + base currency
+        var baseCurrency = await fx.GetBaseCurrencyAsync(ct);
+        var txnCurrency = (dto.Currency ?? baseCurrency).ToUpperInvariant();
+
+        // Pre-load referenced commitments so we can validate + apply allocations in-transaction
+        var commitmentIds = dto.Lines.Where(l => l.CommitmentId.HasValue).Select(l => l.CommitmentId!.Value).Distinct().ToList();
+        var commitments = commitmentIds.Count == 0
+            ? new Dictionary<Guid, Commitment>()
+            : (await db.Commitments.Include(c => c.Installments)
+                .Where(c => commitmentIds.Contains(c.Id)).ToListAsync(ct))
+              .ToDictionary(c => c.Id);
+
+        foreach (var line in dto.Lines)
+        {
+            if (line.CommitmentId is not Guid cId) continue;
+            if (!commitments.TryGetValue(cId, out var cm))
+                return Error.NotFound("commitment.not_found", $"Commitment {cId} not found.");
+            if (cm.Status is CommitmentStatus.Cancelled or CommitmentStatus.Completed or CommitmentStatus.Paused)
+                return Error.Business("commitment.not_payable", $"Commitment {cm.Code} is {cm.Status} and cannot accept payments.");
+            if (cm.Status == CommitmentStatus.Draft)
+                return Error.Business("commitment.not_active", $"Commitment {cm.Code} has no accepted agreement yet.");
+            if (cm.Currency != txnCurrency)
+                return Error.Business("commitment.currency_mismatch",
+                    $"Commitment {cm.Code} is in {cm.Currency}; receipt is in {txnCurrency}. Payment must be in the commitment currency.");
+            if (cm.FundTypeId != line.FundTypeId)
+                return Error.Business("commitment.fund_mismatch",
+                    $"Commitment {cm.Code} is against a different fund type than the receipt line.");
+            if (line.CommitmentInstallmentId is not Guid iId || cm.Installments.All(i => i.Id != iId))
+                return Error.Validation("commitment.installment_required",
+                    $"An installment must be selected for commitment {cm.Code}.");
+            var inst = cm.Installments.First(i => i.Id == iId);
+            var due = inst.ScheduledAmount - inst.PaidAmount;
+            if (!cm.AllowPartialPayments && line.Amount < due)
+                return Error.Business("commitment.partial_not_allowed",
+                    $"Commitment {cm.Code} does not allow partial payments; pay the full installment amount.");
+            if (line.Amount > due)
+                return Error.Business("commitment.overpayment",
+                    $"Amount exceeds remaining installment balance ({due:0.00}) on commitment {cm.Code}.");
+        }
+
+        // Validate fund-enrollment links (Sabil/Wajebaat/Mutafariq/Niyaz collections)
+        var enrollmentIds = dto.Lines.Where(l => l.FundEnrollmentId.HasValue).Select(l => l.FundEnrollmentId!.Value).Distinct().ToList();
+        var enrollments = enrollmentIds.Count == 0
+            ? new Dictionary<Guid, FundEnrollment>()
+            : (await db.FundEnrollments.AsNoTracking().Where(e => enrollmentIds.Contains(e.Id)).ToListAsync(ct))
+              .ToDictionary(e => e.Id);
+        foreach (var line in dto.Lines)
+        {
+            if (line.FundEnrollmentId is not Guid eId) continue;
+            if (!enrollments.TryGetValue(eId, out var en))
+                return Error.NotFound("enrollment.not_found", $"Fund enrollment {eId} not found.");
+            if (en.Status != FundEnrollmentStatus.Active)
+                return Error.Business("enrollment.not_active", $"Enrollment {en.Code} is {en.Status} and cannot accept payments.");
+            if (en.MemberId != dto.MemberId)
+                return Error.Business("enrollment.member_mismatch", $"Enrollment {en.Code} belongs to another member.");
+            if (en.FundTypeId != line.FundTypeId)
+                return Error.Business("enrollment.fund_mismatch", $"Enrollment {en.Code} is against a different fund type.");
+        }
+
+        // Pre-load referenced QH loans and validate
+        var loanIds = dto.Lines.Where(l => l.QarzanHasanaLoanId.HasValue).Select(l => l.QarzanHasanaLoanId!.Value).Distinct().ToList();
+        var loans = loanIds.Count == 0
+            ? new Dictionary<Guid, QarzanHasanaLoan>()
+            : (await db.QarzanHasanaLoans.Include(l => l.Installments).Where(l => loanIds.Contains(l.Id)).ToListAsync(ct))
+              .ToDictionary(l => l.Id);
+        foreach (var line in dto.Lines)
+        {
+            if (line.QarzanHasanaLoanId is not Guid lId) continue;
+            if (!loans.TryGetValue(lId, out var loan))
+                return Error.NotFound("qh.not_found", $"QH loan {lId} not found.");
+            if (loan.Status is not (QarzanHasanaStatus.Active or QarzanHasanaStatus.Disbursed))
+                return Error.Business("qh.not_payable", $"Loan {loan.Code} is {loan.Status} and cannot accept repayments.");
+            if (loan.Currency != txnCurrency)
+                return Error.Business("qh.currency_mismatch",
+                    $"Loan {loan.Code} is in {loan.Currency}; receipt is in {txnCurrency}.");
+            if (line.QarzanHasanaInstallmentId is not Guid qId || loan.Installments.All(i => i.Id != qId))
+                return Error.Validation("qh.installment_required", $"An installment must be selected for loan {loan.Code}.");
+            var qi = loan.Installments.First(i => i.Id == qId);
+            var remaining = qi.ScheduledAmount - qi.PaidAmount;
+            if (line.Amount > remaining)
+                return Error.Business("qh.overpayment",
+                    $"Amount exceeds remaining installment balance ({remaining:0.00}) on loan {loan.Code}.");
+        }
+
+        // Begin an explicit transaction so numbering UPDLOCK, ledger posting, and receipt save commit atomically
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        var receipt = new Receipt(Guid.NewGuid(), tenant.TenantId, dto.ReceiptDate, member.Id, member.ItsNumber.Value, member.FullName, txnCurrency);
+        receipt.SetPayment(dto.PaymentMode, dto.BankAccountId, dto.ChequeNumber, dto.ChequeDate, dto.PaymentReference);
+        receipt.SetRemarks(dto.Remarks);
+
+        if (family is not null)
+        {
+            var onBehalfJson = dto.OnBehalfOfMemberIds is { Count: > 0 }
+                ? System.Text.Json.JsonSerializer.Serialize(dto.OnBehalfOfMemberIds)
+                : null;
+            receipt.SetFamilyContext(family.Id, family.FamilyName, onBehalfJson);
+        }
+
+        var lines = dto.Lines.Select((l, idx) => new ReceiptLine(
+            Guid.NewGuid(), idx + 1, l.FundTypeId, l.Amount, l.Purpose, l.PeriodReference,
+            l.CommitmentId, l.CommitmentInstallmentId,
+            l.FundEnrollmentId,
+            l.QarzanHasanaLoanId, l.QarzanHasanaInstallmentId)).ToList();
+        receipt.ReplaceLines(lines);
+
+        // Apply the payments onto their installments (aggregate tracks PaidAmount + status)
+        foreach (var line in dto.Lines.Where(l => l.CommitmentId.HasValue && l.CommitmentInstallmentId.HasValue))
+        {
+            var cm = commitments[line.CommitmentId!.Value];
+            _ = cm.RecordPaymentOnInstallment(line.CommitmentInstallmentId!.Value, line.Amount, dto.ReceiptDate);
+            db.Commitments.Update(cm);
+        }
+
+        // Apply QH repayments onto loan installments
+        foreach (var line in dto.Lines.Where(l => l.QarzanHasanaLoanId.HasValue && l.QarzanHasanaInstallmentId.HasValue))
+        {
+            var loan = loans[line.QarzanHasanaLoanId!.Value];
+            _ = loan.RecordRepayment(line.QarzanHasanaInstallmentId!.Value, line.Amount, dto.ReceiptDate);
+            db.QarzanHasanaLoans.Update(loan);
+        }
+
+        // FX conversion to base (no-op when txn currency == base)
+        var conversion = await fx.ConvertToBaseAsync(receipt.AmountTotal, txnCurrency, dto.ReceiptDate, ct);
+        receipt.ApplyFxConversion(conversion.BaseCurrency, conversion.Rate, conversion.BaseAmount);
+
+        var (seriesId, number) = await numbering.NextAsync(NumberingScope.Receipt, null, dto.ReceiptDate.Year, ct);
+        receipt.Confirm(number, period.Id, seriesId, currentUser.UserId ?? Guid.Empty, currentUser.UserName ?? "system", clock.UtcNow);
+
+        await repo.AddAsync(receipt, ct);
+        await posting.PostReceiptAsync(receipt, ct);
+        await uow.SaveChangesAsync(ct);
+
+        await tx.CommitAsync(ct);
+
+        var fresh = await repo.GetWithLinesAsync(receipt.Id, ct);
+        return await MapAsync(fresh!, ct);
+    }
+
+    public async Task<Result<ReceiptDto>> CancelAsync(Guid id, CancelReceiptDto dto, CancellationToken ct = default)
+    {
+        var e = await repo.GetByIdAsync(id, ct);
+        if (e is null) return Error.NotFound("receipt.not_found", "Receipt not found.");
+        if (e.Status is ReceiptStatus.Cancelled or ReceiptStatus.Reversed)
+            return Error.Business("receipt.already_closed", "Receipt is already cancelled or reversed.");
+        if (string.IsNullOrWhiteSpace(dto.Reason))
+            return Error.Validation("cancel.reason_required", "A reason is required.");
+
+        e.Cancel(dto.Reason, currentUser.UserId ?? Guid.Empty, clock.UtcNow);
+        repo.Update(e);
+        await uow.SaveChangesAsync(ct);
+        var fresh = await repo.GetWithLinesAsync(e.Id, ct);
+        return await MapAsync(fresh!, ct);
+    }
+
+    public async Task<Result<ReceiptDto>> ReverseAsync(Guid id, ReverseReceiptDto dto, CancellationToken ct = default)
+    {
+        var e = await repo.GetWithLinesAsync(id, ct);
+        if (e is null) return Error.NotFound("receipt.not_found", "Receipt not found.");
+        if (e.Status != ReceiptStatus.Confirmed) return Error.Business("receipt.not_confirmed", "Only confirmed receipts can be reversed.");
+        if (string.IsNullOrWhiteSpace(dto.Reason)) return Error.Validation("reverse.reason_required", "A reason is required.");
+
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        // Rollback any commitment-installment allocations carried by this receipt's lines
+        var committedLines = e.Lines.Where(l => l.CommitmentId.HasValue && l.CommitmentInstallmentId.HasValue).ToList();
+        if (committedLines.Count > 0)
+        {
+            var cIds = committedLines.Select(l => l.CommitmentId!.Value).Distinct().ToList();
+            var cms = await db.Commitments.Include(c => c.Installments)
+                .Where(c => cIds.Contains(c.Id)).ToListAsync(ct);
+            foreach (var l in committedLines)
+            {
+                var cm = cms.FirstOrDefault(c => c.Id == l.CommitmentId);
+                if (cm is null) continue;
+                cm.RollbackPaymentOnInstallment(l.CommitmentInstallmentId!.Value, l.Amount);
+                db.Commitments.Update(cm);
+            }
+        }
+
+        // Rollback any QH repayments carried by this receipt's lines
+        var qhLines = e.Lines.Where(l => l.QarzanHasanaLoanId.HasValue && l.QarzanHasanaInstallmentId.HasValue).ToList();
+        if (qhLines.Count > 0)
+        {
+            var lIds = qhLines.Select(l => l.QarzanHasanaLoanId!.Value).Distinct().ToList();
+            var qhs = await db.QarzanHasanaLoans.Include(l => l.Installments)
+                .Where(l => lIds.Contains(l.Id)).ToListAsync(ct);
+            foreach (var l in qhLines)
+            {
+                var loan = qhs.FirstOrDefault(x => x.Id == l.QarzanHasanaLoanId);
+                if (loan is null) continue;
+                loan.RollbackRepayment(l.QarzanHasanaInstallmentId!.Value, l.Amount);
+                db.QarzanHasanaLoans.Update(loan);
+            }
+        }
+
+        await posting.PostReversalAsync(LedgerSourceType.Receipt, e.Id, dto.Reason, ct);
+        e.MarkReversed(dto.Reason, clock.UtcNow);
+        repo.Update(e);
+        await uow.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        var fresh = await repo.GetWithLinesAsync(e.Id, ct);
+        return await MapAsync(fresh!, ct);
+    }
+
+    public async Task<Result> LogReprintAsync(Guid id, ReprintReceiptDto dto, CancellationToken ct = default)
+    {
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        var e = await repo.GetByIdAsync(id, ct);
+        if (e is null) return Result.Failure(Error.NotFound("receipt.not_found", "Receipt not found."));
+        db.ReprintLogs.Add(new ReprintLog(
+            tenant.TenantId, "Receipt", e.Id, e.ReceiptNumber ?? e.Id.ToString(),
+            currentUser.UserId, currentUser.UserName, dto.Reason, clock.UtcNow));
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
+    public async Task<Result<byte[]>> RenderPdfAsync(Guid id, bool reprint, CancellationToken ct = default)
+    {
+        var e = await repo.GetWithLinesAsync(id, ct);
+        if (e is null) return Error.NotFound("receipt.not_found", "Receipt not found.");
+        if (string.IsNullOrEmpty(e.ReceiptNumber)) return Error.Business("receipt.not_confirmed", "Receipt is not yet confirmed.");
+
+        var renderer = services.GetRequiredService<IReceiptPdfRenderer>();
+        var dto = await MapAsync(e, ct);
+        var bytes = renderer.Render(dto.Value!, reprint);
+        if (reprint) await LogReprintAsync(id, new ReprintReceiptDto("Reprint via API"), ct);
+        return bytes;
+    }
+
+    private async Task<FinancialPeriod?> ResolvePeriodAsync(DateOnly date, CancellationToken ct)
+    {
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        return await db.FinancialPeriods
+            .FirstOrDefaultAsync(p => p.Status == PeriodStatus.Open && p.StartDate <= date && p.EndDate >= date, ct);
+    }
+
+    private async Task<Result<ReceiptDto>> MapAsync(Receipt e, CancellationToken ct)
+    {
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        var fundIds = e.Lines.Select(l => l.FundTypeId).Distinct().ToList();
+        var funds = await db.FundTypes.AsNoTracking().Where(f => fundIds.Contains(f.Id))
+            .Select(f => new { f.Id, f.Code, f.NameEnglish }).ToListAsync(ct);
+        string? bankName = null;
+        if (e.BankAccountId is not null)
+        {
+            bankName = await db.BankAccounts.AsNoTracking().Where(b => b.Id == e.BankAccountId).Select(b => b.Name).FirstOrDefaultAsync(ct);
+        }
+
+        var cmIds = e.Lines.Where(l => l.CommitmentId.HasValue).Select(l => l.CommitmentId!.Value).Distinct().ToList();
+        var cmLookup = cmIds.Count == 0
+            ? []
+            : await db.Commitments.AsNoTracking().Where(c => cmIds.Contains(c.Id))
+                .Select(c => new { c.Id, c.Code }).ToDictionaryAsync(x => x.Id, x => x.Code, ct);
+        var instIds = e.Lines.Where(l => l.CommitmentInstallmentId.HasValue).Select(l => l.CommitmentInstallmentId!.Value).Distinct().ToList();
+        var instLookup = instIds.Count == 0
+            ? new Dictionary<Guid, int>()
+            : await db.Commitments.AsNoTracking().SelectMany(c => c.Installments)
+                .Where(i => instIds.Contains(i.Id))
+                .Select(i => new { i.Id, i.InstallmentNo })
+                .ToDictionaryAsync(x => x.Id, x => x.InstallmentNo, ct);
+
+        var enrollIds = e.Lines.Where(l => l.FundEnrollmentId.HasValue).Select(l => l.FundEnrollmentId!.Value).Distinct().ToList();
+        var enrollLookup = enrollIds.Count == 0
+            ? []
+            : await db.FundEnrollments.AsNoTracking().Where(x => enrollIds.Contains(x.Id))
+                .Select(x => new { x.Id, x.Code }).ToDictionaryAsync(x => x.Id, x => x.Code, ct);
+
+        var loanIds = e.Lines.Where(l => l.QarzanHasanaLoanId.HasValue).Select(l => l.QarzanHasanaLoanId!.Value).Distinct().ToList();
+        var loanLookup = loanIds.Count == 0
+            ? []
+            : await db.QarzanHasanaLoans.AsNoTracking().Where(x => loanIds.Contains(x.Id))
+                .Select(x => new { x.Id, x.Code }).ToDictionaryAsync(x => x.Id, x => x.Code, ct);
+        var qhInstIds = e.Lines.Where(l => l.QarzanHasanaInstallmentId.HasValue).Select(l => l.QarzanHasanaInstallmentId!.Value).Distinct().ToList();
+        var qhInstLookup = qhInstIds.Count == 0
+            ? new Dictionary<Guid, int>()
+            : await db.QarzanHasanaLoans.AsNoTracking().SelectMany(l => l.Installments)
+                .Where(i => qhInstIds.Contains(i.Id))
+                .Select(i => new { i.Id, i.InstallmentNo })
+                .ToDictionaryAsync(x => x.Id, x => x.InstallmentNo, ct);
+
+        return new ReceiptDto(
+            e.Id, e.ReceiptNumber, e.ReceiptDate, e.MemberId, e.ItsNumberSnapshot, e.MemberNameSnapshot,
+            e.AmountTotal, e.Currency, e.FxRate, e.BaseCurrency, e.BaseAmountTotal,
+            e.PaymentMode, e.ChequeNumber, e.ChequeDate,
+            e.BankAccountId, bankName, e.PaymentReference, e.Remarks, e.Status,
+            e.ConfirmedAtUtc, e.ConfirmedByUserName, e.CreatedAtUtc,
+            e.Lines.Select(l =>
+            {
+                var f = funds.First(x => x.Id == l.FundTypeId);
+                var cmCode = l.CommitmentId is Guid cid && cmLookup.TryGetValue(cid, out var c) ? c : null;
+                var instNo = l.CommitmentInstallmentId is Guid iid && instLookup.TryGetValue(iid, out var n) ? (int?)n : null;
+                var enrollCode = l.FundEnrollmentId is Guid eid && enrollLookup.TryGetValue(eid, out var ec) ? ec : null;
+                var loanCode = l.QarzanHasanaLoanId is Guid lid2 && loanLookup.TryGetValue(lid2, out var lc) ? lc : null;
+                var qhInstNo = l.QarzanHasanaInstallmentId is Guid qid && qhInstLookup.TryGetValue(qid, out var qn) ? (int?)qn : null;
+                return new ReceiptLineDto(l.Id, l.LineNo, l.FundTypeId, f.Code, f.NameEnglish, l.Amount, l.Purpose, l.PeriodReference,
+                    l.CommitmentId, cmCode, l.CommitmentInstallmentId, instNo,
+                    l.FundEnrollmentId, enrollCode,
+                    l.QarzanHasanaLoanId, loanCode, l.QarzanHasanaInstallmentId, qhInstNo);
+            }).ToList());
+    }
+}
+
+public sealed class CreateReceiptValidator : AbstractValidator<CreateReceiptDto>
+{
+    public CreateReceiptValidator()
+    {
+        RuleFor(x => x.ReceiptDate).NotEmpty();
+        RuleFor(x => x.MemberId).NotEmpty();
+        RuleFor(x => x.Lines).NotEmpty().WithMessage("At least one line is required.");
+        RuleForEach(x => x.Lines).ChildRules(l =>
+        {
+            l.RuleFor(x => x.FundTypeId).NotEmpty();
+            l.RuleFor(x => x.Amount).GreaterThan(0).WithMessage("Line amount must be greater than zero.");
+        });
+        When(x => x.PaymentMode == PaymentMode.Cheque, () =>
+        {
+            RuleFor(x => x.ChequeNumber).NotEmpty().WithMessage("Cheque number is required for cheque payments.");
+            RuleFor(x => x.ChequeDate).NotEmpty().WithMessage("Cheque date is required for cheque payments.");
+        });
+    }
+}
+
+public interface IReceiptPdfRenderer
+{
+    byte[] Render(ReceiptDto receipt, bool reprint);
+}
