@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Layout, Menu, Dropdown, Button, Avatar, Badge, Input, Tooltip, Breadcrumb } from 'antd';
+import { useHotkey } from '../shared/hooks/useHotkey';
 import {
   DashboardOutlined,
   TeamOutlined,
@@ -41,6 +42,16 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+
+  // Global cashier-friendly shortcuts. Alt+N jumps to New Receipt; "/" jumps to
+  // the Members search page (global top-bar search isn't wired yet — when it is,
+  // this'll refocus the box instead). Both respect permission gates.
+  useHotkey({ key: 'n', modifiers: ['alt'] }, () => {
+    if (hasPermission('receipt.create')) navigate('/receipts/new');
+  });
+  useHotkey({ key: '/' }, () => {
+    if (hasPermission('member.view')) navigate('/members');
+  });
 
   // Permission-gated nav — every entry lists the permissions that grant access.
   // Dashboard + Help are always visible; everything else requires at least one matching claim.
@@ -206,16 +217,18 @@ export function AppLayout() {
 
           <Input
             size="middle"
-            placeholder={t('search.placeholder')}
+            placeholder={`${t('search.placeholder')}  (Press /)`}
             prefix={<SearchOutlined style={{ color: 'var(--jm-gray-400)' }} />}
             style={{ inlineSize: 320, background: 'var(--jm-surface-muted)', border: '1px solid transparent' }}
             disabled
           />
 
           {hasPermission('receipt.create') && (
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/receipts/new')}>
-              {t('actions.newReceipt')}
-            </Button>
+            <Tooltip title="Alt+N">
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/receipts/new')}>
+                {t('actions.newReceipt')}
+              </Button>
+            </Tooltip>
           )}
 
           <Tooltip title="Notifications">

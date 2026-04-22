@@ -6,10 +6,15 @@ import dayjs from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { money, formatDateTime } from '../../shared/format/format';
 import { receiptsApi, PaymentModeLabel, ReceiptStatusLabel, type ReceiptStatus } from './receiptsApi';
+import { useAuth } from '../../shared/auth/useAuth';
 
 export function ReceiptDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canReprint = hasPermission('receipt.reprint');
+  const canCancel = hasPermission('receipt.cancel');
+  const canReverse = hasPermission('receipt.reverse');
   const { data, isLoading, isError } = useQuery({
     queryKey: ['receipt', id], queryFn: () => receiptsApi.get(id!),
     enabled: !!id,
@@ -31,9 +36,11 @@ export function ReceiptDetailPage() {
         actions={
           <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/receipts')}>Back</Button>
-            <Button icon={<PrinterOutlined />} onClick={() => void receiptsApi.openPdf(data.id, true)} disabled={!data.receiptNumber}>
-              Reprint (duplicate)
-            </Button>
+            {canReprint && (
+              <Button icon={<PrinterOutlined />} onClick={() => void receiptsApi.openPdf(data.id, true)} disabled={!data.receiptNumber}>
+                Reprint (duplicate)
+              </Button>
+            )}
           </Space>
         }
       />
@@ -96,10 +103,16 @@ export function ReceiptDetailPage() {
         />
       </Card>
 
-      <div style={{ marginBlockStart: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <Button icon={<StopOutlined />} disabled={data.status !== 2} onClick={() => { /* TODO reason */ }}>Cancel</Button>
-        <Button danger icon={<RollbackOutlined />} disabled={data.status !== 2} onClick={() => { /* TODO reason */ }}>Reverse</Button>
-      </div>
+      {(canCancel || canReverse) && (
+        <div style={{ marginBlockStart: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          {canCancel && (
+            <Button icon={<StopOutlined />} disabled={data.status !== 2} onClick={() => { /* TODO reason */ }}>Cancel</Button>
+          )}
+          {canReverse && (
+            <Button danger icon={<RollbackOutlined />} disabled={data.status !== 2} onClick={() => { /* TODO reason */ }}>Reverse</Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

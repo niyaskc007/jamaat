@@ -6,10 +6,13 @@ import dayjs from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { money, formatDateTime } from '../../shared/format/format';
 import { vouchersApi, PaymentModeLabel, VoucherStatusLabel, type VoucherStatus } from './vouchersApi';
+import { useAuth } from '../../shared/auth/useAuth';
 
 export function VoucherDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canPrint = hasPermission('voucher.view');
   const { data, isLoading, isError } = useQuery({ queryKey: ['voucher', id], queryFn: () => vouchersApi.get(id!), enabled: !!id });
 
   if (isLoading) return <div style={{ padding: 24 }}><Spin /></div>;
@@ -29,9 +32,11 @@ export function VoucherDetailPage() {
         actions={
           <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/vouchers')}>Back</Button>
-            <Button icon={<PrinterOutlined />} disabled={!data.voucherNumber} onClick={() => void vouchersApi.openPdf(data.id)}>
-              Print PDF
-            </Button>
+            {canPrint && (
+              <Button icon={<PrinterOutlined />} disabled={!data.voucherNumber} onClick={() => void vouchersApi.openPdf(data.id)}>
+                Print PDF
+              </Button>
+            )}
           </Space>
         }
       />

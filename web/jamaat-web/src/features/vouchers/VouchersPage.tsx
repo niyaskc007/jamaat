@@ -6,7 +6,7 @@ import {
   PrinterOutlined, CheckCircleFilled, StopOutlined, RollbackOutlined, WalletOutlined,
 } from '@ant-design/icons';
 import { useQuery, keepPreviousData, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -31,7 +31,15 @@ export function VouchersPage() {
   const canCreate = hasPermission('voucher.create');
   const { message, modal } = AntdApp.useApp();
 
-  const [query, setQuery] = useState<VoucherListQuery>({ page: 1, pageSize: 25 });
+  // Honor an initial ?status= query so deep-links like the dashboard's Pending approvals
+  // tile land directly on the filtered list.
+  const [searchParams] = useSearchParams();
+  const initialStatus = (() => {
+    const v = Number(searchParams.get('status'));
+    return Number.isFinite(v) && v >= 1 && v <= 6 ? (v as VoucherStatus) : undefined;
+  })();
+
+  const [query, setQuery] = useState<VoucherListQuery>({ page: 1, pageSize: 25, status: initialStatus });
   const [search, setSearch] = useState('');
   const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
 

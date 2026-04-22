@@ -263,6 +263,14 @@ export function HelpPage() {
             </ul>
           </Card>
 
+          <Card title="Keyboard shortcuts" size="small" style={{ marginBlockEnd: 16 }}>
+            <ul style={{ paddingInlineStart: 18, marginBlockEnd: 0 }}>
+              <li><kbd>Alt</kbd>+<kbd>N</kbd> — New Receipt (from anywhere)</li>
+              <li><kbd>/</kbd> — Jump to Members search</li>
+              <li><kbd>Ctrl</kbd>+<kbd>Enter</kbd> — Confirm &amp; Print on the New Receipt screen (works from any field)</li>
+            </ul>
+          </Card>
+
           <Card title="Conventions" size="small" style={{ marginBlockEnd: 16 }}>
             <ul style={{ paddingInlineStart: 18, marginBlockEnd: 0 }}>
               <li>Dates are stored in UTC and shown in the tenant's locale.</li>

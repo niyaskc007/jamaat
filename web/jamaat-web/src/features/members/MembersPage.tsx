@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, Input, Select, Space, Table, Tag, Dropdown, Empty, App as AntdApp } from 'antd';
+import { Button, Card, Input, Select, Space, Table, Tag, Dropdown, Empty, App as AntdApp, Typography } from 'antd';
 import type { TableProps, MenuProps } from 'antd';
 import {
   PlusOutlined,
@@ -12,6 +12,7 @@ import {
   ExportOutlined,
   ImportOutlined,
   UserOutlined,
+  SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -23,6 +24,7 @@ import { MemberFormDrawer } from './MemberFormDrawer';
 import { extractProblem } from '../../shared/api/client';
 import { useAuth } from '../../shared/auth/useAuth';
 import { downloadCsv, fetchAllPages, toCsv } from '../../shared/export/csv';
+import { api } from '../../shared/api/client';
 
 const VerificationLabel: Record<VerificationStatus, string> = { 0: 'Not started', 1: 'Pending', 2: 'Verified', 3: 'Rejected' };
 const VerificationColor: Record<VerificationStatus, string> = { 0: 'default', 1: 'gold', 2: 'green', 3: 'red' };
@@ -58,6 +60,8 @@ export function MembersPage() {
   const [search, setSearch] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Member | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const { data, isLoading, isFetching, refetch, isError, error } = useQuery({
     queryKey: ['members', query],
@@ -169,6 +173,30 @@ export function MembersPage() {
 
   const empty = !isLoading && !isError && (data?.total ?? 0) === 0;
 
+  const bulkVerify = async () => {
+    if (selectedIds.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      // Per-row endpoint — the API doesn't have a batch verify yet. With our default
+      // page size of 25 this is a small concurrent fan-out; we cap at 10 at a time.
+      const chunks: string[][] = [];
+      for (let i = 0; i < selectedIds.length; i += 10) chunks.push(selectedIds.slice(i, i + 10));
+      let ok = 0, fail = 0;
+      for (const c of chunks) {
+        const res = await Promise.allSettled(c.map((id) =>
+          api.post(`/api/v1/members/${id}/profile/verify-data`, { status: 2 })
+        ));
+        ok += res.filter((r) => r.status === 'fulfilled').length;
+        fail += res.filter((r) => r.status === 'rejected').length;
+      }
+      message[fail === 0 ? 'success' : 'warning'](`Verified ${ok} member(s)${fail ? ` · ${fail} failed` : ''}.`);
+      setSelectedIds([]);
+      await qc.invalidateQueries({ queryKey: ['members'] });
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -230,6 +258,29 @@ export function MembersPage() {
           <Button icon={<ReloadOutlined />} onClick={() => refetch()} loading={isFetching && !isLoading} />
         </div>
 
+        {showVerification && selectedIds.length > 0 && (
+          <div style={{
+            padding: '8px 16px',
+            background: 'rgba(11,110,99,0.08)',
+            borderBlockEnd: '1px solid var(--jm-border)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}>
+            <Typography.Text strong style={{ fontSize: 13 }}>{selectedIds.length} selected</Typography.Text>
+            <Button
+              size="small"
+              type="primary"
+              icon={<SafetyCertificateOutlined />}
+              loading={bulkBusy}
+              onClick={bulkVerify}
+            >
+              Mark {selectedIds.length} verified
+            </Button>
+            <Button size="small" onClick={() => setSelectedIds([])}>Clear selection</Button>
+          </div>
+        )}
+
         <Table<Member>
           rowKey="id"
           size="middle"
@@ -237,6 +288,11 @@ export function MembersPage() {
           columns={columns}
           dataSource={data?.items ?? []}
           onChange={onTableChange}
+          rowSelection={showVerification ? {
+            selectedRowKeys: selectedIds,
+            onChange: (keys) => setSelectedIds(keys as string[]),
+            preserveSelectedRowKeys: true,
+          } : undefined}
           pagination={{
             current: query.page,
             pageSize: query.pageSize,

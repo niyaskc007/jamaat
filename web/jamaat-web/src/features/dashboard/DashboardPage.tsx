@@ -213,7 +213,11 @@ export function DashboardPage() {
           </Card>
           <Row gutter={[12, 12]} style={{ marginBlockStart: 16 }}>
             <Col xs={12}>
-              <Card size="small" style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }}>
+              <Card size="small"
+                style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)', cursor: hasPermission('voucher.approve') ? 'pointer' : 'default' }}
+                onClick={() => hasPermission('voucher.approve') && navigate('/vouchers?status=2')}
+                title={hasPermission('voucher.approve') ? 'Open vouchers awaiting approval' : 'You do not have voucher.approve'}
+              >
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                   <span style={{ inlineSize: 32, blockSize: 32, borderRadius: 8, background: 'rgba(217, 119, 6, 0.12)', color: '#D97706', display: 'grid', placeItems: 'center' }}>
                     <CheckCircleOutlined />

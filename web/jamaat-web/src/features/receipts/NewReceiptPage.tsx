@@ -20,6 +20,7 @@ import { commitmentsApi, InstallmentStatusLabel } from '../commitments/commitmen
 import { familiesApi } from '../families/familiesApi';
 import { fundEnrollmentsApi } from '../fund-enrollments/fundEnrollmentsApi';
 import { qarzanHasanaApi, QhInstallmentStatusLabel } from '../qarzan-hasana/qarzanHasanaApi';
+import { useHotkey } from '../../shared/hooks/useHotkey';
 
 type Line = CreateReceiptLine & { _id: string };
 
@@ -169,6 +170,12 @@ export function NewReceiptPage() {
       const p = extractProblem(err);
       setSubmitError(p.detail ?? p.title ?? 'Failed to create receipt');
     },
+  });
+
+  // Ctrl+Enter anywhere on the page (even inside an input) confirms the receipt —
+  // cashiers often have their last focus inside the Remarks textarea.
+  useHotkey({ key: 'Enter', modifiers: ['ctrl'], ignoreInInputs: false }, () => {
+    if (!mutation.isPending) onSubmit();
   });
 
   const onSubmit = () => {
@@ -488,8 +495,9 @@ export function NewReceiptPage() {
 
           {submitError && <Alert type="error" showIcon message={submitError} style={{ marginBlockEnd: 16 }} />}
 
-          <Button size="large" block type="primary" icon={<PrinterOutlined />} loading={mutation.isPending} onClick={onSubmit}>
-            Confirm & Print ({money(total, currency)})
+          <Button size="large" block type="primary" icon={<PrinterOutlined />} loading={mutation.isPending} onClick={onSubmit}
+            title="Ctrl+Enter confirms from anywhere on the page">
+            Confirm & Print ({money(total, currency)}) <span style={{ opacity: 0.6, fontSize: 12, marginInlineStart: 8 }}>⌃↵</span>
           </Button>
           <Button size="large" block icon={<SaveOutlined />} style={{ marginBlockStart: 8 }} disabled
             title="Draft saving coming later — confirm posts to the ledger immediately">
