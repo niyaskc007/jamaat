@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Card, Input, Select, Table, Tag, DatePicker, Button, Typography } from 'antd';
-import { SearchOutlined, ReloadOutlined, SafetyOutlined } from '@ant-design/icons';
+import { Card, Input, Select, Table, Tag, DatePicker, Button, Typography, Segmented, Tooltip } from 'antd';
+import { SearchOutlined, ReloadOutlined, SafetyOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { Dayjs } from 'dayjs';
 import { api } from '../../shared/api/client';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { formatDateTime } from '../../shared/format/format';
+import { downloadCsv, fetchAllPages, toCsv } from '../../shared/export/csv';
 
 const { RangePicker } = DatePicker;
 
@@ -16,6 +17,11 @@ type AuditLog = {
   ipAddress?: string | null; userAgent?: string | null; atUtc: string;
 };
 
+type AuditQuery = {
+  page: number; pageSize: number; search?: string; action?: string; entityName?: string;
+  fromUtc?: string; toUtc?: string;
+};
+
 export function AuditPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -24,7 +30,7 @@ export function AuditPage() {
   const [entityName, setEntityName] = useState<string | undefined>();
   const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
 
-  const query = {
+  const query: AuditQuery = {
     page, pageSize, search: search || undefined,
     action, entityName,
     fromUtc: range?.[0]?.startOf('day').toISOString(),
@@ -37,9 +43,30 @@ export function AuditPage() {
     placeholderData: keepPreviousData,
   });
 
+  const onExport = async () => {
+    const listFn = async (q: AuditQuery) =>
+      (await api.get<{ items: AuditLog[]; total: number }>('/api/v1/audit-logs', { params: q })).data;
+    const { items, truncated } = await fetchAllPages<AuditLog, AuditQuery>(listFn, query);
+    const csv = toCsv(items, [
+      { header: 'Time (UTC)', value: (r) => r.atUtc },
+      { header: 'User', value: (r) => r.userName },
+      { header: 'Action', value: (r) => r.action },
+      { header: 'Entity', value: (r) => r.entityName },
+      { header: 'Entity Id', value: (r) => r.entityId },
+      { header: 'Correlation', value: (r) => r.correlationId },
+      { header: 'Screen', value: (r) => r.screen ?? '' },
+      { header: 'IP', value: (r) => r.ipAddress ?? '' },
+    ]);
+    downloadCsv(`audit_${new Date().toISOString().slice(0, 10)}${truncated ? '_truncated' : ''}.csv`, csv);
+  };
+
   return (
     <div>
-      <PageHeader title="Audit Log" subtitle="Append-only record of every mutation with before/after snapshots." />
+      <PageHeader
+        title="Audit Log"
+        subtitle="Append-only record of every mutation with before/after snapshots."
+        actions={<Button icon={<DownloadOutlined />} onClick={onExport}>Export CSV</Button>}
+      />
       <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
         <div style={{ display: 'flex', gap: 8, padding: 12, borderBlockEnd: '1px solid var(--jm-border)', flexWrap: 'wrap' }}>
           <RangePicker value={range} onChange={(v) => setRange(v as [Dayjs, Dayjs] | null)} style={{ inlineSize: 260 }} />
@@ -56,25 +83,57 @@ export function AuditPage() {
           pagination={{ current: page, pageSize, total: data?.total ?? 0, showSizeChanger: true,
             onChange: (p, s) => { setPage(p); setPageSize(s); }, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
           expandable={{
-            expandedRowRender: (r) => (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: 12, background: 'var(--jm-surface-muted)' }}>
-                <JsonBlock title="Before" value={r.beforeJson} />
-                <JsonBlock title="After" value={r.afterJson} />
-              </div>
-            ),
+            expandedRowRender: (r) => <AuditRowDetail row={r} />,
           }}
           columns={[
             { title: 'Time', dataIndex: 'atUtc', key: 't', width: 180, render: (v: string) => formatDateTime(v) },
             { title: 'User', dataIndex: 'userName', key: 'u', width: 180 },
-            { title: 'Action', dataIndex: 'action', key: 'a', width: 100, render: (v: string) => <Tag style={{ margin: 0 }}>{v}</Tag> },
+            { title: 'Action', dataIndex: 'action', key: 'a', width: 100, render: (v: string) => <ActionTag action={v} /> },
             { title: 'Entity', dataIndex: 'entityName', key: 'en', width: 160 },
             { title: 'Entity Id', dataIndex: 'entityId', key: 'ei', render: (v: string) => <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 12 }}>{v}</span> },
-            { title: 'Correlation', dataIndex: 'correlationId', key: 'c', width: 140, render: (v: string) => <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 12, color: 'var(--jm-primary-500)' }}>{v.slice(0, 10)}…</span> },
+            { title: 'Correlation', dataIndex: 'correlationId', key: 'c', width: 140, render: (v: string) => (
+              <Tooltip title={v}><span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 12, color: 'var(--jm-primary-500)' }}>{v.slice(0, 10)}…</span></Tooltip>
+            ) },
           ]}
           locale={{ emptyText: <div style={{ padding: 40, textAlign: 'center', color: 'var(--jm-gray-500)' }}><SafetyOutlined style={{ fontSize: 32, color: 'var(--jm-gray-300)', display: 'block', margin: '0 auto 8px' }} />No audit entries</div> }}
           scroll={{ x: 'max-content' }}
         />
       </Card>
+    </div>
+  );
+}
+
+function ActionTag({ action }: { action: string }) {
+  const color = action === 'Create' ? 'green' : action === 'Delete' ? 'red' : action === 'Update' ? 'blue' : 'default';
+  return <Tag color={color} style={{ margin: 0 }}>{action}</Tag>;
+}
+
+/// Expanded row body: toggles between a field-by-field diff (default) and raw JSON.
+/// Diff mode is faster to scan for "what actually changed" — JSON mode stays for the
+/// rare case where a reviewer needs the exact original payload.
+function AuditRowDetail({ row }: { row: AuditLog }) {
+  const [mode, setMode] = useState<'diff' | 'json'>('diff');
+  return (
+    <div style={{ padding: 12, background: 'var(--jm-surface-muted)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBlockEnd: 10 }}>
+        <Segmented
+          size="small"
+          value={mode}
+          onChange={(v) => setMode(v as 'diff' | 'json')}
+          options={[
+            { label: 'Field diff', value: 'diff' },
+            { label: 'Raw JSON', value: 'json' },
+          ]}
+        />
+        {row.screen && <Typography.Text type="secondary" style={{ fontSize: 12 }}>Screen: <code>{row.screen}</code></Typography.Text>}
+        {row.ipAddress && <Typography.Text type="secondary" style={{ fontSize: 12 }}>IP: <code>{row.ipAddress}</code></Typography.Text>}
+      </div>
+      {mode === 'diff'
+        ? <FieldDiff before={row.beforeJson} after={row.afterJson} />
+        : <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <JsonBlock title="Before" value={row.beforeJson} />
+            <JsonBlock title="After" value={row.afterJson} />
+          </div>}
     </div>
   );
 }
@@ -92,6 +151,82 @@ function JsonBlock({ title, value }: { title: string; value?: string | null }) {
       )}
     </div>
   );
+}
+
+/// Render a flat before→after table showing only changed scalar fields.
+/// Nested objects/arrays get compared by JSON stringify — we don't deep-diff,
+/// but we do skip rows where the stringified value is identical.
+function FieldDiff({ before, after }: { before?: string | null; after?: string | null }) {
+  const b = parseOrNull(before);
+  const a = parseOrNull(after);
+
+  // Creates & deletes have only one side — fall back to showing the single object's fields.
+  if (!b && !a) return <Typography.Text type="secondary" style={{ fontSize: 12 }}>No payload captured.</Typography.Text>;
+  if (!b) return <SideOnly kind="New" obj={a ?? {}} />;
+  if (!a) return <SideOnly kind="Deleted" obj={b} />;
+
+  const keys = Array.from(new Set([...Object.keys(b), ...Object.keys(a)])).sort();
+  const rows = keys
+    .map((k) => ({ k, before: b[k], after: a[k] }))
+    .filter((r) => JSON.stringify(r.before) !== JSON.stringify(r.after));
+
+  if (rows.length === 0) {
+    return <Typography.Text type="secondary" style={{ fontSize: 12 }}>No scalar fields changed. Switch to Raw JSON if you need to inspect nested structures.</Typography.Text>;
+  }
+
+  return (
+    <div style={{ background: '#FFFFFF', border: '1px solid var(--jm-border)', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) 1fr 1fr', fontSize: 12, fontWeight: 600, background: 'var(--jm-surface-muted)', padding: '8px 12px' }}>
+        <div>Field</div><div>Before</div><div>After</div>
+      </div>
+      {rows.map((r, i) => (
+        <div key={r.k} style={{
+          display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) 1fr 1fr',
+          fontSize: 12, padding: '6px 12px',
+          borderBlockStart: i === 0 ? 'none' : '1px solid var(--jm-border)',
+          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+        }}>
+          <div style={{ color: 'var(--jm-gray-700)', fontWeight: 500 }}>{r.k}</div>
+          <div style={{ color: '#991B1B', background: 'rgba(254, 226, 226, 0.4)', padding: '2px 6px', borderRadius: 4, overflowWrap: 'anywhere' }}>{fmt(r.before)}</div>
+          <div style={{ color: '#065F46', background: 'rgba(209, 250, 229, 0.4)', padding: '2px 6px', borderRadius: 4, overflowWrap: 'anywhere' }}>{fmt(r.after)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SideOnly({ kind, obj }: { kind: 'New' | 'Deleted'; obj: Record<string, unknown> }) {
+  const keys = Object.keys(obj);
+  return (
+    <div style={{ background: '#FFFFFF', border: '1px solid var(--jm-border)', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ padding: '8px 12px', background: 'var(--jm-surface-muted)', fontSize: 12, fontWeight: 600 }}>
+        {kind === 'New' ? 'Fields (new record)' : 'Fields (deleted record)'}
+      </div>
+      {keys.map((k, i) => (
+        <div key={k} style={{
+          display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) 2fr',
+          fontSize: 12, padding: '6px 12px',
+          borderBlockStart: i === 0 ? 'none' : '1px solid var(--jm-border)',
+          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+        }}>
+          <div style={{ color: 'var(--jm-gray-700)', fontWeight: 500 }}>{k}</div>
+          <div style={{ color: kind === 'New' ? '#065F46' : '#991B1B', overflowWrap: 'anywhere' }}>{fmt(obj[k])}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function fmt(v: unknown): string {
+  if (v === null || v === undefined) return '∅';
+  if (typeof v === 'string') return v;
+  try { return JSON.stringify(v); } catch { return String(v); }
+}
+
+function parseOrNull(s?: string | null): Record<string, unknown> | null {
+  if (!s) return null;
+  try { const p = JSON.parse(s); return typeof p === 'object' && p !== null ? p as Record<string, unknown> : null; }
+  catch { return null; }
 }
 
 function tryFormat(s: string): string {

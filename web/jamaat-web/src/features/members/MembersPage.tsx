@@ -18,14 +18,40 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { useTranslation } from 'react-i18next';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { formatDate } from '../../shared/format/format';
-import { membersApi, MemberStatusLabel, type Member, type MemberListQuery, type MemberStatus } from './membersApi';
+import { membersApi, MemberStatusLabel, type Member, type MemberListQuery, type MemberStatus, type VerificationStatus } from './membersApi';
 import { MemberFormDrawer } from './MemberFormDrawer';
 import { extractProblem } from '../../shared/api/client';
+import { useAuth } from '../../shared/auth/useAuth';
+import { downloadCsv, fetchAllPages, toCsv } from '../../shared/export/csv';
+
+const VerificationLabel: Record<VerificationStatus, string> = { 0: 'Not started', 1: 'Pending', 2: 'Verified', 3: 'Rejected' };
+const VerificationColor: Record<VerificationStatus, string> = { 0: 'default', 1: 'gold', 2: 'green', 3: 'red' };
+
+async function exportMembers(query: MemberListQuery) {
+  const { items, truncated } = await fetchAllPages<Member, MemberListQuery>(membersApi.list, query);
+  const csv = toCsv(items, [
+    { header: 'ITS', value: (r) => r.itsNumber },
+    { header: 'Full name', value: (r) => r.fullName },
+    { header: 'Arabic', value: (r) => r.fullNameArabic ?? '' },
+    { header: 'Phone', value: (r) => r.phone ?? '' },
+    { header: 'Email', value: (r) => r.email ?? '' },
+    { header: 'Status', value: (r) => MemberStatusLabel[r.status] },
+    { header: 'Verification', value: (r) => VerificationLabel[r.dataVerificationStatus] },
+    { header: 'Verified on', value: (r) => r.dataVerifiedOn ?? '' },
+    { header: 'Family id', value: (r) => r.familyId ?? '' },
+    { header: 'Created', value: (r) => r.createdAtUtc },
+  ]);
+  const name = `members_${new Date().toISOString().slice(0, 10)}${truncated ? '_truncated' : ''}.csv`;
+  downloadCsv(name, csv);
+}
 
 export function MembersPage() {
   const { t } = useTranslation('common');
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission('member.create');
+  const showVerification = hasPermission('member.verify');
   const { message, modal } = AntdApp.useApp();
 
   const [query, setQuery] = useState<MemberListQuery>({ page: 1, pageSize: 25, sortBy: 'createdAtUtc', sortDir: 'Desc' });
@@ -75,6 +101,18 @@ export function MembersPage() {
       sorter: true,
       render: (s: MemberStatus) => <StatusTag status={s} />,
     },
+    ...(showVerification ? [{
+      title: 'Verified',
+      dataIndex: 'dataVerificationStatus',
+      key: 'verification',
+      width: 130,
+      render: (s: VerificationStatus, row: Member) => (
+        <Tag color={VerificationColor[s]} style={{ margin: 0 }}>
+          {VerificationLabel[s]}
+          {s === 2 && row.dataVerifiedOn ? ` · ${row.dataVerifiedOn}` : ''}
+        </Tag>
+      ),
+    }] : []),
     {
       title: 'Created',
       dataIndex: 'createdAtUtc',
@@ -116,7 +154,7 @@ export function MembersPage() {
         );
       },
     },
-  ], [deleteMutation, modal]);
+  ], [deleteMutation, modal, navigate, showVerification]);
 
   const onTableChange: TableProps<Member>['onChange'] = (pagination, _filters, sorter) => {
     const s = Array.isArray(sorter) ? sorter[0] : sorter;
@@ -139,10 +177,12 @@ export function MembersPage() {
         actions={
           <Space>
             <Button icon={<ImportOutlined />} disabled>Import</Button>
-            <Button icon={<ExportOutlined />} disabled>Export</Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
-              Add member
-            </Button>
+            <Button icon={<ExportOutlined />} onClick={() => exportMembers(query)}>Export</Button>
+            {canCreate && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
+                Add member
+              </Button>
+            )}
           </Space>
         }
       />
@@ -171,6 +211,21 @@ export function MembersPage() {
             onChange={(v) => setQuery((q) => ({ ...q, page: 1, status: v as MemberStatus | undefined }))}
             options={Object.entries(MemberStatusLabel).map(([v, l]) => ({ value: Number(v), label: l }))}
           />
+          {showVerification && (
+            <Select
+              allowClear
+              placeholder="Verification"
+              style={{ inlineSize: 160 }}
+              value={query.dataVerificationStatus}
+              onChange={(v) => setQuery((q) => ({ ...q, page: 1, dataVerificationStatus: v as VerificationStatus | undefined }))}
+              options={[
+                { value: 0, label: 'Not started' },
+                { value: 1, label: 'Pending' },
+                { value: 2, label: 'Verified' },
+                { value: 3, label: 'Rejected' },
+              ]}
+            />
+          )}
           <div style={{ flex: 1 }} />
           <Button icon={<ReloadOutlined />} onClick={() => refetch()} loading={isFetching && !isLoading} />
         </div>

@@ -1,4 +1,5 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { message as antdMessage } from 'antd';
 import { env } from '../config/env';
 import { authStore } from '../auth/authStore';
 
@@ -35,9 +36,24 @@ api.interceptors.response.use(
     const status = err.response?.status;
 
     if (status === 401) {
+      // Distinguish "session expired" (we had a token, server rejected it — usually TTL or
+      // server restart with a new JWT key) from "never logged in". The first case deserves
+      // a user-visible cue so people don't stare at a silent failure.
+      const hadSession = !!authStore.getAccessToken();
       authStore.clear();
       if (!window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
+        if (hadSession) {
+          try {
+            antdMessage.warning({
+              content: 'Your session has expired. Please sign in again.',
+              duration: 5,
+              key: 'session-expired', // de-dupe when multiple 401s arrive in a burst
+            });
+          } catch { /* toast is best-effort */ }
+        }
+        // Preserve where the user was so RequireAuth can bounce them back after login.
+        const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/login?returnTo=${returnTo}`;
       }
     }
 

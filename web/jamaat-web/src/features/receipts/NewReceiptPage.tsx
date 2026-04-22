@@ -457,30 +457,30 @@ export function NewReceiptPage() {
                 <Select value={currency} onChange={setCurrency} showSearch optionFilterProp="label"
                   options={(currenciesQuery.data ?? []).map((c) => ({ value: c.code, label: `${c.code} — ${c.name}${c.isBase ? ' (base)' : ''}` }))} />
               </Form.Item>
-              <Form.Item label="Mode">
+              <Form.Item label="Mode" tooltip="How the money arrived. Cash posts to the cash account; Cheque/Transfer/UPI posts to the selected bank account.">
                 <Select value={paymentMode} onChange={(v) => setPaymentMode(v)}
                   options={Object.entries(PaymentModeLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
               </Form.Item>
               {paymentMode !== 1 && (
-                <Form.Item label="Deposit into bank account">
+                <Form.Item label="Deposit into bank account" tooltip="Which bank account the funds land in. The ledger will debit this account on Confirm.">
                   <Select value={bankAccountId} onChange={setBankAccountId} allowClear placeholder="Select bank account"
                     options={banksQuery.data?.items.map((b) => ({ value: b.id, label: `${b.name} · ${b.accountNumber}` })) ?? []} />
                 </Form.Item>
               )}
               {paymentMode === 2 && (
                 <>
-                  <Form.Item label="Cheque number" required>
+                  <Form.Item label="Cheque number" required tooltip="Cheque serial number as printed. Used for the bank deposit summary report.">
                     <Input value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} className="jm-tnum" />
                   </Form.Item>
-                  <Form.Item label="Cheque date" required>
+                  <Form.Item label="Cheque date" required tooltip="The date printed on the cheque — may differ from the receipt date if the member issued a post-dated cheque.">
                     <DatePicker value={chequeDate} onChange={setChequeDate} format="DD MMM YYYY" style={{ inlineSize: '100%' }} />
                   </Form.Item>
                 </>
               )}
-              <Form.Item label="Reference">
+              <Form.Item label="Reference" tooltip="Any external reference: UPI transaction id, bank transfer reference, online payment gateway id.">
                 <Input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="Transaction ref, UPI id, etc." />
               </Form.Item>
-              <Form.Item label="Remarks">
+              <Form.Item label="Remarks" tooltip="Free-text note shown on the receipt PDF. Use sparingly — long remarks wrap awkwardly on pre-printed stationery.">
                 <Input.TextArea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} />
               </Form.Item>
             </Form>

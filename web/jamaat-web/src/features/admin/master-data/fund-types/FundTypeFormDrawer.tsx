@@ -106,7 +106,7 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         <Form.Item label="Name (Hindi)"><Controller name="nameHindi" control={control} render={({ field }) => <Input {...field} />} /></Form.Item>
         <Form.Item label="Name (Urdu)"><Controller name="nameUrdu" control={control} render={({ field }) => <Input {...field} dir="rtl" />} /></Form.Item>
         <Form.Item label="Description"><Controller name="description" control={control} render={({ field }) => <Input.TextArea {...field} rows={2} />} /></Form.Item>
-        <Form.Item label="Allowed payment modes">
+        <Form.Item label="Allowed payment modes" tooltip="Receipts for this fund can only use one of these modes. Turn off Cheque/Transfer here if you want a cash-only fund (e.g., Sila Fitra).">
           <Space wrap>
             {Object.entries(PaymentModeLabel).map(([v, l]) => {
               const flag = Number(v);
@@ -114,10 +114,10 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
             })}
           </Space>
         </Form.Item>
-        <Form.Item label="Requires ITS number">
+        <Form.Item label="Requires ITS number" tooltip="When ON, a receipt for this fund must be tied to a specific ITS-numbered member. Turn OFF for anonymous funds like General Charity.">
           <Controller name="requiresItsNumber" control={control} render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />} />
         </Form.Item>
-        <Form.Item label="Requires period reference (month/year)">
+        <Form.Item label="Requires period reference (month/year)" tooltip="When ON, the receipt line must specify a month/year (e.g., Madrasa fees for Rabi-ul-Awwal 1447). Used for contribution history reports.">
           <Controller name="requiresPeriodReference" control={control} render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />} />
         </Form.Item>
         {isEdit && (

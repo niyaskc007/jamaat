@@ -9,6 +9,8 @@ export const MemberStatusLabel: Record<MemberStatus, string> = {
   4: 'Suspended',
 };
 
+export type VerificationStatus = 0 | 1 | 2 | 3; // NotStarted | Pending | Verified | Rejected
+
 export type Member = {
   id: string;
   itsNumber: string;
@@ -25,6 +27,8 @@ export type Member = {
   lastSyncedAtUtc?: string | null;
   createdAtUtc: string;
   updatedAtUtc?: string | null;
+  dataVerificationStatus: VerificationStatus;
+  dataVerifiedOn?: string | null;
 };
 
 export type PagedResult<T> = {
@@ -41,6 +45,7 @@ export type MemberListQuery = {
   sortDir?: 'Asc' | 'Desc';
   search?: string;
   status?: MemberStatus;
+  dataVerificationStatus?: VerificationStatus;
 };
 
 export type CreateMemberInput = {

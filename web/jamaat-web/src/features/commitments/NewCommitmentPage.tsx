@@ -168,14 +168,14 @@ export function NewCommitmentPage() {
                   options={['AED', 'INR', 'USD', 'SAR', 'EUR', 'GBP', 'PKR', 'BHD', 'OMR', 'KWD', 'QAR'].map((c) => ({ value: c, label: c }))}
                 />
               </Form.Item>
-              <Form.Item label="Total pledge amount" required>
+              <Form.Item label="Total pledge amount" required tooltip="The full commitment in the chosen currency. Each instalment = total / count. Receipts allocated against this pledge count towards closing instalments.">
                 <InputNumber
                   style={{ inlineSize: 200 }} min={0.01} step={100}
                   value={form.totalAmount}
                   onChange={(v) => setForm((f) => ({ ...f, totalAmount: Number(v ?? 0) }))}
                 />
               </Form.Item>
-              <Form.Item label="Frequency">
+              <Form.Item label="Frequency" tooltip="How often instalments fall due. Weekly/Monthly generate a due date per instalment; Custom leaves dates manual.">
                 <Select
                   value={form.frequency}
                   onChange={(v) => setForm((f) => ({ ...f, frequency: v as CommitmentFrequency }))}
@@ -183,14 +183,14 @@ export function NewCommitmentPage() {
                   options={Object.entries(FrequencyLabel).map(([v, l]) => ({ value: Number(v), label: l }))}
                 />
               </Form.Item>
-              <Form.Item label="# of installments">
+              <Form.Item label="# of installments" tooltip="How many equal parts to split the total into. Use 1 for a single-shot pledge.">
                 <InputNumber
                   style={{ inlineSize: 140 }} min={1} max={600}
                   value={form.numberOfInstallments}
                   onChange={(v) => setForm((f) => ({ ...f, numberOfInstallments: Number(v ?? 1) }))}
                 />
               </Form.Item>
-              <Form.Item label="Start date">
+              <Form.Item label="Start date" tooltip="The first instalment's due date. Subsequent instalments are spaced by the frequency.">
                 <DatePicker
                   value={form.startDate}
                   onChange={(v) => v && setForm((f) => ({ ...f, startDate: v }))}
@@ -199,10 +199,10 @@ export function NewCommitmentPage() {
             </Space>
 
             <Space wrap size="large" style={{ marginBlockEnd: 12 }}>
-              <Form.Item label="Allow partial payments">
+              <Form.Item label="Allow partial payments" tooltip="When ON, a receipt smaller than the instalment amount is accepted and reduces the outstanding balance. When OFF, the receipt amount must exactly match.">
                 <Switch checked={form.allowPartialPayments} onChange={(v) => setForm((f) => ({ ...f, allowPartialPayments: v }))} />
               </Form.Item>
-              <Form.Item label="Auto-advance overflow">
+              <Form.Item label="Auto-advance overflow" tooltip="When ON, any amount paid over an instalment automatically counts towards the next one. Useful when a member pays ahead.">
                 <Switch checked={form.allowAutoAdvance} onChange={(v) => setForm((f) => ({ ...f, allowAutoAdvance: v }))} />
               </Form.Item>
             </Space>

@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import {
   Card, Tabs, Spin, Result, Space, Button, Form, Input, InputNumber, Select, DatePicker, Switch, Tag,
-  Row, Col, Descriptions, App as AntdApp, Avatar, Divider, Typography, Badge, Upload,
+  Row, Col, Descriptions, App as AntdApp, Avatar, Divider, Typography, Badge, Upload, Alert,
 } from 'antd';
+import { useAuth } from '../../../shared/auth/useAuth';
 import { UserOutlined, TeamOutlined, HomeOutlined, BookOutlined, IdcardOutlined, CheckCircleOutlined, PhoneOutlined, GlobalOutlined, HeartOutlined, SafetyCertificateOutlined, FileProtectOutlined, StarOutlined, UploadOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -460,6 +461,9 @@ function OrganisationsTab({ memberId, memberships }: { memberId: string; members
 }
 
 function VerificationTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSaved: (p: MemberProfile) => void; onErr: (e: unknown) => void }) {
+  const { hasPermission } = useAuth();
+  const canVerify = hasPermission('member.verify');
+  const canUpdate = hasPermission('member.update');
   const dataMut = useMutation({ mutationFn: (s: VerificationStatus) => memberProfileApi.verifyData(profile.id, s), onSuccess: onSaved, onError: onErr });
   const photoMut = useMutation({ mutationFn: (s: VerificationStatus) => memberProfileApi.verifyPhoto(profile.id, s), onSuccess: onSaved, onError: onErr });
   const uploadMut = useMutation({ mutationFn: (file: File) => memberProfileApi.uploadPhoto(profile.id, file), onSuccess: onSaved, onError: onErr });
@@ -470,6 +474,12 @@ function VerificationTab({ profile, onSaved, onErr }: { profile: MemberProfile; 
 
   return (
     <div style={{ padding: 24 }}>
+      {!canVerify && (
+        <Alert
+          type="info" showIcon style={{ marginBlockEnd: 16 }}
+          message="You don't have the 'member.verify' permission — the verification buttons below are hidden. Contact an administrator if you need this access."
+        />
+      )}
       <Row gutter={24}>
         <Col span={12}>
           <Card size="small" title="Data verification" style={{ border: '1px solid var(--jm-border)', marginBlockEnd: 16 }}>
@@ -479,11 +489,13 @@ function VerificationTab({ profile, onSaved, onErr }: { profile: MemberProfile; 
                 { key: 'd', label: 'Date', children: profile.dataVerifiedOn ?? '—' },
               ]}
             />
-            <Space style={{ marginBlockStart: 12 }}>
-              <Button type="primary" loading={dataMut.isPending} icon={<CheckCircleOutlined />} onClick={() => dataMut.mutate(2)}>Mark Verified</Button>
-              <Button danger loading={dataMut.isPending} onClick={() => dataMut.mutate(3)}>Reject</Button>
-              <Button loading={dataMut.isPending} onClick={() => dataMut.mutate(1)}>Pending</Button>
-            </Space>
+            {canVerify && (
+              <Space style={{ marginBlockStart: 12 }}>
+                <Button type="primary" loading={dataMut.isPending} icon={<CheckCircleOutlined />} onClick={() => dataMut.mutate(2)}>Mark Verified</Button>
+                <Button danger loading={dataMut.isPending} onClick={() => dataMut.mutate(3)}>Reject</Button>
+                <Button loading={dataMut.isPending} onClick={() => dataMut.mutate(1)}>Pending</Button>
+              </Space>
+            )}
           </Card>
         </Col>
         <Col span={12}>
@@ -498,22 +510,26 @@ function VerificationTab({ profile, onSaved, onErr }: { profile: MemberProfile; 
               {profile.photoUrl
                 ? <img src={profile.photoUrl} alt="Member" style={{ inlineSize: 96, blockSize: 96, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--jm-border)' }} />
                 : <div style={{ inlineSize: 96, blockSize: 96, borderRadius: 8, background: 'var(--jm-surface-muted)', display: 'grid', placeItems: 'center', color: 'var(--jm-gray-400)', fontSize: 11 }}>No photo</div>}
-              <Space direction="vertical">
-                <Upload
-                  maxCount={1} showUploadList={false} accept="image/*"
-                  beforeUpload={(file) => { uploadMut.mutate(file); return false; }}
-                >
-                  <Button icon={<UploadOutlined />} loading={uploadMut.isPending}>Upload photo</Button>
-                </Upload>
-                {profile.photoUrl && (
-                  <Button size="small" type="text" danger loading={deleteMut.isPending} onClick={() => deleteMut.mutate()}>Remove photo</Button>
-                )}
-              </Space>
+              {canUpdate && (
+                <Space direction="vertical">
+                  <Upload
+                    maxCount={1} showUploadList={false} accept="image/*"
+                    beforeUpload={(file) => { uploadMut.mutate(file); return false; }}
+                  >
+                    <Button icon={<UploadOutlined />} loading={uploadMut.isPending}>Upload photo</Button>
+                  </Upload>
+                  {profile.photoUrl && (
+                    <Button size="small" type="text" danger loading={deleteMut.isPending} onClick={() => deleteMut.mutate()}>Remove photo</Button>
+                  )}
+                </Space>
+              )}
             </div>
-            <Space style={{ marginBlockStart: 12 }}>
-              <Button type="primary" loading={photoMut.isPending} icon={<CheckCircleOutlined />} onClick={() => photoMut.mutate(2)}>Mark Verified</Button>
-              <Button danger loading={photoMut.isPending} onClick={() => photoMut.mutate(3)}>Reject</Button>
-            </Space>
+            {canVerify && (
+              <Space style={{ marginBlockStart: 12 }}>
+                <Button type="primary" loading={photoMut.isPending} icon={<CheckCircleOutlined />} onClick={() => photoMut.mutate(2)}>Mark Verified</Button>
+                <Button danger loading={photoMut.isPending} onClick={() => photoMut.mutate(3)}>Reject</Button>
+              </Space>
+            )}
           </Card>
         </Col>
       </Row>

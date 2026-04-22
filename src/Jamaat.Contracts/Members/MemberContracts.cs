@@ -17,7 +17,9 @@ public sealed record MemberDto(
     string? ExternalUserId,
     DateTimeOffset? LastSyncedAtUtc,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset? UpdatedAtUtc);
+    DateTimeOffset? UpdatedAtUtc,
+    VerificationStatus DataVerificationStatus = VerificationStatus.NotStarted,
+    DateOnly? DataVerifiedOn = null);
 
 public sealed record CreateMemberDto(
     string ItsNumber,
@@ -47,4 +49,5 @@ public sealed record MemberListQuery(
     string? SortBy = null,
     string? SortDir = null,
     string? Search = null,
-    MemberStatus? Status = null);
+    MemberStatus? Status = null,
+    VerificationStatus? DataVerificationStatus = null);

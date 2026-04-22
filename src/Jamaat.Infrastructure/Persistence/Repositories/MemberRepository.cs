@@ -30,6 +30,7 @@ public sealed class MemberRepository(JamaatDbContext db) : IMemberRepository
                           || (m.Email != null && EF.Functions.Like(m.Email, $"%{s}%")));
         }
         if (query.Status is not null) q = q.Where(m => m.Status == query.Status);
+        if (query.DataVerificationStatus is not null) q = q.Where(m => m.DataVerificationStatus == query.DataVerificationStatus);
 
         var total = await q.CountAsync(ct);
 
@@ -62,7 +63,9 @@ public sealed class MemberRepository(JamaatDbContext db) : IMemberRepository
                 m.ExternalUserId,
                 m.LastSyncedAtUtc,
                 m.CreatedAtUtc,
-                m.UpdatedAtUtc))
+                m.UpdatedAtUtc,
+                m.DataVerificationStatus,
+                m.DataVerifiedOn))
             .ToListAsync(ct);
 
         return new PagedResult<MemberDto>(items, total, query.Page, query.PageSize);

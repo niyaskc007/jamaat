@@ -25,7 +25,9 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
-  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard';
+  // Accept both router-state (from RequireAuth) and ?returnTo= query (from axios 401 handler).
+  const returnToQS = new URLSearchParams(location.search).get('returnTo');
+  const from = returnToQS ?? (location.state as { from?: string } | null)?.from ?? '/dashboard';
 
   const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<LoginForm>({
     resolver: zodResolver(schema),

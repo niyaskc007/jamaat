@@ -41,6 +41,7 @@ public sealed class MemberService : IMemberService
             SortDir = Enum.TryParse<SortDirection>(query.SortDir, true, out var d) ? d : SortDirection.Asc,
             Search = query.Search,
             Status = query.Status,
+            DataVerificationStatus = query.DataVerificationStatus,
         };
         return await _repo.ListAsync(pagedQuery, ct);
     }
@@ -117,12 +118,15 @@ public sealed class MemberService : IMemberService
         m.ExternalUserId,
         m.LastSyncedAtUtc,
         m.CreatedAtUtc,
-        m.UpdatedAtUtc);
+        m.UpdatedAtUtc,
+        m.DataVerificationStatus,
+        m.DataVerifiedOn);
 }
 
 public sealed record MemberPageRequest : PagedQuery
 {
     public MemberStatus? Status { get; init; }
+    public VerificationStatus? DataVerificationStatus { get; init; }
 }
 
 public interface IMemberRepository
