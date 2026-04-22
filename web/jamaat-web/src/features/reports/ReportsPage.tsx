@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Card, DatePicker, Tabs, Table, Select, Empty } from 'antd';
+import { Card, DatePicker, Tabs, Table, Select, Empty, Button } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -8,6 +9,23 @@ import { money, formatDate } from '../../shared/format/format';
 import { reportsApi } from '../ledger/ledgerApi';
 import { accountsApi } from '../admin/master-data/chart-of-accounts/accountsApi';
 import { useBaseCurrency } from '../../shared/hooks/useBaseCurrency';
+import { useAuth } from '../../shared/auth/useAuth';
+import { api } from '../../shared/api/client';
+
+/// Fetches an XLSX from the given endpoint and triggers a browser download.
+/// Using axios with responseType=blob so the auth header is attached automatically.
+async function downloadXlsx(path: string, params: Record<string, string>, filename: string) {
+  const { data } = await api.get<Blob>(path, { params, responseType: 'blob' });
+  const url = URL.createObjectURL(data);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function ExportButton({ onClick }: { onClick: () => void }) {
+  return <Button size="small" icon={<DownloadOutlined />} onClick={onClick}>Export XLSX</Button>;
+}
 
 const { RangePicker } = DatePicker;
 
@@ -36,11 +54,14 @@ function useRange(defaultRange: [Dayjs, Dayjs] = [dayjs().subtract(30, 'day'), d
 
 function DailyCollection() {
   const { range, setRange, from, to } = useRange();
+  const { hasPermission } = useAuth();
   const { data, isLoading } = useQuery({ queryKey: ['rpt', 'daily', from, to], queryFn: () => reportsApi.dailyCollection(from, to) });
   return (
     <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
-      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)' }}>
+      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 8, alignItems: 'center' }}>
         <RangePicker value={range} onChange={(v) => v && setRange(v as [Dayjs, Dayjs])} />
+        <div style={{ flex: 1 }} />
+        {hasPermission('reports.export') && <ExportButton onClick={() => downloadXlsx('/api/v1/reports/daily-collection.xlsx', { from, to }, `daily-collection_${from}_${to}.xlsx`)} />}
       </div>
       <Table rowKey={(r) => `${r.date}-${r.currency}`} size="middle" loading={isLoading} dataSource={data ?? []}
         pagination={false}
@@ -58,11 +79,14 @@ function DailyCollection() {
 function FundWise() {
   const { range, setRange, from, to } = useRange();
   const baseCurrency = useBaseCurrency();
+  const { hasPermission } = useAuth();
   const { data, isLoading } = useQuery({ queryKey: ['rpt', 'fund', from, to], queryFn: () => reportsApi.fundWise(from, to) });
   return (
     <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
-      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)' }}>
+      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 8, alignItems: 'center' }}>
         <RangePicker value={range} onChange={(v) => v && setRange(v as [Dayjs, Dayjs])} />
+        <div style={{ flex: 1 }} />
+        {hasPermission('reports.export') && <ExportButton onClick={() => downloadXlsx('/api/v1/reports/fund-wise.xlsx', { from, to }, `fund-wise_${from}_${to}.xlsx`)} />}
       </div>
       <Table rowKey="fundTypeId" size="middle" loading={isLoading} dataSource={data ?? []} pagination={false}
         columns={[
@@ -79,11 +103,14 @@ function FundWise() {
 
 function DailyPayments() {
   const { range, setRange, from, to } = useRange();
+  const { hasPermission } = useAuth();
   const { data, isLoading } = useQuery({ queryKey: ['rpt', 'payments', from, to], queryFn: () => reportsApi.dailyPayments(from, to) });
   return (
     <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
-      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)' }}>
+      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 8, alignItems: 'center' }}>
         <RangePicker value={range} onChange={(v) => v && setRange(v as [Dayjs, Dayjs])} />
+        <div style={{ flex: 1 }} />
+        {hasPermission('reports.export') && <ExportButton onClick={() => downloadXlsx('/api/v1/reports/daily-payments.xlsx', { from, to }, `daily-payments_${from}_${to}.xlsx`)} />}
       </div>
       <Table rowKey={(r) => `${r.date}-${r.currency}`} size="middle" loading={isLoading} dataSource={data ?? []} pagination={false}
         columns={[
@@ -100,6 +127,7 @@ function DailyPayments() {
 function CashBook() {
   const { range, setRange, from, to } = useRange();
   const baseCurrency = useBaseCurrency();
+  const { hasPermission } = useAuth();
   const accountsQuery = useQuery({ queryKey: ['accounts', 'all'], queryFn: () => accountsApi.list({ page: 1, pageSize: 500 }) });
   const cashLike = accountsQuery.data?.items.filter((a) => a.type === 1) ?? [];
   const [accountId, setAccountId] = useState<string | undefined>();
@@ -110,11 +138,15 @@ function CashBook() {
   });
   return (
     <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
-      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 8 }}>
+      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 8, alignItems: 'center' }}>
         <Select style={{ inlineSize: 280 }} placeholder="Select cash/bank account"
           value={accountId} onChange={setAccountId}
           options={cashLike.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))} />
         <RangePicker value={range} onChange={(v) => v && setRange(v as [Dayjs, Dayjs])} />
+        <div style={{ flex: 1 }} />
+        {hasPermission('reports.export') && accountId && (
+          <ExportButton onClick={() => downloadXlsx('/api/v1/reports/cash-book.xlsx', { accountId, from, to }, `cash-book_${from}_${to}.xlsx`)} />
+        )}
       </div>
       <Table rowKey={(r, i) => `${r.date}-${i}`} size="middle" loading={isLoading} dataSource={data ?? []} pagination={false}
         columns={[

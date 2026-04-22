@@ -76,6 +76,9 @@ public sealed record UpdateFamilyRefsDto(string? FatherItsNumber, string? Mother
 
 public sealed record VerifyRequestDto(VerificationStatus Status);
 
+public sealed record BulkVerifyRequestDto(IReadOnlyCollection<Guid> MemberIds, VerificationStatus Status);
+public sealed record BulkVerifyResultDto(int UpdatedCount, int NotFoundCount, IReadOnlyCollection<Guid> NotFoundIds);
+
 public sealed record UploadPhotoDto(string? PhotoUrl);
 
 public sealed record MemberContributionSummaryDto(

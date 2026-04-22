@@ -1,4 +1,5 @@
 using Jamaat.Application.Accounting;
+using Jamaat.Application.Common;
 using Jamaat.Contracts.Ledger;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -56,7 +57,7 @@ public sealed class PeriodsController(IPeriodService svc) : ControllerBase
 [ApiController]
 [Authorize]
 [Route("api/v1/reports")]
-public sealed class ReportsController(IReportsService svc) : ControllerBase
+public sealed class ReportsController(IReportsService svc, IExcelExporter excel) : ControllerBase
 {
     [HttpGet("daily-collection")]
     [Authorize(Policy = "reports.view")]
@@ -77,6 +78,88 @@ public sealed class ReportsController(IReportsService svc) : ControllerBase
     [Authorize(Policy = "reports.view")]
     public async Task<IActionResult> CashBook([FromQuery] Guid accountId, [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
         => Ok(await svc.CashBookAsync(accountId, from, to, ct));
+
+    // --- XLSX exports -----------------------------------------------------
+    // Each endpoint reuses the matching JSON report service call, then formats
+    // via the shared ExcelExporter. Filenames embed the date range so downloads
+    // don't collide when a user exports the same report multiple times.
+
+    [HttpGet("daily-collection.xlsx")]
+    [Authorize(Policy = "reports.export")]
+    public async Task<IActionResult> DailyCollectionXlsx([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
+    {
+        var rows = await svc.DailyCollectionAsync(from, to, ct);
+        var sheet = new ExcelSheet(
+            "Daily Collection",
+            new[]
+            {
+                new ExcelColumn("Date", ExcelColumnType.Date),
+                new ExcelColumn("Receipts", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+            },
+            rows.Select(r => (IReadOnlyList<object?>)new object?[] { r.Date, r.ReceiptCount, r.AmountTotal, r.Currency }).ToList());
+        return Xlsx(excel.Build(new[] { sheet }), $"daily-collection_{from:yyyyMMdd}_{to:yyyyMMdd}.xlsx");
+    }
+
+    [HttpGet("fund-wise.xlsx")]
+    [Authorize(Policy = "reports.export")]
+    public async Task<IActionResult> FundWiseXlsx([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
+    {
+        var rows = await svc.FundWiseAsync(from, to, ct);
+        var sheet = new ExcelSheet(
+            "Fund-wise",
+            new[]
+            {
+                new ExcelColumn("Fund code"),
+                new ExcelColumn("Fund name"),
+                new ExcelColumn("Lines", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+            },
+            rows.Select(r => (IReadOnlyList<object?>)new object?[] { r.FundTypeCode, r.FundTypeName, r.LineCount, r.AmountTotal }).ToList());
+        return Xlsx(excel.Build(new[] { sheet }), $"fund-wise_{from:yyyyMMdd}_{to:yyyyMMdd}.xlsx");
+    }
+
+    [HttpGet("daily-payments.xlsx")]
+    [Authorize(Policy = "reports.export")]
+    public async Task<IActionResult> DailyPaymentsXlsx([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
+    {
+        var rows = await svc.DailyPaymentsAsync(from, to, ct);
+        var sheet = new ExcelSheet(
+            "Daily Payments",
+            new[]
+            {
+                new ExcelColumn("Date", ExcelColumnType.Date),
+                new ExcelColumn("Vouchers", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+            },
+            rows.Select(r => (IReadOnlyList<object?>)new object?[] { r.Date, r.VoucherCount, r.AmountTotal, r.Currency }).ToList());
+        return Xlsx(excel.Build(new[] { sheet }), $"daily-payments_{from:yyyyMMdd}_{to:yyyyMMdd}.xlsx");
+    }
+
+    [HttpGet("cash-book.xlsx")]
+    [Authorize(Policy = "reports.export")]
+    public async Task<IActionResult> CashBookXlsx([FromQuery] Guid accountId, [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
+    {
+        var rows = await svc.CashBookAsync(accountId, from, to, ct);
+        var sheet = new ExcelSheet(
+            "Cash Book",
+            new[]
+            {
+                new ExcelColumn("Date", ExcelColumnType.Date),
+                new ExcelColumn("Reference"),
+                new ExcelColumn("Narration"),
+                new ExcelColumn("Debit", ExcelColumnType.Currency),
+                new ExcelColumn("Credit", ExcelColumnType.Currency),
+                new ExcelColumn("Balance", ExcelColumnType.Currency),
+            },
+            rows.Select(r => (IReadOnlyList<object?>)new object?[] { r.Date, r.Reference, r.Narration, r.Debit, r.Credit, r.Balance }).ToList());
+        return Xlsx(excel.Build(new[] { sheet }), $"cash-book_{from:yyyyMMdd}_{to:yyyyMMdd}.xlsx");
+    }
+
+    private FileContentResult Xlsx(byte[] bytes, string filename) =>
+        File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
 }
 
 [ApiController]

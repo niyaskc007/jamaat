@@ -22,6 +22,7 @@ public interface IMemberProfileService
     Task<Result<MemberProfileDto>> UpdateFamilyRefsAsync(Guid id, UpdateFamilyRefsDto dto, CancellationToken ct = default);
     Task<Result<MemberProfileDto>> VerifyDataAsync(Guid id, VerifyRequestDto dto, CancellationToken ct = default);
     Task<Result<MemberProfileDto>> VerifyPhotoAsync(Guid id, VerifyRequestDto dto, CancellationToken ct = default);
+    Task<Result<BulkVerifyResultDto>> VerifyDataBulkAsync(BulkVerifyRequestDto dto, CancellationToken ct = default);
     Task<Result<MemberProfileDto>> SetPhotoUrlAsync(Guid id, UploadPhotoDto dto, CancellationToken ct = default);
     Task<Result<MemberContributionSummaryDto>> GetContributionSummaryAsync(Guid id, CancellationToken ct = default);
 }
@@ -143,6 +144,29 @@ public sealed class MemberProfileService(
         db.Members.Update(m);
         await uow.SaveChangesAsync(ct);
         return await LoadProfileAsync(id, ct);
+    }
+
+    public async Task<Result<BulkVerifyResultDto>> VerifyDataBulkAsync(BulkVerifyRequestDto dto, CancellationToken ct = default)
+    {
+        // Dedupe + cap to keep one request from dominating the thread pool or audit log.
+        var ids = dto.MemberIds.Distinct().Take(500).ToArray();
+        if (ids.Length == 0) return Error.Validation("member.bulk.empty", "No member ids supplied.");
+
+        var now = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
+        var userId = currentUser.UserId;
+
+        var members = await db.Members.Where(m => ids.Contains(m.Id) && !m.IsDeleted).ToListAsync(ct);
+        var found = members.Select(m => m.Id).ToHashSet();
+        var missing = ids.Where(id => !found.Contains(id)).ToArray();
+
+        foreach (var m in members)
+        {
+            m.VerifyData(dto.Status, userId, now);
+            db.Members.Update(m);
+        }
+        await uow.SaveChangesAsync(ct);
+
+        return new BulkVerifyResultDto(members.Count, missing.Length, missing);
     }
 
     public async Task<Result<MemberProfileDto>> SetPhotoUrlAsync(Guid id, UploadPhotoDto dto, CancellationToken ct = default)

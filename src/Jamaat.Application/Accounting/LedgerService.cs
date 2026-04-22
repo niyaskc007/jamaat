@@ -73,13 +73,18 @@ public sealed class ReportsService(Persistence.JamaatDbContextFacade db) : IRepo
 {
     public async Task<IReadOnlyList<ReportDailyCollectionDto>> DailyCollectionAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
     {
-        var rows = await db.Receipts.AsNoTracking()
+        // EF Core can't translate GroupBy into a record projection here (the currency field
+        // is a value-object-backed string). Fetch the narrow projection first, then group in
+        // memory — receipt volumes are bounded so this is cheap.
+        var raw = await db.Receipts.AsNoTracking()
             .Where(r => r.Status == ReceiptStatus.Confirmed && r.ReceiptDate >= from && r.ReceiptDate <= to)
+            .Select(r => new { r.ReceiptDate, r.Currency, r.AmountTotal })
+            .ToListAsync(ct);
+        return raw
             .GroupBy(r => new { r.ReceiptDate, r.Currency })
             .Select(g => new ReportDailyCollectionDto(g.Key.ReceiptDate, g.Count(), g.Sum(x => x.AmountTotal), g.Key.Currency))
             .OrderBy(x => x.Date)
-            .ToListAsync(ct);
-        return rows;
+            .ToList();
     }
 
     public async Task<IReadOnlyList<ReportFundWiseDto>> FundWiseAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct = default)
@@ -102,13 +107,16 @@ public sealed class ReportsService(Persistence.JamaatDbContextFacade db) : IRepo
 
     public async Task<IReadOnlyList<ReportDailyPaymentDto>> DailyPaymentsAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
     {
-        var rows = await db.Vouchers.AsNoTracking()
+        // Same GroupBy-translation issue as DailyCollectionAsync — fetch narrow then group in memory.
+        var raw = await db.Vouchers.AsNoTracking()
             .Where(v => v.Status == VoucherStatus.Paid && v.VoucherDate >= from && v.VoucherDate <= to)
+            .Select(v => new { v.VoucherDate, v.Currency, v.AmountTotal })
+            .ToListAsync(ct);
+        return raw
             .GroupBy(v => new { v.VoucherDate, v.Currency })
             .Select(g => new ReportDailyPaymentDto(g.Key.VoucherDate, g.Count(), g.Sum(x => x.AmountTotal), g.Key.Currency))
             .OrderBy(x => x.Date)
-            .ToListAsync(ct);
-        return rows;
+            .ToList();
     }
 
     public async Task<IReadOnlyList<ReportCashBookRow>> CashBookAsync(Guid accountId, DateOnly from, DateOnly to, CancellationToken ct = default)

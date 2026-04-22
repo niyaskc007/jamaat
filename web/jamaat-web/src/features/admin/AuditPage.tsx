@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Card, Input, Select, Table, Tag, DatePicker, Button, Typography, Segmented, Tooltip } from 'antd';
-import { SearchOutlined, ReloadOutlined, SafetyOutlined, DownloadOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, SafetyOutlined, DownloadOutlined, LinkOutlined } from '@ant-design/icons';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { Dayjs } from 'dayjs';
+import { Link } from 'react-router-dom';
 import { api } from '../../shared/api/client';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { formatDateTime } from '../../shared/format/format';
@@ -90,7 +91,7 @@ export function AuditPage() {
             { title: 'User', dataIndex: 'userName', key: 'u', width: 180 },
             { title: 'Action', dataIndex: 'action', key: 'a', width: 100, render: (v: string) => <ActionTag action={v} /> },
             { title: 'Entity', dataIndex: 'entityName', key: 'en', width: 160 },
-            { title: 'Entity Id', dataIndex: 'entityId', key: 'ei', render: (v: string) => <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 12 }}>{v}</span> },
+            { title: 'Entity Id', dataIndex: 'entityId', key: 'ei', render: (v: string, row: AuditLog) => <EntityLink entityName={row.entityName} entityId={v} /> },
             { title: 'Correlation', dataIndex: 'correlationId', key: 'c', width: 140, render: (v: string) => (
               <Tooltip title={v}><span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 12, color: 'var(--jm-primary-500)' }}>{v.slice(0, 10)}…</span></Tooltip>
             ) },
@@ -106,6 +107,30 @@ export function AuditPage() {
 function ActionTag({ action }: { action: string }) {
   const color = action === 'Create' ? 'green' : action === 'Delete' ? 'red' : action === 'Update' ? 'blue' : 'default';
   return <Tag color={color} style={{ margin: 0 }}>{action}</Tag>;
+}
+
+/// Map audit entityName → SPA route. Unknown entities render the raw id only.
+/// Keep this list conservative — only entities with a real detail route should
+/// become links, otherwise we'd send reviewers to 404s.
+const ENTITY_ROUTE: Record<string, (id: string) => string> = {
+  Receipt: (id) => `/receipts/${id}`,
+  Voucher: (id) => `/vouchers/${id}`,
+  Member: (id) => `/members/${id}`,
+  Commitment: (id) => `/commitments/${id}`,
+  QarzanHasanaLoan: (id) => `/qarzan-hasana/${id}`,
+  Event: (id) => `/events/${id}`,
+};
+
+function EntityLink({ entityName, entityId }: { entityName: string; entityId: string }) {
+  const monoStyle: React.CSSProperties = { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 12 };
+  const to = ENTITY_ROUTE[entityName]?.(entityId);
+  if (!to) return <span className="jm-tnum" style={monoStyle}>{entityId}</span>;
+  return (
+    <Link to={to} style={{ ...monoStyle, color: 'var(--jm-primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <LinkOutlined style={{ fontSize: 11 }} />
+      {entityId}
+    </Link>
+  );
 }
 
 /// Expanded row body: toggles between a field-by-field diff (default) and raw JSON.

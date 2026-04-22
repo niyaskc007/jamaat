@@ -177,21 +177,16 @@ export function MembersPage() {
     if (selectedIds.length === 0 || bulkBusy) return;
     setBulkBusy(true);
     try {
-      // Per-row endpoint — the API doesn't have a batch verify yet. With our default
-      // page size of 25 this is a small concurrent fan-out; we cap at 10 at a time.
-      const chunks: string[][] = [];
-      for (let i = 0; i < selectedIds.length; i += 10) chunks.push(selectedIds.slice(i, i + 10));
-      let ok = 0, fail = 0;
-      for (const c of chunks) {
-        const res = await Promise.allSettled(c.map((id) =>
-          api.post(`/api/v1/members/${id}/profile/verify-data`, { status: 2 })
-        ));
-        ok += res.filter((r) => r.status === 'fulfilled').length;
-        fail += res.filter((r) => r.status === 'rejected').length;
-      }
-      message[fail === 0 ? 'success' : 'warning'](`Verified ${ok} member(s)${fail ? ` · ${fail} failed` : ''}.`);
+      const { data: res } = await api.post<{ updatedCount: number; notFoundCount: number; notFoundIds: string[] }>(
+        '/api/v1/members/bulk/verify-data',
+        { memberIds: selectedIds, status: 2 }
+      );
+      const msg = `Verified ${res.updatedCount} member(s)${res.notFoundCount ? ` · ${res.notFoundCount} missing` : ''}.`;
+      message[res.notFoundCount === 0 ? 'success' : 'warning'](msg);
       setSelectedIds([]);
       await qc.invalidateQueries({ queryKey: ['members'] });
+    } catch (e) {
+      message.error(extractProblem(e).detail ?? 'Bulk verify failed.');
     } finally {
       setBulkBusy(false);
     }
