@@ -10,6 +10,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
+import { ModuleEmptyState } from '../../shared/ui/ModuleEmptyState';
+import { useAuth } from '../../shared/auth/useAuth';
 import { money, formatDate } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
 import {
@@ -23,6 +25,8 @@ export function VouchersPage() {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission('voucher.create');
   const { message, modal } = AntdApp.useApp();
 
   const [query, setQuery] = useState<VoucherListQuery>({ page: 1, pageSize: 25 });
@@ -86,16 +90,27 @@ export function VouchersPage() {
     },
   ], [approveMut, cancelMut, modal, navigate, reverseMut]);
 
+  const hasActiveFilters = !!(search || range || query.status !== undefined);
   const empty = !isLoading && (data?.total ?? 0) === 0;
+  const firstRun = empty && !hasActiveFilters;
 
   return (
     <div>
       <PageHeader
         title={t('nav.vouchers')}
         subtitle="Outgoing payment vouchers."
-        actions={<Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/vouchers/new')}>New Voucher</Button>}
+        actions={canCreate ? <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/vouchers/new')}>New Voucher</Button> : null}
       />
 
+      {firstRun ? (
+        <ModuleEmptyState
+          icon={<WalletOutlined />}
+          title="No vouchers yet"
+          description="Record outgoing payments here. Expense types over their configured threshold require approval before paying. Cancelled vouchers post nothing; paid ones hit the ledger."
+          primaryAction={canCreate ? { label: 'New voucher', onClick: () => navigate('/vouchers/new') } : undefined}
+          helpHref="/help"
+        />
+      ) : (
       <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
         <div style={{ display: 'flex', gap: 8, padding: 12, borderBlockEnd: '1px solid var(--jm-border)', flexWrap: 'wrap' }}>
           <RangePicker value={range} onChange={(v) => setRange(v as [Dayjs, Dayjs] | null)} style={{ inlineSize: 240 }}
@@ -122,8 +137,10 @@ export function VouchersPage() {
               <Empty image={<WalletOutlined style={{ fontSize: 40, color: 'var(--jm-gray-300)' }} />} styles={{ image: { blockSize: 56 } }}
                 description={
                   <div style={{ paddingBlock: 16 }}>
-                    <div style={{ fontWeight: 500, color: 'var(--jm-gray-700)', marginBlockEnd: 4 }}>No vouchers yet</div>
-                    <Space><Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/vouchers/new')}>New Voucher</Button></Space>
+                    <div style={{ fontWeight: 500, color: 'var(--jm-gray-700)', marginBlockEnd: 4 }}>No matches</div>
+                    <Space style={{ marginBlockStart: 8 }}>
+                      <Button onClick={() => { setSearch(''); setRange(null); setQuery({ page: 1, pageSize: 25 }); }}>Clear filters</Button>
+                    </Space>
                   </div>
                 } />
             ) : undefined,
@@ -131,6 +148,7 @@ export function VouchersPage() {
           scroll={{ x: 'max-content' }}
         />
       </Card>
+      )}
     </div>
   );
 }

@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Button, Card, Input, Select, Table, Tag, Empty, Space, App as AntdApp, Drawer, Form, DatePicker, Dropdown, Switch, Modal } from 'antd';
 import type { TableProps, MenuProps } from 'antd';
-import { PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, EditOutlined, DeleteOutlined, StarOutlined, ScanOutlined, SettingOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, EditOutlined, DeleteOutlined, StarOutlined, ScanOutlined, SettingOutlined, CalendarOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
+import { ModuleEmptyState } from '../../shared/ui/ModuleEmptyState';
+import { useAuth } from '../../shared/auth/useAuth';
 import { formatDate, formatDateTime } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
 import { eventsApi, EventCategoryLabel, type Event, type EventCategory, type EventScan } from './eventsApi';
@@ -13,6 +15,8 @@ import { eventsApi, EventCategoryLabel, type Event, type EventCategory, type Eve
 export function EventsPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission('event.manage');
   const { message, modal } = AntdApp.useApp();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<EventCategory>();
@@ -63,12 +67,25 @@ export function EventsPage() {
     },
   ];
 
+  const hasActiveFilters = !!(search || category !== undefined);
+  const empty = !isLoading && (data?.total ?? 0) === 0;
+  const firstRun = empty && !hasActiveFilters;
+
   return (
     <div>
       <PageHeader title="Events"
         subtitle="Religious and community events. Scan ITS numbers at an event to record member attendance."
-        actions={<Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>New event</Button>} />
+        actions={canManage ? <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>New event</Button> : null} />
 
+      {firstRun ? (
+        <ModuleEmptyState
+          icon={<CalendarOutlined />}
+          title="No events yet"
+          description="Create events like Ashara, Milad, or Urs. Each event gets a branded public portal with registration, guests and on-the-day scan-in. The page designer lets you drop in a hero, agenda, speakers, venue, and more."
+          primaryAction={canManage ? { label: 'Create your first event', onClick: () => { setEditing(null); setDrawerOpen(true); } } : undefined}
+          helpHref="/help"
+        />
+      ) : (
       <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderBlockEnd: '1px solid var(--jm-border)' }}>
           <Input placeholder="Search" prefix={<SearchOutlined />} allowClear value={search}
@@ -82,8 +99,18 @@ export function EventsPage() {
         <Table rowKey="id" size="middle" loading={isLoading} columns={cols} dataSource={data?.items ?? []}
           onChange={(p) => setPage(p.current ?? 1)}
           pagination={{ current: page, pageSize: 25, total: data?.total ?? 0 }}
-          locale={{ emptyText: (data?.total ?? 0) === 0 ? <Empty image={<StarOutlined style={{ fontSize: 40, color: 'var(--jm-gray-300)' }} />} description="No events yet" /> : undefined }} />
+          locale={{ emptyText: empty ? (
+            <Empty image={<StarOutlined style={{ fontSize: 40, color: 'var(--jm-gray-300)' }} />}
+              description={
+                <div style={{ paddingBlock: 12 }}>
+                  <div style={{ fontWeight: 500, color: 'var(--jm-gray-700)' }}>No matches</div>
+                  <div style={{ fontSize: 13, color: 'var(--jm-gray-500)', marginBlockEnd: 12 }}>No events match the current filters.</div>
+                  <Button onClick={() => { setSearch(''); setCategory(undefined); setPage(1); }}>Clear filters</Button>
+                </div>
+              } />
+          ) : undefined }} />
       </Card>
+      )}
 
       <EventDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} event={editing} />
       {scanOpen && <ScanModal event={scanOpen} onClose={() => setScanOpen(null)} />}

@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Button, Card, Input, Select, Table, Tag, Empty, App as AntdApp, Drawer, Form, DatePicker, Dropdown } from 'antd';
 import type { TableProps, MenuProps } from 'antd';
-import { PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, BankOutlined, CheckCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, BankOutlined, GiftOutlined, CheckCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
+import { ModuleEmptyState } from '../../shared/ui/ModuleEmptyState';
+import { useAuth } from '../../shared/auth/useAuth';
 import { formatDate, money } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
 import {
@@ -16,6 +18,8 @@ import { MemberPicker } from '../families/FamilyFormDrawer';
 
 export function FundEnrollmentsPage() {
   const qc = useQueryClient();
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission('enrollment.create');
   const { message, modal } = AntdApp.useApp();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<EnrollmentStatus>();
@@ -80,16 +84,27 @@ export function FundEnrollmentsPage() {
     },
   ];
 
+  const hasActiveFilters = !!(search || status !== undefined || fundFilter);
   const empty = !isLoading && (data?.total ?? 0) === 0;
+  const firstRun = empty && !hasActiveFilters;
 
   return (
     <div>
       <PageHeader
         title="Fund Enrollments"
         subtitle="Long-lived per-member subscriptions to Sabil, Wajebaat, Mutafariq and Niyaz funds."
-        actions={<Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawerOpen(true)}>New enrollment</Button>}
+        actions={canCreate ? <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawerOpen(true)}>New enrollment</Button> : null}
       />
 
+      {firstRun ? (
+        <ModuleEmptyState
+          icon={<GiftOutlined />}
+          title="No enrollments yet"
+          description="Enrol a member into a fund (Sabil, Wajebaat, Niyaz, etc.) so it becomes selectable on the receipt form. Drafts require approval before they go live."
+          primaryAction={canCreate ? { label: 'Create enrollment', onClick: () => setDrawerOpen(true) } : undefined}
+          helpHref="/help"
+        />
+      ) : (
       <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderBlockEnd: '1px solid var(--jm-border)' }}>
           <Input placeholder="Search code" prefix={<SearchOutlined />} allowClear value={search}
@@ -108,10 +123,18 @@ export function FundEnrollmentsPage() {
           columns={cols} dataSource={data?.items ?? []}
           onChange={(p) => setPage(p.current ?? 1)}
           pagination={{ current: page, pageSize: 25, total: data?.total ?? 0 }}
-          locale={{ emptyText: empty
-            ? <Empty image={<BankOutlined style={{ fontSize: 40, color: 'var(--jm-gray-300)' }} />} description="No enrollments yet" />
-            : undefined }} />
+          locale={{ emptyText: empty ? (
+            <Empty image={<BankOutlined style={{ fontSize: 40, color: 'var(--jm-gray-300)' }} />}
+              description={
+                <div style={{ paddingBlock: 12 }}>
+                  <div style={{ fontWeight: 500, color: 'var(--jm-gray-700)' }}>No matches</div>
+                  <div style={{ fontSize: 13, color: 'var(--jm-gray-500)', marginBlockEnd: 12 }}>No enrollments match the current filters.</div>
+                  <Button onClick={() => { setSearch(''); setStatus(undefined); setFundFilter(undefined); setPage(1); }}>Clear filters</Button>
+                </div>
+              } />
+          ) : undefined }} />
       </Card>
+      )}
 
       <NewEnrollmentDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>

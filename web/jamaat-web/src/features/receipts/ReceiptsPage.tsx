@@ -10,6 +10,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
+import { ModuleEmptyState } from '../../shared/ui/ModuleEmptyState';
+import { useAuth } from '../../shared/auth/useAuth';
 import { money, formatDate } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
 import {
@@ -23,6 +25,8 @@ export function ReceiptsPage() {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission('receipt.create');
   const { message, modal } = AntdApp.useApp();
 
   const [query, setQuery] = useState<ReceiptListQuery>({ page: 1, pageSize: 25 });
@@ -91,18 +95,29 @@ export function ReceiptsPage() {
     },
   ], [cancelMut, modal, navigate, reverseMut]);
 
+  const hasActiveFilters = !!(search || range || query.status !== undefined || query.paymentMode !== undefined);
   const empty = !isLoading && (data?.total ?? 0) === 0;
+  const firstRun = empty && !hasActiveFilters;
 
   return (
     <div>
       <PageHeader
         title={t('nav.receipts')}
         subtitle="All inward donation and fund receipts."
-        actions={
+        actions={canCreate ? (
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/receipts/new')}>New Receipt</Button>
-        }
+        ) : null}
       />
 
+      {firstRun ? (
+        <ModuleEmptyState
+          icon={<FileTextOutlined />}
+          title="No receipts yet"
+          description="Every inward payment is captured as a receipt. The ledger posts only when you Confirm, so drafts are safe to experiment with. Reprints and cancellations are audited."
+          primaryAction={canCreate ? { label: 'Issue first receipt', onClick: () => navigate('/receipts/new') } : undefined}
+          helpHref="/help"
+        />
+      ) : (
       <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
         <div style={{ display: 'flex', gap: 8, padding: 12, borderBlockEnd: '1px solid var(--jm-border)', flexWrap: 'wrap' }}>
           <RangePicker value={range} onChange={(v) => setRange(v as [Dayjs, Dayjs] | null)}
@@ -132,9 +147,9 @@ export function ReceiptsPage() {
               <Empty image={<FileTextOutlined style={{ fontSize: 40, color: 'var(--jm-gray-300)' }} />} styles={{ image: { blockSize: 56 } }}
                 description={
                   <div style={{ paddingBlock: 16 }}>
-                    <div style={{ fontWeight: 500, color: 'var(--jm-gray-700)', marginBlockEnd: 4 }}>No receipts yet</div>
-                    <div style={{ fontSize: 13, color: 'var(--jm-gray-500)', marginBlockEnd: 16 }}>Issue your first receipt to a member.</div>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/receipts/new')}>New Receipt</Button>
+                    <div style={{ fontWeight: 500, color: 'var(--jm-gray-700)', marginBlockEnd: 4 }}>No matches</div>
+                    <div style={{ fontSize: 13, color: 'var(--jm-gray-500)', marginBlockEnd: 16 }}>No receipts match the current filters. Try adjusting the date range or clearing filters.</div>
+                    <Button onClick={() => { setSearch(''); setRange(null); setQuery({ page: 1, pageSize: 25 }); }}>Clear filters</Button>
                   </div>
                 } />
             ) : undefined,
@@ -142,6 +157,7 @@ export function ReceiptsPage() {
           scroll={{ x: 'max-content' }}
         />
       </Card>
+      )}
     </div>
   );
 }

@@ -31,6 +31,13 @@ import { AuditPage } from '../features/admin/AuditPage';
 import { ErrorLogsPage } from '../features/admin/error-logs/ErrorLogsPage';
 import { HelpPage } from '../features/help/HelpPage';
 import { RequireAuth } from '../shared/auth/RequireAuth';
+import { RequirePermission } from '../shared/auth/RequirePermission';
+import type { ReactNode } from 'react';
+
+/// Wrap a route element with a permission check. `anyOf=[]` means "any signed-in user".
+const Gate = ({ anyOf, children }: { anyOf: string[]; children: ReactNode }) => (
+  <RequirePermission anyOf={anyOf}>{children}</RequirePermission>
+);
 
 export function App() {
   return (
@@ -48,31 +55,31 @@ export function App() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="members" element={<MembersPage />} />
-        <Route path="members/:id" element={<MemberProfilePage />} />
-        <Route path="families" element={<FamiliesPage />} />
-        <Route path="commitments" element={<CommitmentsPage />} />
-        <Route path="commitments/new" element={<NewCommitmentPage />} />
-        <Route path="commitments/:id" element={<CommitmentDetailPage />} />
-        <Route path="fund-enrollments" element={<FundEnrollmentsPage />} />
-        <Route path="qarzan-hasana" element={<QarzanHasanaPage />} />
-        <Route path="qarzan-hasana/new" element={<NewQarzanHasanaPage />} />
-        <Route path="qarzan-hasana/:id" element={<QarzanHasanaDetailPage />} />
-        <Route path="events" element={<EventsPage />} />
-        <Route path="events/:id" element={<EventDetailPage />} />
-        <Route path="receipts" element={<ReceiptsPage />} />
-        <Route path="receipts/new" element={<NewReceiptPage />} />
-        <Route path="receipts/:id" element={<ReceiptDetailPage />} />
-        <Route path="vouchers" element={<VouchersPage />} />
-        <Route path="vouchers/new" element={<NewVoucherPage />} />
-        <Route path="vouchers/:id" element={<VoucherDetailPage />} />
-        <Route path="ledger" element={<LedgerPage />} />
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="admin/users" element={<UsersPage />} />
-        <Route path="admin/master-data" element={<MasterDataPage />} />
-        <Route path="admin/integrations" element={<IntegrationsPage />} />
-        <Route path="admin/audit" element={<AuditPage />} />
-        <Route path="admin/error-logs" element={<ErrorLogsPage />} />
+        <Route path="members" element={<Gate anyOf={['member.view']}><MembersPage /></Gate>} />
+        <Route path="members/:id" element={<Gate anyOf={['member.view']}><MemberProfilePage /></Gate>} />
+        <Route path="families" element={<Gate anyOf={['family.view']}><FamiliesPage /></Gate>} />
+        <Route path="commitments" element={<Gate anyOf={['commitment.view']}><CommitmentsPage /></Gate>} />
+        <Route path="commitments/new" element={<Gate anyOf={['commitment.create']}><NewCommitmentPage /></Gate>} />
+        <Route path="commitments/:id" element={<Gate anyOf={['commitment.view']}><CommitmentDetailPage /></Gate>} />
+        <Route path="fund-enrollments" element={<Gate anyOf={['enrollment.view']}><FundEnrollmentsPage /></Gate>} />
+        <Route path="qarzan-hasana" element={<Gate anyOf={['qh.view']}><QarzanHasanaPage /></Gate>} />
+        <Route path="qarzan-hasana/new" element={<Gate anyOf={['qh.create']}><NewQarzanHasanaPage /></Gate>} />
+        <Route path="qarzan-hasana/:id" element={<Gate anyOf={['qh.view']}><QarzanHasanaDetailPage /></Gate>} />
+        <Route path="events" element={<Gate anyOf={['event.view', 'event.manage', 'event.scan']}><EventsPage /></Gate>} />
+        <Route path="events/:id" element={<Gate anyOf={['event.view', 'event.manage', 'event.scan']}><EventDetailPage /></Gate>} />
+        <Route path="receipts" element={<Gate anyOf={['receipt.view']}><ReceiptsPage /></Gate>} />
+        <Route path="receipts/new" element={<Gate anyOf={['receipt.create']}><NewReceiptPage /></Gate>} />
+        <Route path="receipts/:id" element={<Gate anyOf={['receipt.view']}><ReceiptDetailPage /></Gate>} />
+        <Route path="vouchers" element={<Gate anyOf={['voucher.view']}><VouchersPage /></Gate>} />
+        <Route path="vouchers/new" element={<Gate anyOf={['voucher.create']}><NewVoucherPage /></Gate>} />
+        <Route path="vouchers/:id" element={<Gate anyOf={['voucher.view']}><VoucherDetailPage /></Gate>} />
+        <Route path="ledger" element={<Gate anyOf={['accounting.view']}><LedgerPage /></Gate>} />
+        <Route path="reports" element={<Gate anyOf={['reports.view']}><ReportsPage /></Gate>} />
+        <Route path="admin/users" element={<Gate anyOf={['admin.users', 'admin.roles']}><UsersPage /></Gate>} />
+        <Route path="admin/master-data" element={<Gate anyOf={['admin.masterdata']}><MasterDataPage /></Gate>} />
+        <Route path="admin/integrations" element={<Gate anyOf={['admin.integration']}><IntegrationsPage /></Gate>} />
+        <Route path="admin/audit" element={<Gate anyOf={['admin.audit']}><AuditPage /></Gate>} />
+        <Route path="admin/error-logs" element={<Gate anyOf={['admin.errorlogs']}><ErrorLogsPage /></Gate>} />
         <Route path="help" element={<HelpPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

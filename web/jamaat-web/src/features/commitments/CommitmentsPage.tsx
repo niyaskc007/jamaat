@@ -5,6 +5,8 @@ import { PlusOutlined, SearchOutlined, ReloadOutlined, HeartOutlined } from '@an
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../shared/ui/PageHeader';
+import { ModuleEmptyState } from '../../shared/ui/ModuleEmptyState';
+import { useAuth } from '../../shared/auth/useAuth';
 import { formatDate, money } from '../../shared/format/format';
 import {
   commitmentsApi,
@@ -20,6 +22,8 @@ import {
 
 export function CommitmentsPage() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission('commitment.create');
   const [query, setQuery] = useState<CommitmentListQuery>({ page: 1, pageSize: 25 });
   const [search, setSearch] = useState('');
 
@@ -110,20 +114,31 @@ export function CommitmentsPage() {
     },
   ], []);
 
+  const hasActiveFilters = !!(query.search || query.status !== undefined || query.partyType !== undefined);
   const empty = !isLoading && !isError && (data?.total ?? 0) === 0;
+  const firstRun = empty && !hasActiveFilters;
 
   return (
     <div>
       <PageHeader
         title="Commitments"
         subtitle="Pledges against fund types, tracked through scheduled installments until fully paid or waived."
-        actions={
+        actions={canCreate ? (
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/commitments/new')}>
             New commitment
           </Button>
-        }
+        ) : null}
       />
 
+      {firstRun ? (
+        <ModuleEmptyState
+          icon={<HeartOutlined />}
+          title="No commitments yet"
+          description="A commitment is a pledge from a member or family — usually multiple instalments against a fund. Receipts allocated here close out instalments automatically."
+          primaryAction={canCreate ? { label: 'Create your first commitment', onClick: () => navigate('/commitments/new') } : undefined}
+          helpHref="/help"
+        />
+      ) : (
       <Card
         style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }}
         styles={{ body: { padding: 0 } }}
@@ -172,13 +187,11 @@ export function CommitmentsPage() {
                 styles={{ image: { blockSize: 56 } }}
                 description={
                   <div style={{ paddingBlock: 16 }}>
-                    <div style={{ fontWeight: 500, color: 'var(--jm-gray-700)', marginBlockEnd: 4 }}>No commitments yet</div>
+                    <div style={{ fontWeight: 500, color: 'var(--jm-gray-700)', marginBlockEnd: 4 }}>No matches</div>
                     <div style={{ fontSize: 13, color: 'var(--jm-gray-500)', marginBlockEnd: 16 }}>
-                      Create a pledge for a member or family against a fund type.
+                      No commitments match the current filters. Try clearing them.
                     </div>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/commitments/new')}>
-                      Create your first commitment
-                    </Button>
+                    <Button onClick={() => { setSearch(''); setQuery({ page: 1, pageSize: 25 }); }}>Clear filters</Button>
                   </div>
                 }
               />
@@ -187,6 +200,7 @@ export function CommitmentsPage() {
           scroll={{ x: 'max-content' }}
         />
       </Card>
+      )}
 
       {isError && (
         <Card size="small" style={{ marginBlockStart: 16, borderColor: 'var(--jm-danger)' }}>

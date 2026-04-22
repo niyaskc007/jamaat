@@ -5,6 +5,8 @@ import { PlusOutlined, SearchOutlined, ReloadOutlined, BankOutlined } from '@ant
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../shared/ui/PageHeader';
+import { ModuleEmptyState } from '../../shared/ui/ModuleEmptyState';
+import { useAuth } from '../../shared/auth/useAuth';
 import { formatDate, money } from '../../shared/format/format';
 import {
   qarzanHasanaApi, type QhLoan, type QhStatus, type QhScheme,
@@ -13,6 +15,8 @@ import {
 
 export function QarzanHasanaPage() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission('qh.create');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<QhStatus>();
   const [scheme, setScheme] = useState<QhScheme>();
@@ -48,16 +52,27 @@ export function QarzanHasanaPage() {
     { title: 'Start', dataIndex: 'startDate', width: 110, render: (v: string) => formatDate(v) },
   ];
 
+  const hasActiveFilters = !!(search || status !== undefined || scheme !== undefined);
   const empty = !isLoading && (data?.total ?? 0) === 0;
+  const firstRun = empty && !hasActiveFilters;
 
   return (
     <div>
       <PageHeader
         title="Qarzan Hasana"
         subtitle="Interest-free loans with 2-level approval, guarantors, gold backing and installment repayment tracking."
-        actions={<Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/qarzan-hasana/new')}>New loan application</Button>}
+        actions={canCreate ? <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/qarzan-hasana/new')}>New loan application</Button> : null}
       />
 
+      {firstRun ? (
+        <ModuleEmptyState
+          icon={<BankOutlined />}
+          title="No loan applications yet"
+          description="Qarzan Hasana is the Jamaat's interest-free loan facility. Applications go through L1 then L2 approval, with optional guarantors and gold collateral. Repayments come in as receipts against the loan."
+          primaryAction={canCreate ? { label: 'New loan application', onClick: () => navigate('/qarzan-hasana/new') } : undefined}
+          helpHref="/help"
+        />
+      ) : (
       <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderBlockEnd: '1px solid var(--jm-border)' }}>
           <Input placeholder="Search code" prefix={<SearchOutlined />} allowClear value={search}
@@ -76,9 +91,19 @@ export function QarzanHasanaPage() {
           onChange={(p) => setPage(p.current ?? 1)}
           pagination={{ current: page, pageSize: 25, total: data?.total ?? 0 }}
           onRow={(row) => ({ onClick: () => navigate(`/qarzan-hasana/${row.id}`), style: { cursor: 'pointer' } })}
-          locale={{ emptyText: empty ? <Empty image={<BankOutlined style={{ fontSize: 40, color: 'var(--jm-gray-300)' }} />} description="No loans yet" /> : undefined }}
+          locale={{ emptyText: empty ? (
+            <Empty image={<BankOutlined style={{ fontSize: 40, color: 'var(--jm-gray-300)' }} />}
+              description={
+                <div style={{ paddingBlock: 12 }}>
+                  <div style={{ fontWeight: 500, color: 'var(--jm-gray-700)' }}>No matches</div>
+                  <div style={{ fontSize: 13, color: 'var(--jm-gray-500)', marginBlockEnd: 12 }}>No loans match the current filters.</div>
+                  <Button onClick={() => { setSearch(''); setStatus(undefined); setScheme(undefined); setPage(1); }}>Clear filters</Button>
+                </div>
+              } />
+          ) : undefined }}
         />
       </Card>
+      )}
     </div>
   );
 }
