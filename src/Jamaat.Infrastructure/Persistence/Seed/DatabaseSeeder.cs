@@ -150,6 +150,13 @@ public static class DatabaseSeeder
         await SeedSectorsAsync(db, defaultTenantId, logger, ct);
         await SeedOrganisationsAsync(db, defaultTenantId, logger, ct);
         await SeedTestUsersAsync(userMgr, defaultTenantId, logger, config);
+
+        // Dev-only bulk data generator — populates members/families/enrollments/commitments/events
+        // so every screen has something to render. Off by default; enable via Seed:DevData=true.
+        if (bool.TryParse(config["Seed:DevData"] ?? "false", out var devData) && devData)
+        {
+            await DevDataSeeder.SeedAsync(db, defaultTenantId, logger, ct);
+        }
     }
 
     /// Creates one user per operational persona so every permission boundary has a login.
