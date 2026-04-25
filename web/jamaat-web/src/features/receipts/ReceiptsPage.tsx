@@ -14,7 +14,7 @@ import { ModuleEmptyState } from '../../shared/ui/ModuleEmptyState';
 import { useAuth } from '../../shared/auth/useAuth';
 import { money, formatDate } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
-import { downloadCsv, fetchAllPages, toCsv } from '../../shared/export/csv';
+import { downloadServerXlsx } from '../../shared/export/server';
 import { DownloadOutlined } from '@ant-design/icons';
 import {
   receiptsApi, PaymentModeLabel, ReceiptStatusLabel,
@@ -101,20 +101,11 @@ export function ReceiptsPage() {
   const empty = !isLoading && (data?.total ?? 0) === 0;
   const firstRun = empty && !hasActiveFilters;
   const canExport = hasPermission('reports.export') || hasPermission('receipt.view');
-  const onExport = async () => {
-    const { items, truncated } = await fetchAllPages<ReceiptListItem, ReceiptListQuery>(receiptsApi.list, effective);
-    const csv = toCsv(items, [
-      { header: 'Receipt #', value: (r) => r.receiptNumber ?? '' },
-      { header: 'Date', value: (r) => r.receiptDate },
-      { header: 'ITS', value: (r) => r.itsNumberSnapshot },
-      { header: 'Member', value: (r) => r.memberNameSnapshot },
-      { header: 'Amount', value: (r) => r.amountTotal },
-      { header: 'Currency', value: (r) => r.currency },
-      { header: 'Mode', value: (r) => PaymentModeLabel[r.paymentMode] },
-      { header: 'Status', value: (r) => ReceiptStatusLabel[r.status] },
-    ]);
-    downloadCsv(`receipts_${new Date().toISOString().slice(0, 10)}${truncated ? '_truncated' : ''}.csv`, csv);
-  };
+  const onExport = () => downloadServerXlsx(
+    '/api/v1/receipts/export.xlsx',
+    effective as Record<string, unknown>,
+    `receipts_${new Date().toISOString().slice(0, 10)}.xlsx`,
+  );
 
   return (
     <div>
@@ -123,7 +114,7 @@ export function ReceiptsPage() {
         subtitle="All inward donation and fund receipts."
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
-            {canExport && <Button icon={<DownloadOutlined />} onClick={onExport}>Export CSV</Button>}
+            {canExport && <Button icon={<DownloadOutlined />} onClick={onExport}>Export XLSX</Button>}
             {canCreate && (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/receipts/new')}>New Receipt</Button>
             )}

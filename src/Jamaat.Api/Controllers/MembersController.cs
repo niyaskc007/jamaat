@@ -1,6 +1,8 @@
+using Jamaat.Application.Common;
 using Jamaat.Application.Members;
 using Jamaat.Contracts.Members;
 using Jamaat.Domain.Common;
+using Jamaat.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,7 +11,7 @@ namespace Jamaat.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/members")]
-public sealed class MembersController(IMemberService svc) : ControllerBase
+public sealed class MembersController(IMemberService svc, IExcelExporter excel) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "member.view")]
@@ -18,6 +20,43 @@ public sealed class MembersController(IMemberService svc) : ControllerBase
         var result = await svc.ListAsync(query, ct);
         return Ok(result);
     }
+
+    /// <summary>Export the filtered member list as XLSX.</summary>
+    /// <remarks>Honours the same query params as the list endpoint, capped at 5000 rows.</remarks>
+    [HttpGet("export.xlsx")]
+    [Authorize(Policy = "member.view")]
+    public async Task<IActionResult> Export([FromQuery] MemberListQuery query, CancellationToken ct)
+    {
+        // Cap at 5000 rows in one shot — anything larger should use a dedicated report.
+        var capped = query with { Page = 1, PageSize = 5000 };
+        var page = await svc.ListAsync(capped, ct);
+        var sheet = new ExcelSheet(
+            "Members",
+            new[]
+            {
+                new ExcelColumn("ITS"),
+                new ExcelColumn("Full name"),
+                new ExcelColumn("Arabic"),
+                new ExcelColumn("Phone"),
+                new ExcelColumn("Email"),
+                new ExcelColumn("Status"),
+                new ExcelColumn("Verified"),
+                new ExcelColumn("Verified on", ExcelColumnType.Date),
+                new ExcelColumn("Created", ExcelColumnType.DateTime),
+            },
+            page.Items.Select(m => (IReadOnlyList<object?>)new object?[]
+            {
+                m.ItsNumber, m.FullName, m.FullNameArabic, m.Phone, m.Email,
+                m.Status.ToString(),
+                m.DataVerificationStatus.ToString(),
+                m.DataVerifiedOn,
+                m.CreatedAtUtc,
+            }).ToList());
+        var bytes = excel.Build(new[] { sheet });
+        return File(bytes, XlsxContentType, $"members_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
+
+    private const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = "member.view")]

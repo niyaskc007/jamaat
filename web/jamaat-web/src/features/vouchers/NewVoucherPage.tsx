@@ -189,26 +189,26 @@ export function NewVoucherPage() {
                 <Select value={currency} onChange={setCurrency} showSearch optionFilterProp="label"
                   options={(currenciesQuery.data ?? []).map((c) => ({ value: c.code, label: `${c.code} — ${c.name}${c.isBase ? ' (base)' : ''}` }))} />
               </Form.Item>
-              <Form.Item label="Mode">
+              <Form.Item label="Mode" tooltip="How the money goes out. Cash credits the cash account; Cheque/Transfer credits the selected bank account on Approve.">
                 <Select value={paymentMode} onChange={setPaymentMode}
                   options={Object.entries(PaymentModeLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
               </Form.Item>
               {paymentMode !== 1 && (
-                <Form.Item label="Paid from bank account">
+                <Form.Item label="Paid from bank account" tooltip="Which bank account funds leave from. Required for non-cash modes — the ledger credits this account when the voucher is approved.">
                   <Select value={bankAccountId} onChange={setBankAccountId} allowClear placeholder="Select bank account"
                     options={banksQuery.data?.items.map((b) => ({ value: b.id, label: `${b.name} · ${b.accountNumber}` })) ?? []} />
                 </Form.Item>
               )}
               {paymentMode === 2 && (
                 <>
-                  <Form.Item label="Cheque number" required><Input value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} className="jm-tnum" /></Form.Item>
-                  <Form.Item label="Cheque date" required>
+                  <Form.Item label="Cheque number" required tooltip="Cheque serial as printed. Used in the cheque-wise reconciliation report."><Input value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} className="jm-tnum" /></Form.Item>
+                  <Form.Item label="Cheque date" required tooltip="Date printed on the cheque — may be later than the voucher date for post-dated cheques.">
                     <DatePicker value={chequeDate} onChange={setChequeDate} format="DD MMM YYYY" style={{ inlineSize: '100%' }} />
                   </Form.Item>
-                  <Form.Item label="Drawn on bank"><Input value={drawnOnBank} onChange={(e) => setDrawnOnBank(e.target.value)} /></Form.Item>
+                  <Form.Item label="Drawn on bank" tooltip="Free-text label for cheques drawn from a bank we don't track in master data (e.g., the recipient's bank)."><Input value={drawnOnBank} onChange={(e) => setDrawnOnBank(e.target.value)} /></Form.Item>
                 </>
               )}
-              <Form.Item label="Remarks"><Input.TextArea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} /></Form.Item>
+              <Form.Item label="Remarks" tooltip="Internal note shown on the voucher PDF. Useful for justification, audit trail, or instructions to the bank teller."><Input.TextArea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} /></Form.Item>
             </Form>
           </Card>
 

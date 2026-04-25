@@ -43,9 +43,33 @@ export function PeriodsPanel() {
                 : <Tag style={{ margin: 0, background: '#E5E9EF', color: '#475569', border: 'none', fontWeight: 500 }}>Closed</Tag> },
             { title: 'Closed at', key: 'c', render: (_, row) => row.closedAtUtc ? <span style={{ fontSize: 12 }}>{formatDateTime(row.closedAtUtc)}{row.closedByUserName ? ` · ${row.closedByUserName}` : ''}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
             { title: '', key: 'a', width: 200, render: (_, row) => row.status === 1 ? (
-              <Button icon={<LockOutlined />} danger size="small" onClick={() => modal.confirm({ title: 'Close period?', content: 'Once closed, no new postings can be made without reopening.', okText: 'Close', okButtonProps: { danger: true }, onOk: () => close.mutateAsync(row.id) })}>Close</Button>
+              <Button icon={<LockOutlined />} danger size="small"
+                onClick={() => modal.confirm({
+                  title: `Close period "${row.name}"?`,
+                  content: (
+                    <div style={{ marginBlockStart: 8 }}>
+                      <p style={{ margin: 0 }}>
+                        Closing locks all ledger postings for <strong>{formatDate(row.startDate)} – {formatDate(row.endDate)}</strong>.
+                      </p>
+                      <ul style={{ marginBlockStart: 8, paddingInlineStart: 18, color: 'var(--jm-gray-600)', fontSize: 13 }}>
+                        <li>New receipts and vouchers cannot post into this window.</li>
+                        <li>Draft receipts within the window must be confirmed or cancelled first — the server will refuse to close otherwise.</li>
+                        <li>An admin can reopen later, but every reopen is recorded in the audit log.</li>
+                      </ul>
+                    </div>
+                  ),
+                  okText: 'Close period', cancelText: 'Cancel',
+                  okButtonProps: { danger: true },
+                  onOk: () => close.mutateAsync(row.id),
+                })}>Close</Button>
             ) : (
-              <Button icon={<UnlockOutlined />} size="small" onClick={() => reopen.mutate(row.id)}>Reopen</Button>
+              <Button icon={<UnlockOutlined />} size="small"
+                onClick={() => modal.confirm({
+                  title: `Reopen period "${row.name}"?`,
+                  content: 'New postings will be allowed in this window again. The reopen is captured in the audit log.',
+                  okText: 'Reopen',
+                  onOk: () => reopen.mutateAsync(row.id),
+                })}>Reopen</Button>
             ) },
           ]}
           locale={{ emptyText: <div style={{ padding: 40, textAlign: 'center', color: 'var(--jm-gray-500)' }}><CalendarOutlined style={{ fontSize: 32, color: 'var(--jm-gray-300)', display: 'block', margin: '0 auto 8px' }} />No periods yet</div> }}

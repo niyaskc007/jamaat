@@ -1,3 +1,4 @@
+using Jamaat.Application.Common;
 using Jamaat.Application.Receipts;
 using Jamaat.Contracts.Receipts;
 using Microsoft.AspNetCore.Authorization;
@@ -8,11 +9,47 @@ namespace Jamaat.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/receipts")]
-public sealed class ReceiptsController(IReceiptService svc) : ControllerBase
+public sealed class ReceiptsController(IReceiptService svc, IExcelExporter excel) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "receipt.view")]
     public async Task<IActionResult> List([FromQuery] ReceiptListQuery q, CancellationToken ct) => Ok(await svc.ListAsync(q, ct));
+
+    /// <summary>Export the filtered receipts list as XLSX (capped at 5000 rows).</summary>
+    [HttpGet("export.xlsx")]
+    [Authorize(Policy = "receipt.view")]
+    public async Task<IActionResult> Export([FromQuery] ReceiptListQuery q, CancellationToken ct)
+    {
+        var capped = q with { Page = 1, PageSize = 5000 };
+        var page = await svc.ListAsync(capped, ct);
+        var sheet = new ExcelSheet(
+            "Receipts",
+            new[]
+            {
+                new ExcelColumn("Receipt #"),
+                new ExcelColumn("Date", ExcelColumnType.Date),
+                new ExcelColumn("ITS"),
+                new ExcelColumn("Member"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+                new ExcelColumn("Mode"),
+                new ExcelColumn("Status"),
+            },
+            page.Items.Select(r => (IReadOnlyList<object?>)new object?[]
+            {
+                r.ReceiptNumber,
+                r.ReceiptDate,
+                r.ItsNumberSnapshot,
+                r.MemberNameSnapshot,
+                r.AmountTotal,
+                r.Currency,
+                r.PaymentMode.ToString(),
+                r.Status.ToString(),
+            }).ToList());
+        var bytes = excel.Build(new[] { sheet });
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"receipts_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = "receipt.view")]

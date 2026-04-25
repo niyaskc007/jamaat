@@ -1,16 +1,19 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Card, Descriptions, Tag, Table, Button, Space, Spin, Alert } from 'antd';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, Descriptions, Tag, Table, Button, Space, Spin, Alert, App as AntdApp, Input } from 'antd';
 import { PrinterOutlined, RollbackOutlined, StopOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { money, formatDateTime } from '../../shared/format/format';
+import { extractProblem } from '../../shared/api/client';
 import { receiptsApi, PaymentModeLabel, ReceiptStatusLabel, type ReceiptStatus } from './receiptsApi';
 import { useAuth } from '../../shared/auth/useAuth';
 
 export function ReceiptDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { message, modal } = AntdApp.useApp();
   const { hasPermission } = useAuth();
   const canReprint = hasPermission('receipt.reprint');
   const canCancel = hasPermission('receipt.cancel');
@@ -18,6 +21,25 @@ export function ReceiptDetailPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['receipt', id], queryFn: () => receiptsApi.get(id!),
     enabled: !!id,
+  });
+
+  const cancelMut = useMutation({
+    mutationFn: (reason: string) => receiptsApi.cancel(id!, reason),
+    onSuccess: () => {
+      message.success('Receipt cancelled.');
+      void qc.invalidateQueries({ queryKey: ['receipt', id] });
+      void qc.invalidateQueries({ queryKey: ['receipts'] });
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to cancel'),
+  });
+  const reverseMut = useMutation({
+    mutationFn: (reason: string) => receiptsApi.reverse(id!, reason),
+    onSuccess: () => {
+      message.success('Receipt reversed.');
+      void qc.invalidateQueries({ queryKey: ['receipt', id] });
+      void qc.invalidateQueries({ queryKey: ['receipts'] });
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to reverse'),
   });
 
   if (isLoading) return <div style={{ padding: 24 }}><Spin /></div>;
@@ -106,13 +128,55 @@ export function ReceiptDetailPage() {
       {(canCancel || canReverse) && (
         <div style={{ marginBlockStart: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           {canCancel && (
-            <Button icon={<StopOutlined />} disabled={data.status !== 2} onClick={() => { /* TODO reason */ }}>Cancel</Button>
+            <Button
+              icon={<StopOutlined />}
+              disabled={data.status !== 2 || cancelMut.isPending}
+              loading={cancelMut.isPending}
+              onClick={() => promptReason(modal, 'Cancel receipt', 'Reason for cancellation', (r) => cancelMut.mutate(r))}
+            >
+              Cancel
+            </Button>
           )}
           {canReverse && (
-            <Button danger icon={<RollbackOutlined />} disabled={data.status !== 2} onClick={() => { /* TODO reason */ }}>Reverse</Button>
+            <Button
+              danger
+              icon={<RollbackOutlined />}
+              disabled={data.status !== 2 || reverseMut.isPending}
+              loading={reverseMut.isPending}
+              onClick={() => promptReason(modal, 'Reverse receipt', 'Reason for reversal', (r) => reverseMut.mutate(r))}
+            >
+              Reverse
+            </Button>
           )}
         </div>
       )}
     </div>
   );
+}
+
+/// Modal-with-textarea reason prompt. Shared shape with the list page; we keep two
+/// copies because the list version is a closure over its own mutation. If a third
+/// caller appears, lift this into shared/ui.
+function promptReason(
+  modal: ReturnType<typeof AntdApp.useApp>['modal'],
+  title: string,
+  label: string,
+  onOk: (reason: string) => void,
+) {
+  let reason = '';
+  modal.confirm({
+    title,
+    content: (
+      <div style={{ marginBlockStart: 8 }}>
+        <div style={{ fontSize: 13, color: 'var(--jm-gray-600)', marginBlockEnd: 6 }}>{label}</div>
+        <Input.TextArea onChange={(e) => { reason = e.target.value; }} rows={3} autoFocus />
+      </div>
+    ),
+    okText: 'Submit',
+    okButtonProps: { danger: true },
+    onOk: () => {
+      if (!reason.trim()) throw new Error('Reason required');
+      onOk(reason);
+    },
+  });
 }

@@ -14,7 +14,7 @@ import { ModuleEmptyState } from '../../shared/ui/ModuleEmptyState';
 import { useAuth } from '../../shared/auth/useAuth';
 import { money, formatDate } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
-import { downloadCsv, fetchAllPages, toCsv } from '../../shared/export/csv';
+import { downloadServerXlsx } from '../../shared/export/server';
 import { DownloadOutlined } from '@ant-design/icons';
 import {
   vouchersApi, PaymentModeLabel, VoucherStatusLabel,
@@ -104,19 +104,11 @@ export function VouchersPage() {
   const empty = !isLoading && (data?.total ?? 0) === 0;
   const firstRun = empty && !hasActiveFilters;
   const canExport = hasPermission('reports.export') || hasPermission('voucher.view');
-  const onExport = async () => {
-    const { items, truncated } = await fetchAllPages<VoucherListItem, VoucherListQuery>(vouchersApi.list, effective);
-    const csv = toCsv(items, [
-      { header: 'Voucher #', value: (r) => r.voucherNumber ?? '' },
-      { header: 'Date', value: (r) => r.voucherDate },
-      { header: 'Pay to', value: (r) => r.payTo },
-      { header: 'Amount', value: (r) => r.amountTotal },
-      { header: 'Currency', value: (r) => r.currency },
-      { header: 'Mode', value: (r) => PaymentModeLabel[r.paymentMode] },
-      { header: 'Status', value: (r) => VoucherStatusLabel[r.status] },
-    ]);
-    downloadCsv(`vouchers_${new Date().toISOString().slice(0, 10)}${truncated ? '_truncated' : ''}.csv`, csv);
-  };
+  const onExport = () => downloadServerXlsx(
+    '/api/v1/vouchers/export.xlsx',
+    effective as Record<string, unknown>,
+    `vouchers_${new Date().toISOString().slice(0, 10)}.xlsx`,
+  );
 
   return (
     <div>
@@ -125,7 +117,7 @@ export function VouchersPage() {
         subtitle="Outgoing payment vouchers."
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
-            {canExport && <Button icon={<DownloadOutlined />} onClick={onExport}>Export CSV</Button>}
+            {canExport && <Button icon={<DownloadOutlined />} onClick={onExport}>Export XLSX</Button>}
             {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/vouchers/new')}>New Voucher</Button>}
           </div>
         }

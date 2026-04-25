@@ -1,3 +1,4 @@
+using Jamaat.Application.Common;
 using Jamaat.Application.Vouchers;
 using Jamaat.Contracts.Vouchers;
 using Microsoft.AspNetCore.Authorization;
@@ -8,11 +9,45 @@ namespace Jamaat.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/vouchers")]
-public sealed class VouchersController(IVoucherService svc) : ControllerBase
+public sealed class VouchersController(IVoucherService svc, IExcelExporter excel) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "voucher.view")]
     public async Task<IActionResult> List([FromQuery] VoucherListQuery q, CancellationToken ct) => Ok(await svc.ListAsync(q, ct));
+
+    /// <summary>Export the filtered vouchers list as XLSX (capped at 5000 rows).</summary>
+    [HttpGet("export.xlsx")]
+    [Authorize(Policy = "voucher.view")]
+    public async Task<IActionResult> Export([FromQuery] VoucherListQuery q, CancellationToken ct)
+    {
+        var capped = q with { Page = 1, PageSize = 5000 };
+        var page = await svc.ListAsync(capped, ct);
+        var sheet = new ExcelSheet(
+            "Vouchers",
+            new[]
+            {
+                new ExcelColumn("Voucher #"),
+                new ExcelColumn("Date", ExcelColumnType.Date),
+                new ExcelColumn("Pay to"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+                new ExcelColumn("Mode"),
+                new ExcelColumn("Status"),
+            },
+            page.Items.Select(v => (IReadOnlyList<object?>)new object?[]
+            {
+                v.VoucherNumber,
+                v.VoucherDate,
+                v.PayTo,
+                v.AmountTotal,
+                v.Currency,
+                v.PaymentMode.ToString(),
+                v.Status.ToString(),
+            }).ToList());
+        var bytes = excel.Build(new[] { sheet });
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"vouchers_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = "voucher.view")]

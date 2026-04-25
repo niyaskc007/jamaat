@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { Button, Card, Input, Select, Table, Tag, Empty, App as AntdApp, Drawer, Form, DatePicker, Dropdown } from 'antd';
 import type { TableProps, MenuProps } from 'antd';
-import { PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, BankOutlined, GiftOutlined, CheckCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, BankOutlined, GiftOutlined, CheckCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined, CheckOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { ModuleEmptyState } from '../../shared/ui/ModuleEmptyState';
 import { useAuth } from '../../shared/auth/useAuth';
+import { Typography } from 'antd';
 import { formatDate, money } from '../../shared/format/format';
-import { extractProblem } from '../../shared/api/client';
+import { extractProblem, api } from '../../shared/api/client';
 import {
   fundEnrollmentsApi, type FundEnrollment, type EnrollmentStatus, type Recurrence,
   RecurrenceLabel, EnrollmentStatusLabel, EnrollmentStatusColor,
@@ -20,12 +21,34 @@ export function FundEnrollmentsPage() {
   const qc = useQueryClient();
   const { hasPermission } = useAuth();
   const canCreate = hasPermission('enrollment.create');
+  const canApprove = hasPermission('enrollment.approve');
   const { message, modal } = AntdApp.useApp();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<EnrollmentStatus>();
   const [fundFilter, setFundFilter] = useState<string>();
   const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const bulkApprove = async () => {
+    if (selectedIds.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      const { data: res } = await api.post<{ approvedCount: number; failedCount: number; failedIds: string[] }>(
+        '/api/v1/fund-enrollments/bulk/approve',
+        { ids: selectedIds }
+      );
+      const msg = `Approved ${res.approvedCount}${res.failedCount ? ` · ${res.failedCount} failed` : ''}.`;
+      message[res.failedCount === 0 ? 'success' : 'warning'](msg);
+      setSelectedIds([]);
+      await qc.invalidateQueries({ queryKey: ['enrollments'] });
+    } catch (e) {
+      message.error(extractProblem(e).detail ?? 'Bulk approve failed.');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['enrollments', page, search, status, fundFilter],
@@ -119,9 +142,30 @@ export function FundEnrollmentsPage() {
           <Button icon={<ReloadOutlined />} onClick={() => refetch()} loading={isFetching && !isLoading} />
         </div>
 
+        {canApprove && selectedIds.length > 0 && (
+          <div style={{
+            padding: '8px 16px', background: 'rgba(11,110,99,0.08)',
+            borderBlockEnd: '1px solid var(--jm-border)',
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <Typography.Text strong style={{ fontSize: 13 }}>{selectedIds.length} selected</Typography.Text>
+            <Button size="small" type="primary" icon={<CheckOutlined />} loading={bulkBusy} onClick={bulkApprove}>
+              Approve {selectedIds.length}
+            </Button>
+            <Button size="small" onClick={() => setSelectedIds([])}>Clear selection</Button>
+          </div>
+        )}
+
         <Table<FundEnrollment> rowKey="id" size="middle" loading={isLoading}
           columns={cols} dataSource={data?.items ?? []}
           onChange={(p) => setPage(p.current ?? 1)}
+          rowSelection={canApprove ? {
+            selectedRowKeys: selectedIds,
+            onChange: (keys) => setSelectedIds(keys as string[]),
+            // Only Draft (status=1) rows can be approved — disable selection on the others.
+            getCheckboxProps: (row) => ({ disabled: row.status !== 1 }),
+            preserveSelectedRowKeys: true,
+          } : undefined}
           pagination={{ current: page, pageSize: 25, total: data?.total ?? 0 }}
           locale={{ emptyText: empty ? (
             <Empty image={<BankOutlined style={{ fontSize: 40, color: 'var(--jm-gray-300)' }} />}

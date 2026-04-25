@@ -23,28 +23,15 @@ import { membersApi, MemberStatusLabel, type Member, type MemberListQuery, type 
 import { MemberFormDrawer } from './MemberFormDrawer';
 import { extractProblem } from '../../shared/api/client';
 import { useAuth } from '../../shared/auth/useAuth';
-import { downloadCsv, fetchAllPages, toCsv } from '../../shared/export/csv';
 import { api } from '../../shared/api/client';
+import { downloadServerXlsx } from '../../shared/export/server';
 
 const VerificationLabel: Record<VerificationStatus, string> = { 0: 'Not started', 1: 'Pending', 2: 'Verified', 3: 'Rejected' };
 const VerificationColor: Record<VerificationStatus, string> = { 0: 'default', 1: 'gold', 2: 'green', 3: 'red' };
 
 async function exportMembers(query: MemberListQuery) {
-  const { items, truncated } = await fetchAllPages<Member, MemberListQuery>(membersApi.list, query);
-  const csv = toCsv(items, [
-    { header: 'ITS', value: (r) => r.itsNumber },
-    { header: 'Full name', value: (r) => r.fullName },
-    { header: 'Arabic', value: (r) => r.fullNameArabic ?? '' },
-    { header: 'Phone', value: (r) => r.phone ?? '' },
-    { header: 'Email', value: (r) => r.email ?? '' },
-    { header: 'Status', value: (r) => MemberStatusLabel[r.status] },
-    { header: 'Verification', value: (r) => VerificationLabel[r.dataVerificationStatus] },
-    { header: 'Verified on', value: (r) => r.dataVerifiedOn ?? '' },
-    { header: 'Family id', value: (r) => r.familyId ?? '' },
-    { header: 'Created', value: (r) => r.createdAtUtc },
-  ]);
-  const name = `members_${new Date().toISOString().slice(0, 10)}${truncated ? '_truncated' : ''}.csv`;
-  downloadCsv(name, csv);
+  // Server-side XLSX export — branded headers, proper number formats, locale-safe.
+  await downloadServerXlsx('/api/v1/members/export.xlsx', query as Record<string, unknown>, `members_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 export function MembersPage() {

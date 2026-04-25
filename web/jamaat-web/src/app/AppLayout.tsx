@@ -120,7 +120,7 @@ export function AppLayout() {
   const breadcrumb = resolveBreadcrumb(location.pathname, t);
 
   const userMenu: MenuProps['items'] = [
-    { key: 'profile', icon: <UserOutlined />, label: t('nav.profile'), disabled: true },
+    { key: 'profile', icon: <UserOutlined />, label: t('nav.profile'), onClick: () => navigate('/me') },
     { type: 'divider' },
     {
       key: 'logout',

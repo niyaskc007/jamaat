@@ -1,18 +1,40 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Card, Descriptions, Tag, Table, Button, Space, Spin, Alert } from 'antd';
-import { PrinterOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, Descriptions, Tag, Table, Button, Space, Spin, Alert, App as AntdApp, Input } from 'antd';
+import { PrinterOutlined, ArrowLeftOutlined, CheckCircleFilled, StopOutlined, RollbackOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { money, formatDateTime } from '../../shared/format/format';
+import { extractProblem } from '../../shared/api/client';
 import { vouchersApi, PaymentModeLabel, VoucherStatusLabel, type VoucherStatus } from './vouchersApi';
 import { useAuth } from '../../shared/auth/useAuth';
 
 export function VoucherDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { message, modal } = AntdApp.useApp();
   const { hasPermission } = useAuth();
   const canPrint = hasPermission('voucher.view');
+  const canApprove = hasPermission('voucher.approve');
+  const canCancel = hasPermission('voucher.cancel');
+  const canReverse = hasPermission('voucher.reverse');
+
+  const approveMut = useMutation({
+    mutationFn: () => vouchersApi.approve(id!),
+    onSuccess: () => { message.success('Voucher approved & paid.'); void qc.invalidateQueries({ queryKey: ['voucher', id] }); void qc.invalidateQueries({ queryKey: ['vouchers'] }); },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to approve'),
+  });
+  const cancelMut = useMutation({
+    mutationFn: (reason: string) => vouchersApi.cancel(id!, reason),
+    onSuccess: () => { message.success('Voucher cancelled.'); void qc.invalidateQueries({ queryKey: ['voucher', id] }); void qc.invalidateQueries({ queryKey: ['vouchers'] }); },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to cancel'),
+  });
+  const reverseMut = useMutation({
+    mutationFn: (reason: string) => vouchersApi.reverse(id!, reason),
+    onSuccess: () => { message.success('Voucher reversed.'); void qc.invalidateQueries({ queryKey: ['voucher', id] }); void qc.invalidateQueries({ queryKey: ['vouchers'] }); },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to reverse'),
+  });
   const { data, isLoading, isError } = useQuery({ queryKey: ['voucher', id], queryFn: () => vouchersApi.get(id!), enabled: !!id });
 
   if (isLoading) return <div style={{ padding: 24 }}><Spin /></div>;
@@ -96,6 +118,66 @@ export function VoucherDetailPage() {
           )}
         />
       </Card>
+
+      {(canApprove || canCancel || canReverse) && (
+        <div style={{ marginBlockStart: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          {canApprove && (
+            <Button
+              type="primary"
+              icon={<CheckCircleFilled />}
+              loading={approveMut.isPending}
+              disabled={data.status !== 2 || approveMut.isPending}
+              onClick={() => approveMut.mutate()}
+            >
+              Approve &amp; Pay
+            </Button>
+          )}
+          {canCancel && (
+            <Button
+              icon={<StopOutlined />}
+              loading={cancelMut.isPending}
+              // Disable for terminal states (Paid/Cancelled/Reversed) — reversal goes via Reverse, not Cancel.
+              disabled={data.status === 4 || data.status === 5 || data.status === 6 || cancelMut.isPending}
+              onClick={() => promptReason(modal, 'Cancel voucher', 'Reason for cancellation', (r) => cancelMut.mutate(r))}
+            >
+              Cancel
+            </Button>
+          )}
+          {canReverse && (
+            <Button
+              danger
+              icon={<RollbackOutlined />}
+              loading={reverseMut.isPending}
+              // Reversal only valid on a Paid voucher.
+              disabled={data.status !== 4 || reverseMut.isPending}
+              onClick={() => promptReason(modal, 'Reverse voucher', 'Reason for reversal', (r) => reverseMut.mutate(r))}
+            >
+              Reverse
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
+}
+
+function promptReason(
+  modal: ReturnType<typeof AntdApp.useApp>['modal'],
+  title: string,
+  label: string,
+  onOk: (reason: string) => void,
+) {
+  let reason = '';
+  modal.confirm({
+    title,
+    content: (
+      <div style={{ marginBlockStart: 8 }}>
+        <div style={{ fontSize: 13, color: 'var(--jm-gray-600)', marginBlockEnd: 6 }}>{label}</div>
+        <Input.TextArea onChange={(e) => { reason = e.target.value; }} rows={3} autoFocus />
+      </div>
+    ),
+    okText: 'Submit',
+    okButtonProps: { danger: true },
+    onOk: () => { if (!reason.trim()) throw new Error('Reason required'); onOk(reason); },
+  });
 }

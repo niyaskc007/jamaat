@@ -30,6 +30,7 @@ import { IntegrationsPage } from '../features/admin/IntegrationsPage';
 import { AuditPage } from '../features/admin/AuditPage';
 import { ErrorLogsPage } from '../features/admin/error-logs/ErrorLogsPage';
 import { HelpPage } from '../features/help/HelpPage';
+import { MePage } from '../features/me/MePage';
 import { RequireAuth } from '../shared/auth/RequireAuth';
 import { RequirePermission } from '../shared/auth/RequirePermission';
 import type { ReactNode } from 'react';
@@ -81,6 +82,7 @@ export function App() {
         <Route path="admin/audit" element={<Gate anyOf={['admin.audit']}><AuditPage /></Gate>} />
         <Route path="admin/error-logs" element={<Gate anyOf={['admin.errorlogs']}><ErrorLogsPage /></Gate>} />
         <Route path="help" element={<HelpPage />} />
+        <Route path="me" element={<MePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

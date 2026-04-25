@@ -57,4 +57,52 @@ public sealed class AuthController : ControllerBase
         await _tokens.RevokeAsync(req.RefreshToken, ct);
         return NoContent();
     }
+
+    /// <summary>Profile of the currently signed-in user.</summary>
+    /// <remarks>
+    /// Returns the same id / userName / fullName / tenantId / permissions shape the login
+    /// response uses, so the client can store it under the same authStore type.
+    /// </remarks>
+    [HttpGet("me")]
+    [Authorize]
+    public async Task<IActionResult> Me(CancellationToken ct)
+    {
+        var user = await _users.FindByNameAsync(User.Identity?.Name ?? string.Empty);
+        if (user is null) return Unauthorized();
+        var permissions = (await _users.GetClaimsAsync(user))
+            .Where(c => c.Type == "permission")
+            .Select(c => c.Value)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return Ok(new
+        {
+            id = user.Id,
+            userName = user.UserName,
+            email = user.Email,
+            fullName = user.FullName,
+            tenantId = user.TenantId,
+            preferredLanguage = user.PreferredLanguage,
+            permissions,
+        });
+    }
+
+    /// <summary>Change the signed-in user's password (requires current password).</summary>
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.NewPassword))
+            return BadRequest(new { error = "new_password_required" });
+
+        var user = await _users.FindByNameAsync(User.Identity?.Name ?? string.Empty);
+        if (user is null) return Unauthorized();
+
+        var result = await _users.ChangePasswordAsync(user, req.CurrentPassword, req.NewPassword);
+        if (!result.Succeeded)
+            return BadRequest(new { error = "change_failed", details = result.Errors.Select(e => e.Description) });
+
+        return NoContent();
+    }
 }
+
+public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
