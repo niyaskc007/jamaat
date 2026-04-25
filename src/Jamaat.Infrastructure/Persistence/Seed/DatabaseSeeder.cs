@@ -156,6 +156,7 @@ public static class DatabaseSeeder
         if (bool.TryParse(config["Seed:DevData"] ?? "false", out var devData) && devData)
         {
             await DevDataSeeder.SeedAsync(db, defaultTenantId, logger, ct);
+            await DevDataSeeder.SeedReceiptsAsync(scope.ServiceProvider, defaultTenantId, logger, ct);
         }
     }
 

@@ -142,6 +142,63 @@ public sealed class ReportsService(Persistence.JamaatDbContextFacade db) : IRepo
         }
         return result;
     }
+
+    public async Task<IReadOnlyList<ReportMemberContributionRow>> MemberContributionAsync(Guid memberId, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        // Bind parameters to non-keyword locals so the LINQ query syntax below doesn't
+        // collide with the `from` / `to` C# keywords.
+        var fromDate = from;
+        var toDate = to;
+
+        // Pull confirmed receipt lines for this member in the window, flat-projected so the
+        // report can be exported as-is. Sorted desc so most-recent contributions appear first.
+        var lines = await (
+            from r in db.Receipts.AsNoTracking()
+            where r.MemberId == memberId
+                && r.Status == ReceiptStatus.Confirmed
+                && r.ReceiptDate >= fromDate && r.ReceiptDate <= toDate
+            from l in r.Lines
+            join f in db.Funds.AsNoTracking() on l.FundTypeId equals f.Id
+            orderby r.ReceiptDate descending
+            select new
+            {
+                r.ReceiptDate, r.ReceiptNumber, FundCode = f.Code, FundName = f.NameEnglish,
+                l.PeriodReference, l.Purpose, l.Amount, r.Currency,
+                BaseAmount = r.AmountTotal == 0 ? 0 : l.Amount * (r.BaseAmountTotal / r.AmountTotal),
+                BaseCurrency = r.BaseCurrency,
+            }).ToListAsync(ct);
+
+        return lines.Select(x => new ReportMemberContributionRow(
+            x.ReceiptDate, x.ReceiptNumber ?? "—", x.FundCode, x.FundName,
+            x.PeriodReference, x.Purpose, x.Amount, x.Currency,
+            x.BaseAmount, x.BaseCurrency)).ToList();
+    }
+
+    public async Task<IReadOnlyList<ReportChequeWiseRow>> ChequeWiseAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var fromDate = from;
+        var toDate = to;
+        // Cheque mode (PaymentMode.Cheque). We include all statuses so reconciliation
+        // can cross-reference cancelled/reversed cheques.
+        var rows = await (
+            from r in db.Receipts.AsNoTracking()
+            where r.PaymentMode == PaymentMode.Cheque
+                && r.ReceiptDate >= fromDate && r.ReceiptDate <= toDate
+            join b in db.BankAccounts.AsNoTracking() on r.BankAccountId equals b.Id into bg
+            from b in bg.DefaultIfEmpty()
+            orderby r.ReceiptDate descending, r.ReceiptNumber descending
+            select new
+            {
+                r.ReceiptDate, r.ReceiptNumber, ItsNumber = r.ItsNumberSnapshot, r.MemberNameSnapshot,
+                r.ChequeNumber, r.ChequeDate, BankAccountName = b != null ? b.Name : null,
+                r.AmountTotal, r.Currency, r.Status,
+            }).ToListAsync(ct);
+
+        return rows.Select(x => new ReportChequeWiseRow(
+            x.ReceiptDate, x.ReceiptNumber, x.ItsNumber, x.MemberNameSnapshot,
+            x.ChequeNumber, x.ChequeDate, x.BankAccountName,
+            x.AmountTotal, x.Currency, x.Status.ToString())).ToList();
+    }
 }
 
 public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domain.Abstractions.IClock clock) : IDashboardService

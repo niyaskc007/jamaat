@@ -158,6 +158,76 @@ public sealed class ReportsController(IReportsService svc, IExcelExporter excel)
         return Xlsx(excel.Build(new[] { sheet }), $"cash-book_{from:yyyyMMdd}_{to:yyyyMMdd}.xlsx");
     }
 
+    // --- Member Contribution History --------------------------------------
+
+    [HttpGet("member-contribution")]
+    [Authorize(Policy = "reports.view")]
+    public async Task<IActionResult> MemberContribution([FromQuery] Guid memberId, [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
+        => Ok(await svc.MemberContributionAsync(memberId, from, to, ct));
+
+    [HttpGet("member-contribution.xlsx")]
+    [Authorize(Policy = "reports.export")]
+    public async Task<IActionResult> MemberContributionXlsx([FromQuery] Guid memberId, [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
+    {
+        var rows = await svc.MemberContributionAsync(memberId, from, to, ct);
+        var sheet = new ExcelSheet(
+            "Member Contribution",
+            new[]
+            {
+                new ExcelColumn("Date", ExcelColumnType.Date),
+                new ExcelColumn("Receipt #"),
+                new ExcelColumn("Fund code"),
+                new ExcelColumn("Fund name"),
+                new ExcelColumn("Period"),
+                new ExcelColumn("Purpose"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+                new ExcelColumn("Base amount", ExcelColumnType.Currency),
+                new ExcelColumn("Base currency"),
+            },
+            rows.Select(r => (IReadOnlyList<object?>)new object?[] {
+                r.ReceiptDate, r.ReceiptNumber, r.FundCode, r.FundName,
+                r.PeriodReference, r.Purpose, r.Amount, r.Currency,
+                r.BaseAmount, r.BaseCurrency,
+            }).ToList());
+        return Xlsx(excel.Build(new[] { sheet }), $"member-contribution_{memberId:N}_{from:yyyyMMdd}_{to:yyyyMMdd}.xlsx");
+    }
+
+    // --- Cheque-wise Receipts ---------------------------------------------
+
+    [HttpGet("cheque-wise")]
+    [Authorize(Policy = "reports.view")]
+    public async Task<IActionResult> ChequeWise([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
+        => Ok(await svc.ChequeWiseAsync(from, to, ct));
+
+    [HttpGet("cheque-wise.xlsx")]
+    [Authorize(Policy = "reports.export")]
+    public async Task<IActionResult> ChequeWiseXlsx([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
+    {
+        var rows = await svc.ChequeWiseAsync(from, to, ct);
+        var sheet = new ExcelSheet(
+            "Cheque-wise",
+            new[]
+            {
+                new ExcelColumn("Receipt date", ExcelColumnType.Date),
+                new ExcelColumn("Receipt #"),
+                new ExcelColumn("ITS"),
+                new ExcelColumn("Member"),
+                new ExcelColumn("Cheque #"),
+                new ExcelColumn("Cheque date", ExcelColumnType.Date),
+                new ExcelColumn("Bank account"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+                new ExcelColumn("Status"),
+            },
+            rows.Select(r => (IReadOnlyList<object?>)new object?[] {
+                r.ReceiptDate, r.ReceiptNumber, r.ItsNumber, r.MemberName,
+                r.ChequeNumber, r.ChequeDate, r.BankAccountName,
+                r.Amount, r.Currency, r.Status,
+            }).ToList());
+        return Xlsx(excel.Build(new[] { sheet }), $"cheque-wise_{from:yyyyMMdd}_{to:yyyyMMdd}.xlsx");
+    }
+
     private FileContentResult Xlsx(byte[] bytes, string filename) =>
         File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
 }

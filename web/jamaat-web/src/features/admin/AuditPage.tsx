@@ -178,9 +178,9 @@ function JsonBlock({ title, value }: { title: string; value?: string | null }) {
   );
 }
 
-/// Render a flat before→after table showing only changed scalar fields.
-/// Nested objects/arrays get compared by JSON stringify — we don't deep-diff,
-/// but we do skip rows where the stringified value is identical.
+/// Render a recursive before→after diff. Nested objects expand into dotted paths
+/// (e.g. address.city), arrays into bracket-indexed paths (lines[0].amount).
+/// Skips paths whose serialised values are identical so reviewers see only what changed.
 function FieldDiff({ before, after }: { before?: string | null; after?: string | null }) {
   const b = parseOrNull(before);
   const a = parseOrNull(after);
@@ -190,34 +190,75 @@ function FieldDiff({ before, after }: { before?: string | null; after?: string |
   if (!b) return <SideOnly kind="New" obj={a ?? {}} />;
   if (!a) return <SideOnly kind="Deleted" obj={b} />;
 
-  const keys = Array.from(new Set([...Object.keys(b), ...Object.keys(a)])).sort();
-  const rows = keys
-    .map((k) => ({ k, before: b[k], after: a[k] }))
-    .filter((r) => JSON.stringify(r.before) !== JSON.stringify(r.after));
-
+  const rows = collectDiffRows(b, a, '');
   if (rows.length === 0) {
-    return <Typography.Text type="secondary" style={{ fontSize: 12 }}>No scalar fields changed. Switch to Raw JSON if you need to inspect nested structures.</Typography.Text>;
+    return <Typography.Text type="secondary" style={{ fontSize: 12 }}>No fields changed.</Typography.Text>;
   }
 
   return (
     <div style={{ background: '#FFFFFF', border: '1px solid var(--jm-border)', borderRadius: 8, overflow: 'hidden' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) 1fr 1fr', fontSize: 12, fontWeight: 600, background: 'var(--jm-surface-muted)', padding: '8px 12px' }}>
-        <div>Field</div><div>Before</div><div>After</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1fr) 1fr 1fr', fontSize: 12, fontWeight: 600, background: 'var(--jm-surface-muted)', padding: '8px 12px' }}>
+        <div>Path</div><div>Before</div><div>After</div>
       </div>
       {rows.map((r, i) => (
-        <div key={r.k} style={{
-          display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) 1fr 1fr',
+        <div key={r.path} style={{
+          display: 'grid', gridTemplateColumns: 'minmax(180px, 1fr) 1fr 1fr',
           fontSize: 12, padding: '6px 12px',
           borderBlockStart: i === 0 ? 'none' : '1px solid var(--jm-border)',
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
         }}>
-          <div style={{ color: 'var(--jm-gray-700)', fontWeight: 500 }}>{r.k}</div>
+          <div style={{ color: 'var(--jm-gray-700)', fontWeight: 500, overflowWrap: 'anywhere' }}>{r.path}</div>
           <div style={{ color: '#991B1B', background: 'rgba(254, 226, 226, 0.4)', padding: '2px 6px', borderRadius: 4, overflowWrap: 'anywhere' }}>{fmt(r.before)}</div>
           <div style={{ color: '#065F46', background: 'rgba(209, 250, 229, 0.4)', padding: '2px 6px', borderRadius: 4, overflowWrap: 'anywhere' }}>{fmt(r.after)}</div>
         </div>
       ))}
     </div>
   );
+}
+
+type DiffRow = { path: string; before: unknown; after: unknown };
+
+/// Walk both sides in parallel, emitting one DiffRow per leaf that differs. Leaves are
+/// scalars (string/number/bool/null), arrays (compared element-wise), and objects whose
+/// keys we recurse into. We compare by JSON.stringify so equal nested structures collapse.
+function collectDiffRows(before: unknown, after: unknown, path: string, out: DiffRow[] = [], depth = 0): DiffRow[] {
+  // Cap recursion to keep deeply nested payloads from overwhelming the table.
+  if (depth > 6) {
+    if (JSON.stringify(before) !== JSON.stringify(after)) out.push({ path, before, after });
+    return out;
+  }
+
+  if (JSON.stringify(before) === JSON.stringify(after)) return out;
+
+  const bIsObj = isPlainObject(before);
+  const aIsObj = isPlainObject(after);
+  if (bIsObj && aIsObj) {
+    const keys = Array.from(new Set([...Object.keys(before as object), ...Object.keys(after as object)])).sort();
+    for (const k of keys) {
+      const childPath = path ? `${path}.${k}` : k;
+      collectDiffRows((before as Record<string, unknown>)[k], (after as Record<string, unknown>)[k], childPath, out, depth + 1);
+    }
+    return out;
+  }
+
+  const bIsArr = Array.isArray(before);
+  const aIsArr = Array.isArray(after);
+  if (bIsArr && aIsArr) {
+    const len = Math.max((before as unknown[]).length, (after as unknown[]).length);
+    for (let i = 0; i < len; i++) {
+      const childPath = `${path}[${i}]`;
+      collectDiffRows((before as unknown[])[i], (after as unknown[])[i], childPath, out, depth + 1);
+    }
+    return out;
+  }
+
+  // Mixed types or scalars → leaf
+  out.push({ path: path || '(root)', before, after });
+  return out;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
 function SideOnly({ kind, obj }: { kind: 'New' | 'Deleted'; obj: Record<string, unknown> }) {

@@ -43,3 +43,17 @@ public sealed record ReportDailyCollectionDto(DateOnly Date, int ReceiptCount, d
 public sealed record ReportFundWiseDto(Guid FundTypeId, string FundTypeCode, string FundTypeName, int LineCount, decimal AmountTotal);
 public sealed record ReportDailyPaymentDto(DateOnly Date, int VoucherCount, decimal AmountTotal, string Currency);
 public sealed record ReportCashBookRow(DateOnly Date, string Reference, string Narration, decimal Debit, decimal Credit, decimal Balance);
+
+/// One row per receipt-line for a given member; lets the report break a total
+/// contribution down by fund + period. Powers /api/v1/reports/member-contribution.
+public sealed record ReportMemberContributionRow(
+    DateOnly ReceiptDate, string ReceiptNumber, string FundCode, string FundName,
+    string? PeriodReference, string? Purpose, decimal Amount, string Currency,
+    decimal BaseAmount, string BaseCurrency);
+
+/// One row per cheque-mode receipt. Powers the bank-reconciliation workflow.
+public sealed record ReportChequeWiseRow(
+    DateOnly ReceiptDate, string? ReceiptNumber,
+    string ItsNumber, string MemberName,
+    string? ChequeNumber, DateOnly? ChequeDate, string? BankAccountName,
+    decimal Amount, string Currency, string Status);

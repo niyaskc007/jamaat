@@ -54,6 +54,19 @@ export const reportsApi = {
     (await api.get<{ date: string; voucherCount: number; amountTotal: number; currency: string }[]>('/api/v1/reports/daily-payments', { params: { from, to } })).data,
   cashBook: async (accountId: string, from: string, to: string) =>
     (await api.get<{ date: string; reference: string; narration: string; debit: number; credit: number; balance: number }[]>('/api/v1/reports/cash-book', { params: { accountId, from, to } })).data,
+  memberContribution: async (memberId: string, from: string, to: string) =>
+    (await api.get<{
+      receiptDate: string; receiptNumber: string; fundCode: string; fundName: string;
+      periodReference?: string | null; purpose?: string | null;
+      amount: number; currency: string; baseAmount: number; baseCurrency: string;
+    }[]>('/api/v1/reports/member-contribution', { params: { memberId, from, to } })).data,
+  chequeWise: async (from: string, to: string) =>
+    (await api.get<{
+      receiptDate: string; receiptNumber?: string | null;
+      itsNumber: string; memberName: string;
+      chequeNumber?: string | null; chequeDate?: string | null; bankAccountName?: string | null;
+      amount: number; currency: string; status: string;
+    }[]>('/api/v1/reports/cheque-wise', { params: { from, to } })).data,
 };
 
 export const dashboardApi = {

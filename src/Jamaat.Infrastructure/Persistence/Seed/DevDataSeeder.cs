@@ -1,7 +1,11 @@
+using Jamaat.Application.Receipts;
+using Jamaat.Contracts.Receipts;
 using Jamaat.Domain.Entities;
 using Jamaat.Domain.Enums;
 using Jamaat.Domain.ValueObjects;
+using Jamaat.Infrastructure.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Jamaat.Infrastructure.Persistence.Seed;
@@ -12,9 +16,9 @@ namespace Jamaat.Infrastructure.Persistence.Seed;
 ///
 /// Gated by <c>Seed:DevData=true</c> so it never fires in production.
 ///
-/// Intentionally narrow scope: members, families, fund enrollments, commitments, events.
-/// Skips receipts/vouchers/QH — those require ledger posting, numbering, and FX that are
-/// safer to exercise via the real services in manual testing rather than bulk-generating.
+/// Master-data scope: members, families, fund enrollments, commitments, events.
+/// <see cref="SeedReceiptsAsync"/> is opt-in and routes through the real ReceiptService so
+/// every fake receipt actually posts to the ledger (numbering, audit, FX all included).
 public static class DevDataSeeder
 {
     public static async Task SeedAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
@@ -158,6 +162,83 @@ public static class DevDataSeeder
         db.Events.AddRange(events);
         await db.SaveChangesAsync(ct);
         logger.LogInformation("DevDataSeeder: seeded {Count} events.", events.Count);
+    }
+
+    /// Seeds confirmed receipts via <see cref="IReceiptService.CreateAndConfirmAsync"/> so each
+    /// one runs through the same numbering, ledger-posting, and audit-interceptor path as the
+    /// real Counter flow. We use the service rather than direct entity inserts because the
+    /// dashboard charts and accounting reports depend on the ledger entries those produce.
+    public static async Task SeedReceiptsAsync(IServiceProvider sp, Guid tenantId, ILogger logger, CancellationToken ct)
+    {
+        // Need a service scope of our own — DI scopes per request, but the seeder is a one-shot.
+        using var scope = sp.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<JamaatDbContext>();
+
+        // CRITICAL: set the TenantContext *before* any query — the EF global query filter
+        // strips rows when no tenant is bound, which would falsely look like an empty DB.
+        var tenantCtx = scope.ServiceProvider.GetRequiredService<TenantContext>();
+        tenantCtx.SetTenant(tenantId);
+
+        // Skip if already seeded — any Confirmed receipt above the noise threshold means the
+        // dashboard will look populated; bulk-adding more would just duplicate the noise.
+        var existing = await db.Receipts.CountAsync(r => r.Status == Domain.Enums.ReceiptStatus.Confirmed, ct);
+        if (existing >= 20)
+        {
+            logger.LogDebug("DevDataSeeder: receipts already seeded ({Count}), skipping.", existing);
+            return;
+        }
+
+        // Find dev-seeded members + non-loan funds. We use a deterministic Random so re-runs in
+        // empty DBs produce the same dataset.
+        var members = await db.Members.AsNoTracking().Take(20).Select(m => m.Id).ToListAsync(ct);
+        var fundIds = await db.FundTypes.AsNoTracking()
+            .Where(f => f.Category != FundCategory.Loan && f.IsActive)
+            .Select(f => f.Id)
+            .Take(6)
+            .ToListAsync(ct);
+        if (members.Count == 0 || fundIds.Count == 0)
+        {
+            logger.LogWarning("DevDataSeeder: cannot seed receipts — need members and non-loan funds.");
+            return;
+        }
+
+        var svc = scope.ServiceProvider.GetRequiredService<IReceiptService>();
+
+        var rng = new Random(7777);
+        var seeded = 0;
+        var failed = 0;
+        // Spread receipts over the last 60 days so charts have a meaningful trend line.
+        for (var i = 0; i < 60; i++)
+        {
+            var member = members[rng.Next(members.Count)];
+            var fund = fundIds[rng.Next(fundIds.Count)];
+            var amount = (decimal)(50 + rng.Next(0, 950)); // 50–1000
+            var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-rng.Next(0, 60)));
+            // Mix payment modes: 60% Cash, 30% Cheque, 10% Bank Transfer.
+            var roll = rng.Next(100);
+            var mode = roll < 60 ? PaymentMode.Cash : roll < 90 ? PaymentMode.Cheque : PaymentMode.BankTransfer;
+            Guid? bankAccountId = null;
+            if (mode != PaymentMode.Cash)
+            {
+                bankAccountId = await db.BankAccounts.AsNoTracking().Where(b => b.IsActive).Select(b => (Guid?)b.Id).FirstOrDefaultAsync(ct);
+            }
+            var dto = new CreateReceiptDto(
+                ReceiptDate: date,
+                MemberId: member,
+                PaymentMode: mode,
+                BankAccountId: bankAccountId,
+                ChequeNumber: mode == PaymentMode.Cheque ? $"DEV{1000 + i}" : null,
+                ChequeDate: mode == PaymentMode.Cheque ? date : null,
+                PaymentReference: mode == PaymentMode.BankTransfer ? $"TXN-{rng.Next(100000, 999999)}" : null,
+                Remarks: null,
+                Lines: new[]
+                {
+                    new CreateReceiptLineDto(fund, amount, Purpose: "Seeded contribution", PeriodReference: null),
+                });
+            var r = await svc.CreateAndConfirmAsync(dto, ct);
+            if (r.IsSuccess) seeded++; else failed++;
+        }
+        logger.LogInformation("DevDataSeeder: seeded {Seeded} confirmed receipts ({Failed} failed).", seeded, failed);
     }
 
     /// Name pool — Bohra/Arabic-leaning first names + common family surnames seen in the community.

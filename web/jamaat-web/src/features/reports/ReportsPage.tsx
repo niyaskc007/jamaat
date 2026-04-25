@@ -8,6 +8,7 @@ import { PageHeader } from '../../shared/ui/PageHeader';
 import { money, formatDate } from '../../shared/format/format';
 import { reportsApi } from '../ledger/ledgerApi';
 import { accountsApi } from '../admin/master-data/chart-of-accounts/accountsApi';
+import { membersApi } from '../members/membersApi';
 import { useBaseCurrency } from '../../shared/hooks/useBaseCurrency';
 import { useAuth } from '../../shared/auth/useAuth';
 import { api } from '../../shared/api/client';
@@ -39,6 +40,8 @@ export function ReportsPage() {
         { key: 'fund', label: 'Fund-wise Collection', children: <FundWise /> },
         { key: 'payments', label: 'Daily Payments', children: <DailyPayments /> },
         { key: 'cashbook', label: 'Cash Book', children: <CashBook /> },
+        { key: 'member', label: 'Member Contribution', children: <MemberContribution /> },
+        { key: 'cheque', label: 'Cheque-wise', children: <ChequeWise /> },
       ]} />
     </div>
   );
@@ -158,6 +161,82 @@ function CashBook() {
           { title: 'Balance', dataIndex: 'balance', key: 'bal', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, baseCurrency)}</span> },
         ]}
         locale={{ emptyText: <Empty description={accountId ? "No entries in this period" : "Select an account to view its cash book"} /> }}
+      />
+    </Card>
+  );
+}
+
+function MemberContribution() {
+  const { range, setRange, from, to } = useRange();
+  const { hasPermission } = useAuth();
+  // Member picker — fetch active members so the report can be run quickly. We don't lazy-search
+  // here because the count is small enough; if a Jamaat grows large, swap to type-ahead lookup.
+  const membersQuery = useQuery({ queryKey: ['members', 'for-report'], queryFn: () => membersApi.list({ page: 1, pageSize: 500, status: 1 }) });
+  const [memberId, setMemberId] = useState<string | undefined>();
+  const { data, isLoading } = useQuery({
+    queryKey: ['rpt', 'mc', memberId, from, to],
+    queryFn: () => memberId ? reportsApi.memberContribution(memberId, from, to) : Promise.resolve([]),
+    enabled: !!memberId,
+  });
+  const total = (data ?? []).reduce((s, r) => s + r.amount, 0);
+  return (
+    <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
+      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <Select style={{ inlineSize: 320 }} placeholder="Select member"
+          showSearch optionFilterProp="label"
+          value={memberId} onChange={setMemberId}
+          options={(membersQuery.data?.items ?? []).map((m) => ({ value: m.id, label: `${m.itsNumber} · ${m.fullName}` }))} />
+        <RangePicker value={range} onChange={(v) => v && setRange(v as [Dayjs, Dayjs])} />
+        <div style={{ flex: 1 }} />
+        {hasPermission('reports.export') && memberId && (
+          <ExportButton onClick={() => downloadXlsx('/api/v1/reports/member-contribution.xlsx', { memberId, from, to }, `member-contribution_${from}_${to}.xlsx`)} />
+        )}
+      </div>
+      <Table rowKey={(_, i) => String(i)} size="middle" loading={isLoading} dataSource={data ?? []} pagination={false}
+        columns={[
+          { title: 'Date', dataIndex: 'receiptDate', key: 'd', width: 110, render: (v: string) => formatDate(v) },
+          { title: 'Receipt #', dataIndex: 'receiptNumber', key: 'rn', width: 120, render: (v: string) => <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{v}</span> },
+          { title: 'Fund', dataIndex: 'fundName', key: 'fn', render: (v: string, row) => <span><strong>{row.fundCode}</strong> — {v}</span> },
+          { title: 'Period', dataIndex: 'periodReference', key: 'pr', width: 120, render: (v?: string | null) => v ?? '—' },
+          { title: 'Purpose', dataIndex: 'purpose', key: 'pu', render: (v?: string | null) => v ?? '—' },
+          { title: 'Amount', dataIndex: 'amount', key: 'a', align: 'right', width: 140, render: (v: number, row) => <span className="jm-tnum" style={{ fontWeight: 500 }}>{money(v, row.currency)}</span> },
+        ]}
+        summary={(rows) => rows.length > 0 ? (
+          <Table.Summary.Row>
+            <Table.Summary.Cell index={0} colSpan={5} align="right"><strong>Total</strong></Table.Summary.Cell>
+            <Table.Summary.Cell index={1} align="right"><span className="jm-tnum" style={{ fontWeight: 700, fontSize: 15 }}>{money(total, rows[0].currency)}</span></Table.Summary.Cell>
+          </Table.Summary.Row>
+        ) : null}
+        locale={{ emptyText: <Empty description={memberId ? 'No contributions in this period' : 'Select a member to view their contribution history'} /> }}
+      />
+    </Card>
+  );
+}
+
+function ChequeWise() {
+  const { range, setRange, from, to } = useRange();
+  const { hasPermission } = useAuth();
+  const { data, isLoading } = useQuery({ queryKey: ['rpt', 'cheque', from, to], queryFn: () => reportsApi.chequeWise(from, to) });
+  return (
+    <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
+      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <RangePicker value={range} onChange={(v) => v && setRange(v as [Dayjs, Dayjs])} />
+        <div style={{ flex: 1 }} />
+        {hasPermission('reports.export') && <ExportButton onClick={() => downloadXlsx('/api/v1/reports/cheque-wise.xlsx', { from, to }, `cheque-wise_${from}_${to}.xlsx`)} />}
+      </div>
+      <Table rowKey={(_, i) => String(i)} size="middle" loading={isLoading} dataSource={data ?? []} pagination={false}
+        columns={[
+          { title: 'Receipt date', dataIndex: 'receiptDate', key: 'rd', width: 120, render: (v: string) => formatDate(v) },
+          { title: 'Receipt #', dataIndex: 'receiptNumber', key: 'rn', width: 120, render: (v?: string | null) => v ?? '—' },
+          { title: 'ITS', dataIndex: 'itsNumber', key: 'its', width: 110, render: (v: string) => <span className="jm-tnum">{v}</span> },
+          { title: 'Member', dataIndex: 'memberName', key: 'mn' },
+          { title: 'Cheque #', dataIndex: 'chequeNumber', key: 'cn', width: 130, render: (v?: string | null) => v ? <span className="jm-tnum">{v}</span> : '—' },
+          { title: 'Cheque date', dataIndex: 'chequeDate', key: 'cd', width: 120, render: (v?: string | null) => v ? formatDate(v) : '—' },
+          { title: 'Bank', dataIndex: 'bankAccountName', key: 'b', render: (v?: string | null) => v ?? '—' },
+          { title: 'Amount', dataIndex: 'amount', key: 'a', align: 'right', width: 140, render: (v: number, row) => <span className="jm-tnum" style={{ fontWeight: 500 }}>{money(v, row.currency)}</span> },
+          { title: 'Status', dataIndex: 'status', key: 's', width: 110 },
+        ]}
+        locale={{ emptyText: <Empty description="No cheque receipts in this period" /> }}
       />
     </Card>
   );
