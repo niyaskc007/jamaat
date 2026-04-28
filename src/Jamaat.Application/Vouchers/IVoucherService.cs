@@ -13,6 +13,8 @@ public interface IVoucherService
     Task<Result<VoucherDto>> CancelAsync(Guid id, CancelVoucherDto dto, CancellationToken ct = default);
     Task<Result<VoucherDto>> ReverseAsync(Guid id, ReverseVoucherDto dto, CancellationToken ct = default);
     Task<Result<byte[]>> RenderPdfAsync(Guid id, CancellationToken ct = default);
+    /// <summary>Bulk-import historical vouchers. Each row = one single-line voucher; auto-approved if Mode=Cash, otherwise left in Draft for manual review.</summary>
+    Task<ImportResult> ImportAsync(Stream xlsxStream, CancellationToken ct = default);
 }
 
 public interface IVoucherRepository

@@ -285,6 +285,96 @@ public sealed class ReceiptService(
         return bytes;
     }
 
+    public async Task<ImportResult> ImportAsync(Stream xlsxStream, CancellationToken ct = default)
+    {
+        var reader = services.GetRequiredService<IExcelReader>();
+        var rows = reader.Read(xlsxStream);
+        var errors = new List<ImportRowError>();
+        var committed = 0;
+
+        // Pre-load lookups so each row doesn't round-trip the DB.
+        var db = services.GetRequiredService<Persistence.JamaatDbContextFacade>();
+        var memberByIts = await db.Members.AsNoTracking().Where(m => !m.IsDeleted)
+            .Select(m => new { m.Id, ItsNumber = m.ItsNumber.Value }).ToDictionaryAsync(m => m.ItsNumber, m => m.Id, ct);
+        var fundByCode = await db.FundTypes.AsNoTracking().Where(f => f.IsActive)
+            .Select(f => new { f.Id, f.Code }).ToDictionaryAsync(x => x.Code, x => x.Id, StringComparer.OrdinalIgnoreCase, ct);
+        var bankByName = await db.BankAccounts.AsNoTracking().Where(b => b.IsActive)
+            .Select(b => new { b.Id, b.Name }).ToDictionaryAsync(x => x.Name, x => x.Id, StringComparer.OrdinalIgnoreCase, ct);
+
+        foreach (var row in rows)
+        {
+            try
+            {
+                var dateStr = row.Get("Date", "Receipt date", "ReceiptDate");
+                if (string.IsNullOrWhiteSpace(dateStr) || !DateOnly.TryParse(dateStr, System.Globalization.CultureInfo.InvariantCulture, out var date))
+                { errors.Add(new(row.RowNumber, "Date is required (yyyy-MM-dd).", "Date")); continue; }
+
+                var its = row.Get("ITS", "ItsNumber", "ITS Number");
+                if (string.IsNullOrWhiteSpace(its) || !memberByIts.TryGetValue(its, out var memberId))
+                { errors.Add(new(row.RowNumber, $"ITS '{its}' not found among members.", "ITS")); continue; }
+
+                var fundCode = row.Get("Fund", "Fund code", "FundCode");
+                if (string.IsNullOrWhiteSpace(fundCode) || !fundByCode.TryGetValue(fundCode, out var fundId))
+                { errors.Add(new(row.RowNumber, $"Fund code '{fundCode}' not found.", "Fund code")); continue; }
+
+                var amountStr = row.Get("Amount");
+                if (!decimal.TryParse(amountStr, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var amount) || amount <= 0)
+                { errors.Add(new(row.RowNumber, "Amount must be a positive number.", "Amount")); continue; }
+
+                var modeStr = row.Get("Mode", "Payment mode", "PaymentMode") ?? "Cash";
+                if (!Enum.TryParse<PaymentMode>(modeStr, ignoreCase: true, out var mode))
+                { errors.Add(new(row.RowNumber, $"Payment mode '{modeStr}' is invalid (Cash/Cheque/BankTransfer/Upi/Card/Online).", "Mode")); continue; }
+
+                Guid? bankId = null;
+                var bankName = row.Get("Bank", "Bank account", "BankAccount");
+                if (!string.IsNullOrWhiteSpace(bankName))
+                {
+                    if (!bankByName.TryGetValue(bankName, out var b)) { errors.Add(new(row.RowNumber, $"Bank account '{bankName}' not found.", "Bank")); continue; }
+                    bankId = b;
+                }
+
+                string? chequeNumber = mode == PaymentMode.Cheque ? row.Get("Cheque #", "Cheque number", "ChequeNumber") : null;
+                DateOnly? chequeDate = null;
+                var chequeDateStr = row.Get("Cheque date", "ChequeDate");
+                if (mode == PaymentMode.Cheque)
+                {
+                    if (string.IsNullOrWhiteSpace(chequeNumber)) { errors.Add(new(row.RowNumber, "Cheque number required for Cheque mode.", "Cheque #")); continue; }
+                    if (string.IsNullOrWhiteSpace(chequeDateStr) || !DateOnly.TryParse(chequeDateStr, System.Globalization.CultureInfo.InvariantCulture, out var cd))
+                    { errors.Add(new(row.RowNumber, "Cheque date required for Cheque mode (yyyy-MM-dd).", "Cheque date")); continue; }
+                    chequeDate = cd;
+                }
+
+                var currency = row.Get("Currency");
+                var purpose = row.Get("Purpose");
+                var periodRef = row.Get("Period", "Period reference", "PeriodReference");
+                var reference = row.Get("Reference");
+                var remarks = row.Get("Remarks", "Notes");
+
+                var dto = new CreateReceiptDto(
+                    ReceiptDate: date,
+                    MemberId: memberId,
+                    PaymentMode: mode,
+                    BankAccountId: bankId,
+                    ChequeNumber: chequeNumber,
+                    ChequeDate: chequeDate,
+                    PaymentReference: reference,
+                    Remarks: remarks,
+                    Lines: new[] { new CreateReceiptLineDto(fundId, amount, purpose, periodRef) },
+                    Currency: currency);
+
+                var result = await CreateAndConfirmAsync(dto, ct);
+                if (!result.IsSuccess) { errors.Add(new(row.RowNumber, result.Error.Message)); continue; }
+                committed++;
+            }
+            catch (Exception ex)
+            {
+                errors.Add(new(row.RowNumber, ex.Message));
+            }
+        }
+
+        return new ImportResult(rows.Count, committed, errors);
+    }
+
     private async Task<FinancialPeriod?> ResolvePeriodAsync(DateOnly date, CancellationToken ct)
     {
         var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();

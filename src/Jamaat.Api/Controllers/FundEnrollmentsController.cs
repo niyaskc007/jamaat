@@ -1,3 +1,4 @@
+using Jamaat.Application.Common;
 using Jamaat.Application.FundEnrollments;
 using Jamaat.Contracts.FundEnrollments;
 using Microsoft.AspNetCore.Authorization;
@@ -8,11 +9,44 @@ namespace Jamaat.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/fund-enrollments")]
-public sealed class FundEnrollmentsController(IFundEnrollmentService svc) : ControllerBase
+public sealed class FundEnrollmentsController(IFundEnrollmentService svc, IExcelExporter excel) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "enrollment.view")]
     public async Task<IActionResult> List([FromQuery] FundEnrollmentListQuery q, CancellationToken ct) => Ok(await svc.ListAsync(q, ct));
+
+    [HttpGet("export.xlsx")]
+    [Authorize(Policy = "enrollment.view")]
+    public async Task<IActionResult> Export([FromQuery] FundEnrollmentListQuery q, CancellationToken ct)
+    {
+        var capped = q with { Page = 1, PageSize = 5000 };
+        var page = await svc.ListAsync(capped, ct);
+        var sheet = new ExcelSheet(
+            "Fund enrollments",
+            new[]
+            {
+                new ExcelColumn("Code"),
+                new ExcelColumn("ITS"),
+                new ExcelColumn("Member"),
+                new ExcelColumn("Fund code"),
+                new ExcelColumn("Fund name"),
+                new ExcelColumn("Sub-type"),
+                new ExcelColumn("Recurrence"),
+                new ExcelColumn("Start", ExcelColumnType.Date),
+                new ExcelColumn("Status"),
+                new ExcelColumn("Total collected", ExcelColumnType.Currency),
+                new ExcelColumn("Receipts", ExcelColumnType.Number, "#,##0"),
+            },
+            page.Items.Select(e => (IReadOnlyList<object?>)new object?[]
+            {
+                e.Code, e.MemberItsNumber, e.MemberName, e.FundTypeCode, e.FundTypeName,
+                e.SubType, e.Recurrence.ToString(), e.StartDate, e.Status.ToString(),
+                e.TotalCollected, e.ReceiptCount,
+            }).ToList());
+        var bytes = excel.Build(new[] { sheet });
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"fund-enrollments_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = "enrollment.view")]

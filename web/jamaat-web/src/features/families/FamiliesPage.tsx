@@ -10,6 +10,8 @@ import {
   TeamOutlined,
   HomeOutlined,
   EyeOutlined,
+  ImportOutlined,
+  ExportOutlined,
 } from '@ant-design/icons';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -17,15 +19,21 @@ import { formatDate } from '../../shared/format/format';
 import { familiesApi, type Family, type FamilyListQuery } from './familiesApi';
 import { FamilyFormDrawer } from './FamilyFormDrawer';
 import { FamilyDetailDrawer } from './FamilyDetailDrawer';
+import { useAuth } from '../../shared/auth/useAuth';
+import { downloadServerXlsx } from '../../shared/export/server';
+import { ImportDialog } from '../../shared/export/ImportDialog';
 
 export function FamiliesPage() {
   const { message } = AntdApp.useApp();
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission('family.create');
 
   const [query, setQuery] = useState<FamilyListQuery>({ page: 1, pageSize: 25 });
   const [search, setSearch] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Family | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data, isLoading, isFetching, refetch, isError, error } = useQuery({
     queryKey: ['families', query],
@@ -124,9 +132,13 @@ export function FamiliesPage() {
         subtitle="Households and their members. The head can pay for the entire family or individual members."
         actions={
           <Space>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
-              Add family
-            </Button>
+            {canCreate && <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>Import</Button>}
+            <Button icon={<ExportOutlined />} onClick={() => downloadServerXlsx('/api/v1/families/export.xlsx', query as Record<string, unknown>, `families_${new Date().toISOString().slice(0, 10)}.xlsx`)}>Export</Button>
+            {canCreate && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
+                Add family
+              </Button>
+            )}
           </Space>
         }
       />
@@ -196,6 +208,17 @@ export function FamiliesPage() {
 
       <FamilyFormDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} family={editing} />
       {detailId && <FamilyDetailDrawer familyId={detailId} onClose={() => setDetailId(null)} />}
+
+      <ImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="Import families"
+        uploadEndpoint="/api/v1/families/import"
+        templateEndpoint="/api/v1/families/import-template.xlsx"
+        templateFilename="families-import-template.xlsx"
+        invalidateKeys={[['families']]}
+        hint={<>Upserts by Code. The Head ITS must already exist as a member — import members first.</>}
+      />
 
       {isError && (
         <Card size="small" style={{ marginBlockStart: 16, borderColor: 'var(--jm-danger)' }}>

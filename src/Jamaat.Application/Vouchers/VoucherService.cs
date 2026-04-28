@@ -147,6 +147,91 @@ public sealed class VoucherService(
         return renderer.Render(dto.Value!);
     }
 
+    public async Task<ImportResult> ImportAsync(Stream xlsxStream, CancellationToken ct = default)
+    {
+        var reader = services.GetRequiredService<IExcelReader>();
+        var rows = reader.Read(xlsxStream);
+        var errors = new List<ImportRowError>();
+        var committed = 0;
+
+        var db = services.GetRequiredService<Persistence.JamaatDbContextFacade>();
+        var expenseByCode = await db.ExpenseTypes.AsNoTracking().Where(e => e.IsActive)
+            .Select(e => new { e.Id, e.Code }).ToDictionaryAsync(x => x.Code, x => x.Id, StringComparer.OrdinalIgnoreCase, ct);
+        var bankByName = await db.BankAccounts.AsNoTracking().Where(b => b.IsActive)
+            .Select(b => new { b.Id, b.Name }).ToDictionaryAsync(x => x.Name, x => x.Id, StringComparer.OrdinalIgnoreCase, ct);
+
+        foreach (var row in rows)
+        {
+            try
+            {
+                var dateStr = row.Get("Date", "Voucher date", "VoucherDate");
+                if (string.IsNullOrWhiteSpace(dateStr) || !DateOnly.TryParse(dateStr, System.Globalization.CultureInfo.InvariantCulture, out var date))
+                { errors.Add(new(row.RowNumber, "Date is required (yyyy-MM-dd).", "Date")); continue; }
+
+                var payTo = row.Get("Pay to", "PayTo");
+                if (string.IsNullOrWhiteSpace(payTo)) { errors.Add(new(row.RowNumber, "Pay to is required.", "Pay to")); continue; }
+
+                var purpose = row.Get("Purpose") ?? string.Empty;
+
+                var expenseCode = row.Get("Expense", "Expense code", "ExpenseCode");
+                if (string.IsNullOrWhiteSpace(expenseCode) || !expenseByCode.TryGetValue(expenseCode, out var expenseId))
+                { errors.Add(new(row.RowNumber, $"Expense code '{expenseCode}' not found.", "Expense")); continue; }
+
+                var amountStr = row.Get("Amount");
+                if (!decimal.TryParse(amountStr, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var amount) || amount <= 0)
+                { errors.Add(new(row.RowNumber, "Amount must be a positive number.", "Amount")); continue; }
+
+                var modeStr = row.Get("Mode", "Payment mode", "PaymentMode") ?? "Cash";
+                if (!Enum.TryParse<PaymentMode>(modeStr, ignoreCase: true, out var mode))
+                { errors.Add(new(row.RowNumber, $"Payment mode '{modeStr}' is invalid.", "Mode")); continue; }
+
+                Guid? bankId = null;
+                var bankName = row.Get("Bank", "Bank account");
+                if (!string.IsNullOrWhiteSpace(bankName))
+                {
+                    if (!bankByName.TryGetValue(bankName, out var b)) { errors.Add(new(row.RowNumber, $"Bank account '{bankName}' not found.", "Bank")); continue; }
+                    bankId = b;
+                }
+
+                string? chequeNumber = mode == PaymentMode.Cheque ? row.Get("Cheque #", "Cheque number") : null;
+                DateOnly? chequeDate = null;
+                if (mode == PaymentMode.Cheque)
+                {
+                    var cdStr = row.Get("Cheque date", "ChequeDate");
+                    if (string.IsNullOrWhiteSpace(chequeNumber) || string.IsNullOrWhiteSpace(cdStr) ||
+                        !DateOnly.TryParse(cdStr, System.Globalization.CultureInfo.InvariantCulture, out var cd))
+                    { errors.Add(new(row.RowNumber, "Cheque number + cheque date required for Cheque mode.", "Cheque")); continue; }
+                    chequeDate = cd;
+                }
+
+                var dto = new CreateVoucherDto(
+                    VoucherDate: date,
+                    PayTo: payTo,
+                    PayeeItsNumber: row.Get("Payee ITS", "PayeeITS"),
+                    Purpose: purpose,
+                    PaymentMode: mode,
+                    BankAccountId: bankId,
+                    ChequeNumber: chequeNumber,
+                    ChequeDate: chequeDate,
+                    DrawnOnBank: row.Get("Drawn on", "Drawn on bank"),
+                    PaymentDate: null,
+                    Remarks: row.Get("Remarks", "Notes"),
+                    Lines: new[] { new CreateVoucherLineDto(expenseId, amount, row.Get("Narration")) },
+                    Currency: row.Get("Currency"));
+
+                var created = await CreateAsync(dto, ct);
+                if (!created.IsSuccess) { errors.Add(new(row.RowNumber, created.Error.Message)); continue; }
+                committed++;
+            }
+            catch (Exception ex)
+            {
+                errors.Add(new(row.RowNumber, ex.Message));
+            }
+        }
+
+        return new ImportResult(rows.Count, committed, errors);
+    }
+
     private async Task<Result<VoucherDto>> MapAsync(Voucher v, CancellationToken ct)
     {
         var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();

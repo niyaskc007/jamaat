@@ -15,7 +15,8 @@ import { useAuth } from '../../shared/auth/useAuth';
 import { money, formatDate } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
 import { downloadServerXlsx } from '../../shared/export/server';
-import { DownloadOutlined } from '@ant-design/icons';
+import { ImportDialog } from '../../shared/export/ImportDialog';
+import { DownloadOutlined, ImportOutlined } from '@ant-design/icons';
 import {
   vouchersApi, PaymentModeLabel, VoucherStatusLabel,
   type VoucherListItem, type VoucherListQuery, type VoucherStatus, type PaymentMode,
@@ -42,6 +43,7 @@ export function VouchersPage() {
   const [query, setQuery] = useState<VoucherListQuery>({ page: 1, pageSize: 25, status: initialStatus });
   const [search, setSearch] = useState('');
   const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const effective: VoucherListQuery = {
     ...query,
@@ -117,6 +119,7 @@ export function VouchersPage() {
         subtitle="Outgoing payment vouchers."
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
+            {canCreate && <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>Import</Button>}
             {canExport && <Button icon={<DownloadOutlined />} onClick={onExport}>Export XLSX</Button>}
             {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/vouchers/new')}>New Voucher</Button>}
           </div>
@@ -170,6 +173,17 @@ export function VouchersPage() {
         />
       </Card>
       )}
+
+      <ImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="Import historical vouchers"
+        uploadEndpoint="/api/v1/vouchers/import"
+        templateEndpoint="/api/v1/vouchers/import-template.xlsx"
+        templateFilename="vouchers-import-template.xlsx"
+        invalidateKeys={[['vouchers']]}
+        hint={<>Each row creates one single-line draft voucher — Approve & Pay manually after import to post to the ledger. Required: <strong>Date, Pay to, Expense, Amount, Mode</strong>.</>}
+      />
     </div>
   );
 }

@@ -13,6 +13,12 @@ public interface IReceiptService
     Task<Result<ReceiptDto>> ReverseAsync(Guid id, ReverseReceiptDto dto, CancellationToken ct = default);
     Task<Result> LogReprintAsync(Guid id, ReprintReceiptDto dto, CancellationToken ct = default);
     Task<Result<byte[]>> RenderPdfAsync(Guid id, bool reprint, CancellationToken ct = default);
+    /// <summary>Bulk-import historical receipts. Each row = one single-line confirmed receipt.</summary>
+    /// <remarks>
+    /// Routes through <see cref="CreateAndConfirmAsync"/> so numbering, ledger posting, FX
+    /// and the audit trail are consistent with the real Counter flow.
+    /// </remarks>
+    Task<ImportResult> ImportAsync(Stream xlsxStream, CancellationToken ct = default);
 }
 
 public interface IReceiptRepository

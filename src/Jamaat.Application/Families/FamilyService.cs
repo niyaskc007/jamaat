@@ -19,11 +19,14 @@ public interface IFamilyService
     Task<Result> AssignMemberAsync(Guid familyId, AssignMemberToFamilyDto dto, CancellationToken ct = default);
     Task<Result> RemoveMemberAsync(Guid familyId, Guid memberId, CancellationToken ct = default);
     Task<Result> TransferHeadshipAsync(Guid familyId, TransferHeadshipDto dto, CancellationToken ct = default);
+    /// <summary>Bulk-import families from XLSX. Each row references a head ITS — that member must already exist.</summary>
+    Task<ImportResult> ImportAsync(Stream xlsxStream, CancellationToken ct = default);
 }
 
 public sealed class FamilyService(
     JamaatDbContextFacade db, IUnitOfWork uow, ITenantContext tenant,
-    IValidator<CreateFamilyDto> createV, IValidator<UpdateFamilyDto> updateV) : IFamilyService
+    IValidator<CreateFamilyDto> createV, IValidator<UpdateFamilyDto> updateV,
+    IExcelReader excelReader) : IFamilyService
 {
     public async Task<PagedResult<FamilyDto>> ListAsync(FamilyListQuery q, CancellationToken ct = default)
     {
@@ -151,6 +154,65 @@ public sealed class FamilyService(
     {
         var count = await db.Families.CountAsync(ct);
         return $"F-{(count + 1):D5}";
+    }
+
+    public async Task<ImportResult> ImportAsync(Stream xlsxStream, CancellationToken ct = default)
+    {
+        var rows = excelReader.Read(xlsxStream);
+        var errors = new List<ImportRowError>();
+        var committed = 0;
+
+        // Pre-load existing family codes so we upsert by Code rather than name.
+        var existingByCode = await db.Families.AsNoTracking()
+            .Select(f => new { f.Id, f.Code }).ToDictionaryAsync(x => x.Code, x => x.Id, StringComparer.OrdinalIgnoreCase, ct);
+
+        foreach (var row in rows)
+        {
+            try
+            {
+                var name = row.Get("Family name", "Name", "FamilyName");
+                if (string.IsNullOrWhiteSpace(name)) { errors.Add(new(row.RowNumber, "Family name is required.", "Family name")); continue; }
+
+                var headIts = row.Get("Head ITS", "HeadITS", "Head ITS Number");
+                if (string.IsNullOrWhiteSpace(headIts)) { errors.Add(new(row.RowNumber, "Head ITS is required.", "Head ITS")); continue; }
+
+                // Resolve head member by ITS — the importer requires the member to exist.
+                var head = await db.Members.FirstOrDefaultAsync(m => ((string)(object)m.ItsNumber) == headIts && !m.IsDeleted, ct);
+                if (head is null) { errors.Add(new(row.RowNumber, $"No member found with ITS '{headIts}'. Import members first.", "Head ITS")); continue; }
+
+                var code = row.Get("Code") ?? await NextCodeAsync(ct);
+                var phone = row.Get("Phone");
+                var email = row.Get("Email");
+                var address = row.Get("Address");
+                var notes = row.Get("Notes");
+
+                if (existingByCode.TryGetValue(code, out var existingId))
+                {
+                    var family = await db.Families.FirstOrDefaultAsync(f => f.Id == existingId, ct);
+                    if (family is null) { errors.Add(new(row.RowNumber, "Family disappeared mid-import.")); continue; }
+                    family.UpdateDetails(name, phone, email, address, notes);
+                    db.Families.Update(family);
+                }
+                else
+                {
+                    var family = new Family(Guid.NewGuid(), tenant.TenantId, code, name, head.Id);
+                    family.UpdateDetails(name, phone, email, address, notes);
+                    family.SetHead(head.Id, head.ItsNumber.Value);
+                    db.Families.Add(family);
+                    head.LinkFamily(family.Id, FamilyRole.Head);
+                    db.Members.Update(head);
+                    existingByCode[code] = family.Id; // dedupe within the same upload
+                }
+                committed++;
+            }
+            catch (Exception ex)
+            {
+                errors.Add(new(row.RowNumber, ex.Message));
+            }
+        }
+
+        if (committed > 0) await uow.SaveChangesAsync(ct);
+        return new ImportResult(rows.Count, committed, errors);
     }
 }
 

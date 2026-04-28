@@ -16,19 +16,22 @@ public sealed class MemberService : IMemberService
     private readonly ITenantContext _tenant;
     private readonly IValidator<CreateMemberDto> _createValidator;
     private readonly IValidator<UpdateMemberDto> _updateValidator;
+    private readonly IExcelReader _excelReader;
 
     public MemberService(
         IMemberRepository repo,
         IUnitOfWork uow,
         ITenantContext tenant,
         IValidator<CreateMemberDto> createValidator,
-        IValidator<UpdateMemberDto> updateValidator)
+        IValidator<UpdateMemberDto> updateValidator,
+        IExcelReader excelReader)
     {
         _repo = repo;
         _uow = uow;
         _tenant = tenant;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
+        _excelReader = excelReader;
     }
 
     public async Task<PagedResult<MemberDto>> ListAsync(MemberListQuery query, CancellationToken ct = default)
@@ -101,6 +104,72 @@ public sealed class MemberService : IMemberService
         _repo.Update(member);
         await _uow.SaveChangesAsync(ct);
         return Result.Success();
+    }
+
+    public async Task<ImportResult> ImportAsync(Stream xlsxStream, CancellationToken ct = default)
+    {
+        // Each row → either an UPSERT by ITS number, or a per-row error. We accumulate
+        // entities in memory and commit once at the end so a single SaveChanges runs.
+        var rows = _excelReader.Read(xlsxStream);
+        var errors = new List<ImportRowError>();
+        var committed = 0;
+
+        // Pre-load existing members for upsert. Small enough to fit in memory; if a Jamaat
+        // grows past tens of thousands, this should switch to per-row lookups.
+        var existing = await _repo.ListAsync(
+            new MemberPageRequest { Page = 1, PageSize = 100_000 }, ct);
+        var byIts = existing.Items.ToDictionary(m => m.ItsNumber, StringComparer.Ordinal);
+
+        foreach (var row in rows)
+        {
+            try
+            {
+                var itsRaw = row.Get("ITS", "ItsNumber", "ITS Number") ?? "";
+                if (string.IsNullOrWhiteSpace(itsRaw)) { errors.Add(new(row.RowNumber, "ITS is required.", "ITS")); continue; }
+                if (!ItsNumber.TryCreate(itsRaw, out var its)) { errors.Add(new(row.RowNumber, $"ITS '{itsRaw}' is invalid (expected 8 digits).", "ITS")); continue; }
+
+                var fullName = row.Get("Full name", "FullName", "Name");
+                if (string.IsNullOrWhiteSpace(fullName)) { errors.Add(new(row.RowNumber, "Full name is required.", "Full name")); continue; }
+
+                var arabic = row.Get("Arabic", "Full name (Arabic)", "FullNameArabic");
+                var hindi = row.Get("Hindi", "FullNameHindi");
+                var urdu = row.Get("Urdu", "FullNameUrdu");
+                var phone = row.Get("Phone", "Mobile");
+                var email = row.Get("Email");
+                var address = row.Get("Address");
+
+                if (byIts.TryGetValue(its.Value, out var existingDto))
+                {
+                    // Upsert: update by id
+                    var entity = await _repo.GetByIdAsync(existingDto.Id, ct);
+                    if (entity is null) { errors.Add(new(row.RowNumber, "Member disappeared mid-import.")); continue; }
+                    entity.UpdateName(fullName, arabic, hindi, urdu);
+                    entity.UpdateContact(phone, phone, email);
+                    if (!string.IsNullOrWhiteSpace(address))
+                        entity.UpdateAddress(address, null, null, null, null, null, null, HousingOwnership.Unknown, TypeOfHouse.Unknown);
+                    _repo.Update(entity);
+                }
+                else
+                {
+                    var member = new Member(Guid.NewGuid(), _tenant.TenantId, its, fullName);
+                    member.UpdateName(fullName, arabic, hindi, urdu);
+                    member.UpdateContact(phone, phone, email);
+                    if (!string.IsNullOrWhiteSpace(address))
+                        member.UpdateAddress(address, null, null, null, null, null, null, HousingOwnership.Unknown, TypeOfHouse.Unknown);
+                    await _repo.AddAsync(member, ct);
+                    // Track so a duplicate ITS within the same upload is detected as error.
+                    byIts[its.Value] = Map(member);
+                }
+                committed++;
+            }
+            catch (Exception ex)
+            {
+                errors.Add(new(row.RowNumber, ex.Message));
+            }
+        }
+
+        if (committed > 0) await _uow.SaveChangesAsync(ct);
+        return new ImportResult(rows.Count, committed, errors);
     }
 
     private static MemberDto Map(Member m) => new(

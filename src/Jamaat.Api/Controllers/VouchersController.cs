@@ -65,6 +65,48 @@ public sealed class VouchersController(IVoucherService svc, IExcelExporter excel
         return r.IsSuccess ? CreatedAtAction(nameof(Get), new { id = r.Value.Id }, r.Value) : ControllerResults.Problem(this, r.Error);
     }
 
+    /// <summary>Bulk-import historical vouchers from XLSX. Each row = one single-line draft voucher.</summary>
+    [HttpPost("import")]
+    [Authorize(Policy = "voucher.create")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<IActionResult> Import(IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0) return BadRequest(new { error = "no_file" });
+        await using var s = file.OpenReadStream();
+        return Ok(await svc.ImportAsync(s, ct));
+    }
+
+    [HttpGet("import-template.xlsx")]
+    [Authorize(Policy = "voucher.view")]
+    public IActionResult ImportTemplate()
+    {
+        var sheet = new ExcelSheet(
+            "Vouchers template",
+            new[]
+            {
+                new ExcelColumn("Date", ExcelColumnType.Date),
+                new ExcelColumn("Pay to"),
+                new ExcelColumn("Payee ITS"),
+                new ExcelColumn("Purpose"),
+                new ExcelColumn("Expense"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+                new ExcelColumn("Mode"),
+                new ExcelColumn("Bank account"),
+                new ExcelColumn("Cheque #"),
+                new ExcelColumn("Cheque date", ExcelColumnType.Date),
+                new ExcelColumn("Drawn on"),
+                new ExcelColumn("Narration"),
+                new ExcelColumn("Remarks"),
+            },
+            new[] { (IReadOnlyList<object?>)new object?[] {
+                DateOnly.FromDateTime(DateTime.UtcNow), "Saif Cleaning Services", null, "Mosque cleaning Apr",
+                "UTIL", 250m, "AED", "Cash", null, null, null, null, "Cleaning supplies", null,
+            }});
+        var bytes = excel.Build(new[] { sheet });
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "vouchers-import-template.xlsx");
+    }
+
     [HttpPost("{id:guid}/approve")]
     [Authorize(Policy = "voucher.approve")]
     public async Task<IActionResult> Approve(Guid id, CancellationToken ct)

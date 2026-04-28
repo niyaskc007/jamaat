@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Button, Card, Input, Select, Table, Tag, Empty, Progress } from 'antd';
+import { Button, Card, Input, Select, Table, Tag, Empty, Progress, Space } from 'antd';
 import type { TableProps } from 'antd';
-import { PlusOutlined, SearchOutlined, ReloadOutlined, BankOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, ReloadOutlined, BankOutlined, DownloadOutlined } from '@ant-design/icons';
+import { downloadServerXlsx } from '../../shared/export/server';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -61,7 +62,12 @@ export function QarzanHasanaPage() {
       <PageHeader
         title="Qarzan Hasana"
         subtitle="Interest-free loans with 2-level approval, guarantors, gold backing and installment repayment tracking."
-        actions={canCreate ? <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/qarzan-hasana/new')}>New loan application</Button> : null}
+        actions={
+          <Space>
+            <Button icon={<DownloadOutlined />} onClick={() => downloadServerXlsx('/api/v1/qarzan-hasana/export.xlsx', { search, status, scheme } as Record<string, unknown>, `qarzan-hasana_${new Date().toISOString().slice(0, 10)}.xlsx`)}>Export XLSX</Button>
+            {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/qarzan-hasana/new')}>New loan application</Button>}
+          </Space>
+        }
       />
 
       {firstRun ? (

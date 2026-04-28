@@ -56,6 +56,46 @@ public sealed class MembersController(IMemberService svc, IExcelExporter excel) 
         return File(bytes, XlsxContentType, $"members_{DateTime.UtcNow:yyyyMMdd}.xlsx");
     }
 
+    /// <summary>Import members from an XLSX upload (the "ITS sync via Excel" workflow).</summary>
+    /// <remarks>Upserts by ITS — existing members get updated, new ones get created. Per-row errors are returned alongside the commit count.</remarks>
+    [HttpPost("import")]
+    [Authorize(Policy = "member.create")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<IActionResult> Import(IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0) return BadRequest(new { error = "no_file" });
+        await using var s = file.OpenReadStream();
+        var result = await svc.ImportAsync(s, ct);
+        return Ok(result);
+    }
+
+    /// <summary>Download an empty XLSX template with the headers the Members import accepts.</summary>
+    [HttpGet("import-template.xlsx")]
+    [Authorize(Policy = "member.view")]
+    public IActionResult ImportTemplate()
+    {
+        var sheet = new ExcelSheet(
+            "Members template",
+            new[]
+            {
+                new ExcelColumn("ITS"),
+                new ExcelColumn("Full name"),
+                new ExcelColumn("Arabic"),
+                new ExcelColumn("Hindi"),
+                new ExcelColumn("Urdu"),
+                new ExcelColumn("Phone"),
+                new ExcelColumn("Email"),
+                new ExcelColumn("Address"),
+            },
+            // One illustrative row so operators see the expected shape; replace before upload.
+            new[] { (IReadOnlyList<object?>)new object?[] {
+                "40123001", "Mufaddal Saifuddin", "مفضل سيف الدين", null, null,
+                "+971501000001", "mufaddal.s@example.com", "House 1, Hakimi Compound",
+            }});
+        var bytes = excel.Build(new[] { sheet });
+        return File(bytes, XlsxContentType, "members-import-template.xlsx");
+    }
+
     private const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     [HttpGet("{id:guid}")]

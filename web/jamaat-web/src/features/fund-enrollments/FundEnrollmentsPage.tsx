@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Button, Card, Input, Select, Table, Tag, Empty, App as AntdApp, Drawer, Form, DatePicker, Dropdown } from 'antd';
+import { Button, Card, Input, Select, Table, Tag, Empty, App as AntdApp, Drawer, Form, DatePicker, Dropdown, Space } from 'antd';
 import type { TableProps, MenuProps } from 'antd';
-import { PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, BankOutlined, GiftOutlined, CheckCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined, CheckOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, BankOutlined, GiftOutlined, CheckCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined, CheckOutlined, DownloadOutlined } from '@ant-design/icons';
+import { downloadServerXlsx } from '../../shared/export/server';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -116,7 +117,12 @@ export function FundEnrollmentsPage() {
       <PageHeader
         title="Fund Enrollments"
         subtitle="Long-lived per-member subscriptions to Sabil, Wajebaat, Mutafariq and Niyaz funds."
-        actions={canCreate ? <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawerOpen(true)}>New enrollment</Button> : null}
+        actions={
+          <Space>
+            <Button icon={<DownloadOutlined />} onClick={() => downloadServerXlsx('/api/v1/fund-enrollments/export.xlsx', { search, status, fundTypeId: fundFilter } as Record<string, unknown>, `fund-enrollments_${new Date().toISOString().slice(0, 10)}.xlsx`)}>Export XLSX</Button>
+            {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawerOpen(true)}>New enrollment</Button>}
+          </Space>
+        }
       />
 
       {firstRun ? (

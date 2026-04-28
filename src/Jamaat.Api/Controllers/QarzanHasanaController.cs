@@ -1,3 +1,4 @@
+using Jamaat.Application.Common;
 using Jamaat.Application.QarzanHasana;
 using Jamaat.Contracts.QarzanHasana;
 using Microsoft.AspNetCore.Authorization;
@@ -8,11 +9,48 @@ namespace Jamaat.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/qarzan-hasana")]
-public sealed class QarzanHasanaController(IQarzanHasanaService svc) : ControllerBase
+public sealed class QarzanHasanaController(IQarzanHasanaService svc, IExcelExporter excel) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "qh.view")]
     public async Task<IActionResult> List([FromQuery] QarzanHasanaListQuery q, CancellationToken ct) => Ok(await svc.ListAsync(q, ct));
+
+    [HttpGet("export.xlsx")]
+    [Authorize(Policy = "qh.view")]
+    public async Task<IActionResult> Export([FromQuery] QarzanHasanaListQuery q, CancellationToken ct)
+    {
+        var capped = q with { Page = 1, PageSize = 5000 };
+        var page = await svc.ListAsync(capped, ct);
+        var sheet = new ExcelSheet(
+            "Qarzan Hasana",
+            new[]
+            {
+                new ExcelColumn("Code"),
+                new ExcelColumn("ITS"),
+                new ExcelColumn("Member"),
+                new ExcelColumn("Scheme"),
+                new ExcelColumn("Requested", ExcelColumnType.Currency),
+                new ExcelColumn("Approved", ExcelColumnType.Currency),
+                new ExcelColumn("Disbursed", ExcelColumnType.Currency),
+                new ExcelColumn("Repaid", ExcelColumnType.Currency),
+                new ExcelColumn("Outstanding", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+                new ExcelColumn("Start", ExcelColumnType.Date),
+                new ExcelColumn("Status"),
+                new ExcelColumn("Guarantor 1"),
+                new ExcelColumn("Guarantor 2"),
+            },
+            page.Items.Select(l => (IReadOnlyList<object?>)new object?[]
+            {
+                l.Code, l.MemberItsNumber, l.MemberName, l.Scheme.ToString(),
+                l.AmountRequested, l.AmountApproved, l.AmountDisbursed, l.AmountRepaid, l.AmountOutstanding,
+                l.Currency, l.StartDate, l.Status.ToString(),
+                l.Guarantor1Name, l.Guarantor2Name,
+            }).ToList());
+        var bytes = excel.Build(new[] { sheet });
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"qarzan-hasana_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = "qh.view")]

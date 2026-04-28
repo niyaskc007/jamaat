@@ -138,8 +138,9 @@ public static class DependencyInjection
         services.Configure<PhotoStorageOptions>(config.GetSection(PhotoStorageOptions.SectionName));
         services.AddSingleton<IPhotoStorage, LocalFileSystemPhotoStorage>();
 
-        // Excel exporter — ClosedXML-backed, stateless, safe as a singleton.
+        // Excel exporter / reader — ClosedXML-backed, stateless, safe as singletons.
         services.AddSingleton<Application.Common.IExcelExporter, Export.ClosedXmlExcelExporter>();
+        services.AddSingleton<Application.Common.IExcelReader, Export.ClosedXmlExcelReader>();
 
         // FluentValidation validators
         services.AddValidatorsFromAssembly(typeof(IMemberService).Assembly, includeInternalTypes: false);

@@ -25,6 +25,7 @@ import { extractProblem } from '../../shared/api/client';
 import { useAuth } from '../../shared/auth/useAuth';
 import { api } from '../../shared/api/client';
 import { downloadServerXlsx } from '../../shared/export/server';
+import { ImportDialog } from '../../shared/export/ImportDialog';
 
 const VerificationLabel: Record<VerificationStatus, string> = { 0: 'Not started', 1: 'Pending', 2: 'Verified', 3: 'Rejected' };
 const VerificationColor: Record<VerificationStatus, string> = { 0: 'default', 1: 'gold', 2: 'green', 3: 'red' };
@@ -49,6 +50,7 @@ export function MembersPage() {
   const [editing, setEditing] = useState<Member | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data, isLoading, isFetching, refetch, isError, error } = useQuery({
     queryKey: ['members', query],
@@ -186,7 +188,7 @@ export function MembersPage() {
         subtitle="Members synced from the main Jamaat platform plus locally added contacts."
         actions={
           <Space>
-            <Button icon={<ImportOutlined />} disabled>Import</Button>
+            {canCreate && <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>Import</Button>}
             <Button icon={<ExportOutlined />} onClick={() => exportMembers(query)}>Export</Button>
             {canCreate && (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
@@ -307,6 +309,17 @@ export function MembersPage() {
       </Card>
 
       <MemberFormDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} member={editing} />
+
+      <ImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="Import members (ITS sync via Excel)"
+        uploadEndpoint="/api/v1/members/import"
+        templateEndpoint="/api/v1/members/import-template.xlsx"
+        templateFilename="members-import-template.xlsx"
+        invalidateKeys={[['members']]}
+        hint={<>Upserts by ITS — existing members are updated, new ones created. Required columns: <strong>ITS</strong> + <strong>Full name</strong>.</>}
+      />
 
       {isError && (
         <Card size="small" style={{ marginBlockStart: 16, borderColor: 'var(--jm-danger)' }}>

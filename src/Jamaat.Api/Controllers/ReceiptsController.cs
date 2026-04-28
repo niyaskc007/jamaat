@@ -67,6 +67,47 @@ public sealed class ReceiptsController(IReceiptService svc, IExcelExporter excel
         return r.IsSuccess ? CreatedAtAction(nameof(Get), new { id = r.Value.Id }, r.Value) : ControllerResults.Problem(this, r.Error);
     }
 
+    /// <summary>Bulk-import historical receipts from XLSX. Each row = one single-line confirmed receipt.</summary>
+    [HttpPost("import")]
+    [Authorize(Policy = "receipt.create")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<IActionResult> Import(IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0) return BadRequest(new { error = "no_file" });
+        await using var s = file.OpenReadStream();
+        return Ok(await svc.ImportAsync(s, ct));
+    }
+
+    [HttpGet("import-template.xlsx")]
+    [Authorize(Policy = "receipt.view")]
+    public IActionResult ImportTemplate()
+    {
+        var sheet = new ExcelSheet(
+            "Receipts template",
+            new[]
+            {
+                new ExcelColumn("Date", ExcelColumnType.Date),
+                new ExcelColumn("ITS"),
+                new ExcelColumn("Fund code"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+                new ExcelColumn("Mode"),
+                new ExcelColumn("Bank account"),
+                new ExcelColumn("Cheque #"),
+                new ExcelColumn("Cheque date", ExcelColumnType.Date),
+                new ExcelColumn("Reference"),
+                new ExcelColumn("Purpose"),
+                new ExcelColumn("Period"),
+                new ExcelColumn("Remarks"),
+            },
+            new[] { (IReadOnlyList<object?>)new object?[] {
+                DateOnly.FromDateTime(DateTime.UtcNow), "40123001", "SABIL", 100m, "AED",
+                "Cash", null, null, null, null, "Monthly contribution", "Apr-2026", null,
+            }});
+        var bytes = excel.Build(new[] { sheet });
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "receipts-import-template.xlsx");
+    }
+
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Policy = "receipt.cancel")]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelReceiptDto dto, CancellationToken ct)

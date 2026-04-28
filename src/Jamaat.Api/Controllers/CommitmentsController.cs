@@ -1,4 +1,5 @@
 using Jamaat.Application.Commitments;
+using Jamaat.Application.Common;
 using Jamaat.Contracts.Commitments;
 using Jamaat.Domain.Common;
 using Microsoft.AspNetCore.Authorization;
@@ -9,12 +10,46 @@ namespace Jamaat.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/commitments")]
-public sealed class CommitmentsController(ICommitmentService svc) : ControllerBase
+public sealed class CommitmentsController(ICommitmentService svc, IExcelExporter excel) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "commitment.view")]
     public async Task<IActionResult> List([FromQuery] CommitmentListQuery q, CancellationToken ct)
         => Ok(await svc.ListAsync(q, ct));
+
+    [HttpGet("export.xlsx")]
+    [Authorize(Policy = "commitment.view")]
+    public async Task<IActionResult> Export([FromQuery] CommitmentListQuery q, CancellationToken ct)
+    {
+        var capped = q with { Page = 1, PageSize = 5000 };
+        var page = await svc.ListAsync(capped, ct);
+        var sheet = new ExcelSheet(
+            "Commitments",
+            new[]
+            {
+                new ExcelColumn("Code"),
+                new ExcelColumn("Party"),
+                new ExcelColumn("Party type"),
+                new ExcelColumn("Fund"),
+                new ExcelColumn("Total", ExcelColumnType.Currency),
+                new ExcelColumn("Paid", ExcelColumnType.Currency),
+                new ExcelColumn("Remaining", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+                new ExcelColumn("Instalments", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Frequency"),
+                new ExcelColumn("Start", ExcelColumnType.Date),
+                new ExcelColumn("Status"),
+            },
+            page.Items.Select(c => (IReadOnlyList<object?>)new object?[]
+            {
+                c.Code, c.PartyName, c.PartyType.ToString(), $"{c.FundTypeCode} — {c.FundTypeName}",
+                c.TotalAmount, c.PaidAmount, c.RemainingAmount, c.Currency,
+                c.NumberOfInstallments, c.Frequency.ToString(), c.StartDate, c.Status.ToString(),
+            }).ToList());
+        var bytes = excel.Build(new[] { sheet });
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"commitments_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = "commitment.view")]

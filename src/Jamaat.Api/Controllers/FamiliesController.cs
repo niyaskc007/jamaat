@@ -1,3 +1,4 @@
+using Jamaat.Application.Common;
 using Jamaat.Application.Families;
 using Jamaat.Contracts.Families;
 using Jamaat.Domain.Common;
@@ -9,12 +10,82 @@ namespace Jamaat.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/families")]
-public sealed class FamiliesController(IFamilyService svc) : ControllerBase
+public sealed class FamiliesController(IFamilyService svc, IExcelExporter excel) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "family.view")]
     public async Task<IActionResult> List([FromQuery] FamilyListQuery query, CancellationToken ct)
         => Ok(await svc.ListAsync(query, ct));
+
+    /// <summary>Export the filtered family list as XLSX (capped at 5000 rows).</summary>
+    [HttpGet("export.xlsx")]
+    [Authorize(Policy = "family.view")]
+    public async Task<IActionResult> Export([FromQuery] FamilyListQuery query, CancellationToken ct)
+    {
+        var capped = query with { Page = 1, PageSize = 5000 };
+        var page = await svc.ListAsync(capped, ct);
+        var sheet = new ExcelSheet(
+            "Families",
+            new[]
+            {
+                new ExcelColumn("Code"),
+                new ExcelColumn("Family name"),
+                new ExcelColumn("Head ITS"),
+                new ExcelColumn("Head name"),
+                new ExcelColumn("Phone"),
+                new ExcelColumn("Email"),
+                new ExcelColumn("Address"),
+                new ExcelColumn("Members", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Active"),
+                new ExcelColumn("Created", ExcelColumnType.DateTime),
+            },
+            page.Items.Select(f => (IReadOnlyList<object?>)new object?[]
+            {
+                f.Code, f.FamilyName, f.HeadItsNumber, f.HeadName,
+                f.ContactPhone, f.ContactEmail, f.Address,
+                f.MemberCount, f.IsActive ? "Yes" : "No", f.CreatedAtUtc,
+            }).ToList());
+        var bytes = excel.Build(new[] { sheet });
+        return File(bytes, XlsxContentType, $"families_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
+
+    [HttpPost("import")]
+    [Authorize(Policy = "family.create")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<IActionResult> Import(IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0) return BadRequest(new { error = "no_file" });
+        await using var s = file.OpenReadStream();
+        var result = await svc.ImportAsync(s, ct);
+        return Ok(result);
+    }
+
+    [HttpGet("import-template.xlsx")]
+    [Authorize(Policy = "family.view")]
+    public IActionResult ImportTemplate()
+    {
+        var sheet = new ExcelSheet(
+            "Families template",
+            new[]
+            {
+                new ExcelColumn("Code"),
+                new ExcelColumn("Family name"),
+                new ExcelColumn("Head ITS"),
+                new ExcelColumn("Phone"),
+                new ExcelColumn("Email"),
+                new ExcelColumn("Address"),
+                new ExcelColumn("Notes"),
+            },
+            new[] { (IReadOnlyList<object?>)new object?[] {
+                "F-00001", "Saifuddin family", "40123001",
+                "+971501000001", "head@example.com",
+                "House 1, Hakimi Compound", "Auto-imported from migration",
+            }});
+        var bytes = excel.Build(new[] { sheet });
+        return File(bytes, XlsxContentType, "families-import-template.xlsx");
+    }
+
+    private const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = "family.view")]

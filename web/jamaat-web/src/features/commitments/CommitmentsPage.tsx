@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, Input, Select, Table, Tag, Empty, Progress } from 'antd';
+import { Button, Card, Input, Select, Table, Tag, Empty, Progress, Space } from 'antd';
 import type { TableProps } from 'antd';
-import { PlusOutlined, SearchOutlined, ReloadOutlined, HeartOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, ReloadOutlined, HeartOutlined, DownloadOutlined } from '@ant-design/icons';
+import { downloadServerXlsx } from '../../shared/export/server';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -123,11 +124,16 @@ export function CommitmentsPage() {
       <PageHeader
         title="Commitments"
         subtitle="Pledges against fund types, tracked through scheduled installments until fully paid or waived."
-        actions={canCreate ? (
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/commitments/new')}>
-            New commitment
-          </Button>
-        ) : null}
+        actions={
+          <Space>
+            <Button icon={<DownloadOutlined />} onClick={() => downloadServerXlsx('/api/v1/commitments/export.xlsx', query as Record<string, unknown>, `commitments_${new Date().toISOString().slice(0, 10)}.xlsx`)}>Export XLSX</Button>
+            {canCreate && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/commitments/new')}>
+                New commitment
+              </Button>
+            )}
+          </Space>
+        }
       />
 
       {firstRun ? (

@@ -15,7 +15,8 @@ import { useAuth } from '../../shared/auth/useAuth';
 import { money, formatDate } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
 import { downloadServerXlsx } from '../../shared/export/server';
-import { DownloadOutlined } from '@ant-design/icons';
+import { ImportDialog } from '../../shared/export/ImportDialog';
+import { DownloadOutlined, ImportOutlined } from '@ant-design/icons';
 import {
   receiptsApi, PaymentModeLabel, ReceiptStatusLabel,
   type ReceiptListItem, type ReceiptListQuery, type ReceiptStatus, type PaymentMode,
@@ -34,6 +35,7 @@ export function ReceiptsPage() {
   const [query, setQuery] = useState<ReceiptListQuery>({ page: 1, pageSize: 25 });
   const [search, setSearch] = useState('');
   const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const effective: ReceiptListQuery = {
     ...query,
@@ -114,6 +116,7 @@ export function ReceiptsPage() {
         subtitle="All inward donation and fund receipts."
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
+            {canCreate && <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>Import</Button>}
             {canExport && <Button icon={<DownloadOutlined />} onClick={onExport}>Export XLSX</Button>}
             {canCreate && (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/receipts/new')}>New Receipt</Button>
@@ -171,6 +174,17 @@ export function ReceiptsPage() {
         />
       </Card>
       )}
+
+      <ImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="Import historical receipts"
+        uploadEndpoint="/api/v1/receipts/import"
+        templateEndpoint="/api/v1/receipts/import-template.xlsx"
+        templateFilename="receipts-import-template.xlsx"
+        invalidateKeys={[['receipts'], ['dashboard']]}
+        hint={<>Each row creates one single-line confirmed receipt via the same flow as the counter UI — numbering, ledger posting and audit all run. Required: <strong>Date, ITS, Fund code, Amount, Mode</strong>. ITS must already exist as a member.</>}
+      />
     </div>
   );
 }
