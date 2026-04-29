@@ -24,6 +24,8 @@ public sealed record FundTypeDto(
     Guid? FundCategoryId, string? FundCategoryCode, string? FundCategoryName, FundCategoryKind? FundCategoryKind,
     Guid? FundSubCategoryId, string? FundSubCategoryCode, string? FundSubCategoryName,
     bool IsReturnable, bool RequiresAgreement, bool RequiresMaturityTracking, bool RequiresNiyyath,
+    // Batch-6: function-based funds tied to a specific Event.
+    Guid? EventId, string? EventName,
     DateTimeOffset CreatedAtUtc);
 
 public sealed record CreateFundTypeDto(
@@ -45,7 +47,8 @@ public sealed record CreateFundTypeDto(
     bool IsReturnable = false,
     bool RequiresAgreement = false,
     bool RequiresMaturityTracking = false,
-    bool RequiresNiyyath = false);
+    bool RequiresNiyyath = false,
+    Guid? EventId = null);
 
 public sealed record UpdateFundTypeDto(
     string NameEnglish,
@@ -65,7 +68,8 @@ public sealed record UpdateFundTypeDto(
     bool IsReturnable = false,
     bool RequiresAgreement = false,
     bool RequiresMaturityTracking = false,
-    bool RequiresNiyyath = false);
+    bool RequiresNiyyath = false,
+    Guid? EventId = null);
 
 public sealed record FundTypeListQuery(
     int Page = 1, int PageSize = 25, string? SortBy = null, string? SortDir = null,

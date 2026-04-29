@@ -54,6 +54,7 @@ public sealed class FundTypeService(
         e.ConfigureAccounting(dto.CreditAccountId, null);
         await ApplyClassificationAsync(e, dto.FundCategoryId, dto.FundSubCategoryId,
             dto.IsReturnable, dto.RequiresAgreement, dto.RequiresMaturityTracking, dto.RequiresNiyyath, ct);
+        e.LinkEvent(dto.EventId);
 
         await repo.AddAsync(e, ct);
         await uow.SaveChangesAsync(ct);
@@ -72,6 +73,7 @@ public sealed class FundTypeService(
         if (dto.IsActive) e.Activate(); else e.Deactivate();
         await ApplyClassificationAsync(e, dto.FundCategoryId, dto.FundSubCategoryId,
             dto.IsReturnable, dto.RequiresAgreement, dto.RequiresMaturityTracking, dto.RequiresNiyyath, ct);
+        e.LinkEvent(dto.EventId);
         repo.Update(e);
         await uow.SaveChangesAsync(ct);
         return await MapWithCategoryAsync(e, ct);
@@ -111,20 +113,24 @@ public sealed class FundTypeService(
     {
         FundCategoryEntity? cat = null;
         FundSubCategory? sub = null;
+        string? eventName = null;
         if (e.FundCategoryId is Guid cid)
             cat = await db.FundCategories.AsNoTracking().FirstOrDefaultAsync(c => c.Id == cid, ct);
         if (e.FundSubCategoryId is Guid sid)
             sub = await db.FundSubCategories.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sid, ct);
-        return Map(e, cat, sub);
+        if (e.EventId is Guid eid)
+            eventName = await db.Events.AsNoTracking().Where(ev => ev.Id == eid).Select(ev => ev.Name).FirstOrDefaultAsync(ct);
+        return Map(e, cat, sub, eventName);
     }
 
-    internal static FundTypeDto Map(FundType e, FundCategoryEntity? cat = null, FundSubCategory? sub = null) => new(
+    internal static FundTypeDto Map(FundType e, FundCategoryEntity? cat = null, FundSubCategory? sub = null, string? eventName = null) => new(
         e.Id, e.Code, e.NameEnglish, e.NameArabic, e.NameHindi, e.NameUrdu, e.Description,
         e.IsActive, e.RequiresItsNumber, e.RequiresPeriodReference, e.Category, e.IsLoan, (int)e.AllowedPaymentModes,
         e.CreditAccountId, null, e.DefaultTemplateId, e.RulesJson,
         e.FundCategoryId, cat?.Code, cat?.Name, cat?.Kind,
         e.FundSubCategoryId, sub?.Code, sub?.Name,
         e.IsReturnable, e.RequiresAgreement, e.RequiresMaturityTracking, e.RequiresNiyyath,
+        e.EventId, eventName,
         e.CreatedAtUtc);
 }
 

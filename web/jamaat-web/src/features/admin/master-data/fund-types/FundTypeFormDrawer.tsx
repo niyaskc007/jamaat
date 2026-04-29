@@ -8,6 +8,7 @@ import { extractProblem } from '../../../../shared/api/client';
 import { PaymentModeLabel } from '../shared';
 import { fundTypesApi, FundCategoryLabel, type FundType, type FundCategory } from './fundTypesApi';
 import { fundCategoriesApi, FundCategoryKindLabel } from '../fund-categories/fundCategoriesApi';
+import { eventsApi } from '../../../events/eventsApi';
 
 const schema = z.object({
   code: z.string().min(1).max(32).regex(/^[A-Za-z0-9_-]+$/, 'Letters, digits, _ and - only'),
@@ -27,6 +28,8 @@ const schema = z.object({
   requiresAgreement: z.boolean(),
   requiresMaturityTracking: z.boolean(),
   requiresNiyyath: z.boolean(),
+  // Batch-6: optional event link for Function-based funds.
+  eventId: z.string().optional(),
   isActive: z.boolean().optional(),
 });
 type Form = z.infer<typeof schema>;
@@ -38,6 +41,8 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
 
   const categoriesQ = useQuery({ queryKey: ['fund-categories'], queryFn: () => fundCategoriesApi.list(true), enabled: open });
   const subsQ = useQuery({ queryKey: ['fund-sub-categories'], queryFn: () => fundCategoriesApi.listSubs(undefined, true), enabled: open });
+  // Function-based funds need to pick an event — pull a small list when the form opens.
+  const eventsQ = useQuery({ queryKey: ['events', 'for-fund-type'], queryFn: () => eventsApi.list({ pageSize: 200 }), enabled: open });
 
   const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<Form>({
     resolver: zodResolver(schema),
@@ -59,6 +64,7 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         requiresAgreement: fundType.requiresAgreement ?? false,
         requiresMaturityTracking: fundType.requiresMaturityTracking ?? false,
         requiresNiyyath: fundType.requiresNiyyath ?? false,
+        eventId: fundType.eventId ?? undefined,
         isActive: fundType.isActive,
       });
     } else {
@@ -84,6 +90,7 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         requiresAgreement: data.requiresAgreement,
         requiresMaturityTracking: data.requiresMaturityTracking,
         requiresNiyyath: data.requiresNiyyath,
+        eventId: data.eventId || undefined,
       };
       if (isEdit && fundType) {
         return fundTypesApi.update(fundType.id, { ...payload, isActive: data.isActive ?? true });
@@ -105,6 +112,7 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
   const subOptions = (subsQ.data ?? []).filter((s) => !selectedCategoryId || s.fundCategoryId === selectedCategoryId);
   const isLoanFund = selectedCategory?.kind === 3;
   const isTempIncome = selectedCategory?.kind === 2;
+  const isFunctionBased = selectedCategory?.kind === 5;
 
   return (
     <Drawer
@@ -160,6 +168,18 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
               ? 'This is a Loan Fund — it can both receive returnable contributions and issue loans. Enable the relevant behaviour flags below.'
               : 'This is a Temporary Income category — receipts under this fund will be tracked as a return obligation, not as income.'}
           />
+        )}
+
+        {isFunctionBased && (
+          <Form.Item label="Bound to event" tooltip="Function-based funds collect against a specific event/majlis. Receipts on this fund implicitly tie to it.">
+            <Controller name="eventId" control={control} render={({ field }) => (
+              <Select {...field} placeholder="Pick the event"
+                allowClear showSearch optionFilterProp="label"
+                loading={eventsQ.isLoading}
+                options={(eventsQ.data?.items ?? []).map((ev) => ({ value: ev.id, label: `${ev.name} · ${ev.eventDate}` }))}
+              />
+            )} />
+          </Form.Item>
         )}
 
         <Form.Item label="Returnable contributions" tooltip="When ON, the fund accepts contributions where the contributor expects the money back. Maturity / agreement tracking applies.">
@@ -225,6 +245,7 @@ function defaults(): Form {
     category: 1,
     fundCategoryId: undefined, fundSubCategoryId: undefined,
     isReturnable: false, requiresAgreement: false, requiresMaturityTracking: false, requiresNiyyath: false,
+    eventId: undefined,
     isActive: true,
   };
 }

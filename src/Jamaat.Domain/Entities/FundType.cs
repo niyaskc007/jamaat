@@ -38,6 +38,8 @@ public sealed class FundType : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public Guid? FundCategoryId { get; private set; }
     /// <summary>Optional second-tier classification (e.g. "Mohammedi Scheme" under Permanent Income).</summary>
     public Guid? FundSubCategoryId { get; private set; }
+    /// <summary>For Function-based funds: the event this fund collects against. Receipts on this fund implicitly tie to the event.</summary>
+    public Guid? EventId { get; private set; }
 
     /// <summary>When true, the fund accepts contributions that the contributor expects back (returnable money). Drives different posting + reporting flows in batch 2 of the fund-management uplift.</summary>
     public bool IsReturnable { get; private set; }
@@ -85,6 +87,9 @@ public sealed class FundType : AggregateRoot<Guid>, ITenantScoped, IAuditable
     }
 
     public void SetCategory(FundCategory category) => Category = category;
+
+    /// <summary>Bind a Function-based fund to a specific event. Pass null to clear the link.</summary>
+    public void LinkEvent(Guid? eventId) => EventId = eventId;
 
     /// <summary>Set the new admin-managed classification + per-fund behaviour flags.</summary>
     /// <remarks>

@@ -71,7 +71,8 @@ export function FundTypesPanel() {
           {row.requiresAgreement && <Tag color="purple" style={{ margin: 0 }}>Agreement</Tag>}
           {row.requiresMaturityTracking && <Tag color="blue" style={{ margin: 0 }}>Maturity</Tag>}
           {row.requiresNiyyath && <Tag color="cyan" style={{ margin: 0 }}>Niyyath</Tag>}
-          {!row.isReturnable && !row.requiresAgreement && !row.requiresMaturityTracking && !row.requiresNiyyath && <span style={{ color: 'var(--jm-gray-400)', fontSize: 12 }}>—</span>}
+          {row.eventName && <Tag color="geekblue" style={{ margin: 0 }}>Event · {row.eventName}</Tag>}
+          {!row.isReturnable && !row.requiresAgreement && !row.requiresMaturityTracking && !row.requiresNiyyath && !row.eventName && <span style={{ color: 'var(--jm-gray-400)', fontSize: 12 }}>—</span>}
         </Space>
       ),
     },

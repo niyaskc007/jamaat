@@ -47,6 +47,9 @@ export type FundType = {
   requiresAgreement: boolean;
   requiresMaturityTracking: boolean;
   requiresNiyyath: boolean;
+  // Batch-6: Function-based funds may bind to a specific Event.
+  eventId?: string | null;
+  eventName?: string | null;
   createdAtUtc: string;
 };
 
@@ -74,6 +77,7 @@ export type CreateFundType = {
   requiresAgreement?: boolean;
   requiresMaturityTracking?: boolean;
   requiresNiyyath?: boolean;
+  eventId?: string;
 };
 
 export type UpdateFundType = Omit<CreateFundType, 'code'> & { isActive: boolean };

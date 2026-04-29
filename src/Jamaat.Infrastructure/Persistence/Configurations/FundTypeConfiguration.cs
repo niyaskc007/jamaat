@@ -30,6 +30,9 @@ public sealed class FundTypeConfiguration : IEntityTypeConfiguration<FundType>
         b.Property(x => x.RequiresAgreement).HasDefaultValue(false);
         b.Property(x => x.RequiresMaturityTracking).HasDefaultValue(false);
         b.Property(x => x.RequiresNiyyath).HasDefaultValue(false);
+        // Batch-6: function-based funds attach to a specific Event.
+        b.Property(x => x.EventId);
+        b.HasIndex(x => new { x.TenantId, x.EventId });
 
         b.HasIndex(x => new { x.TenantId, x.Code }).IsUnique();
         b.HasIndex(x => new { x.TenantId, x.Category });
