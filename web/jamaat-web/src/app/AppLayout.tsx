@@ -98,10 +98,14 @@ export function AppLayout() {
     if (any('voucher.view')) ops.push({ key: '/vouchers', icon: <WalletOutlined />, label: t('nav.vouchers') });
 
     const acc: any[] = [];
+    // Overview lands on /accounting (KPI dashboard); Ledger and Reports are the existing drill-ins.
+    if (any('accounting.view')) acc.push({ key: '/accounting', icon: <DashboardOutlined />, label: 'Overview' });
     if (any('accounting.view')) acc.push({ key: '/ledger', icon: <BookOutlined />, label: t('nav.ledger') });
     if (any('reports.view')) acc.push({ key: '/reports', icon: <BarChartOutlined />, label: t('nav.reports') });
 
     const adm: any[] = [];
+    if (any('admin.users', 'admin.roles', 'admin.masterdata', 'admin.integration', 'admin.audit', 'admin.errorlogs'))
+      adm.push({ key: '/admin', icon: <DashboardOutlined />, label: 'Overview' });
     if (any('admin.users', 'admin.roles'))
       adm.push({ key: '/admin/users', icon: <UserSwitchOutlined />, label: t('nav.users') });
     if (any('admin.masterdata'))
@@ -302,10 +306,13 @@ export function AppLayout() {
 
 function resolveActiveKey(path: string): string {
   // Match deepest known prefix
+  // Order matters: deeper paths must be listed before their parents so the deepest
+  // prefix wins (e.g. /admin/users before /admin, otherwise /admin would always match first).
   const known = [
     '/dashboard', '/members', '/families', '/events', '/commitments', '/fund-enrollments', '/qarzan-hasana',
-    '/receipts', '/cheques', '/vouchers', '/ledger', '/reports', '/help',
+    '/receipts', '/cheques', '/vouchers', '/ledger', '/reports', '/accounting', '/help',
     '/admin/users', '/admin/master-data', '/admin/integrations', '/admin/audit', '/admin/error-logs', '/admin/notifications',
+    '/admin',
   ];
   return known.find((k) => path === k || path.startsWith(k + '/')) ?? '/dashboard';
 }
@@ -338,6 +345,7 @@ function resolveBreadcrumb(path: string, t: (k: string) => string): { title: Rea
       vouchers: t('nav.vouchers'),
       ledger: t('nav.ledger'),
       reports: t('nav.reports'),
+      accounting: t('nav.sectionAccounting'),
       admin: t('nav.sectionAdmin'),
       help: 'Help & Docs',
       events: 'Events',

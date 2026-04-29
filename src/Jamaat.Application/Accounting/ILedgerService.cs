@@ -48,7 +48,24 @@ public interface IDashboardService
     Task<DashboardStatsDto> StatsAsync(CancellationToken ct = default);
     Task<IReadOnlyList<DashboardActivityDto>> RecentActivityAsync(int take, CancellationToken ct = default);
     Task<IReadOnlyList<DashboardFundSliceDto>> FundSliceAsync(DateOnly from, DateOnly to, CancellationToken ct = default);
+    /// <summary>Pre-aggregated BI for the dashboard home: collection trend (last 30 days),
+    /// pending obligations strip, cheque pipeline by status. One call for the whole panel
+    /// so the page doesn't fan out into 4-5 round-trips on every load.</summary>
+    Task<DashboardInsightsDto> InsightsAsync(CancellationToken ct = default);
 }
+
+public sealed record DashboardInsightsDto(
+    IReadOnlyList<DailyCollectionPoint> CollectionTrend,
+    decimal OutstandingLoanBalance,
+    decimal OutstandingReturnableBalance,
+    decimal PendingCommitmentBalance,
+    int OverdueReturnsCount,
+    IReadOnlyList<ChequePipelinePoint> ChequePipeline,
+    string Currency);
+
+public sealed record DailyCollectionPoint(DateOnly Date, decimal Amount, int Count);
+
+public sealed record ChequePipelinePoint(int Status, string StatusLabel, int Count, decimal Amount);
 
 public sealed record DashboardStatsDto(
     decimal TodayCollection, int ReceiptsToday, int ActiveMembers, decimal MtdCollection,

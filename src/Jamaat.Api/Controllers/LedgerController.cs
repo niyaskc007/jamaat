@@ -432,4 +432,9 @@ public sealed class DashboardController(IDashboardService svc) : ControllerBase
     [HttpGet("fund-slice")]
     public async Task<IActionResult> Fund([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
         => Ok(await svc.FundSliceAsync(from, to, ct));
+
+    /// <summary>BI insights bundle: 30-day collection trend + obligations strip + cheque
+    /// pipeline. Replaces the 4-5 separate calls a chart-heavy dashboard would otherwise need.</summary>
+    [HttpGet("insights")]
+    public async Task<IActionResult> Insights(CancellationToken ct) => Ok(await svc.InsightsAsync(ct));
 }

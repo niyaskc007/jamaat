@@ -31,6 +31,8 @@ import { IntegrationsPage } from '../features/admin/IntegrationsPage';
 import { AuditPage } from '../features/admin/AuditPage';
 import { ErrorLogsPage } from '../features/admin/error-logs/ErrorLogsPage';
 import { NotificationLogPage } from '../features/admin/notifications/NotificationLogPage';
+import { AdministrationPage } from '../features/admin/AdministrationPage';
+import { AccountingPage } from '../features/accounting/AccountingPage';
 import { HelpPage } from '../features/help/HelpPage';
 import { MePage } from '../features/me/MePage';
 import { RequireAuth } from '../shared/auth/RequireAuth';
@@ -77,8 +79,11 @@ export function App() {
         <Route path="vouchers" element={<Gate anyOf={['voucher.view']}><VouchersPage /></Gate>} />
         <Route path="vouchers/new" element={<Gate anyOf={['voucher.create']}><NewVoucherPage /></Gate>} />
         <Route path="vouchers/:id" element={<Gate anyOf={['voucher.view']}><VoucherDetailPage /></Gate>} />
+        <Route path="accounting" element={<Gate anyOf={['accounting.view']}><AccountingPage /></Gate>} />
         <Route path="ledger" element={<Gate anyOf={['accounting.view']}><LedgerPage /></Gate>} />
         <Route path="reports" element={<Gate anyOf={['reports.view']}><ReportsPage /></Gate>} />
+        <Route path="reports/:reportSlug" element={<Gate anyOf={['reports.view']}><ReportsPage /></Gate>} />
+        <Route path="admin" element={<Gate anyOf={['admin.users', 'admin.roles', 'admin.masterdata', 'admin.integration', 'admin.audit', 'admin.errorlogs']}><AdministrationPage /></Gate>} />
         <Route path="admin/users" element={<Gate anyOf={['admin.users', 'admin.roles']}><UsersPage /></Gate>} />
         <Route path="admin/master-data" element={<Gate anyOf={['admin.masterdata']}><MasterDataPage /></Gate>} />
         <Route path="admin/integrations" element={<Gate anyOf={['admin.integration']}><IntegrationsPage /></Gate>} />

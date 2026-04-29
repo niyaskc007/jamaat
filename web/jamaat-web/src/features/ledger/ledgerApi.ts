@@ -133,6 +133,15 @@ export const dashboardApi = {
   }>('/api/v1/dashboard/stats')).data,
   recentActivity: async (take = 10) =>
     (await api.get<{ kind: string; reference: string; title: string; amount: number | null; currency: string; status: string; atUtc: string }[]>('/api/v1/dashboard/recent-activity', { params: { take } })).data,
+  insights: async () => (await api.get<{
+    collectionTrend: { date: string; amount: number; count: number }[];
+    outstandingLoanBalance: number;
+    outstandingReturnableBalance: number;
+    pendingCommitmentBalance: number;
+    overdueReturnsCount: number;
+    chequePipeline: { status: number; statusLabel: string; count: number; amount: number }[];
+    currency: string;
+  }>('/api/v1/dashboard/insights')).data,
   fundSlice: async (from: string, to: string) =>
     (await api.get<{ fundTypeId: string; name: string; code: string; amount: number }[]>('/api/v1/dashboard/fund-slice', { params: { from, to } })).data,
 };

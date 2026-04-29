@@ -14,6 +14,7 @@ import { money } from '../../shared/format/format';
 import { dashboardApi } from '../ledger/ledgerApi';
 import { PeriodGuard } from './PeriodGuard';
 import { useBaseCurrency } from '../../shared/hooks/useBaseCurrency';
+import { DashboardInsights } from './DashboardInsights';
 
 export function DashboardPage() {
   const { user, hasPermission } = useAuth();
@@ -114,6 +115,11 @@ export function DashboardPage() {
           <KpiCard icon={<RiseOutlined />} label="MTD Collection" value={stats?.mtdCollection ?? null} format="money" deltaPercent={null} accent="#0A8754" />
         </Col>
       </Row>
+
+      {/* BI panel - obligations strip + 30-day collection trend + fund-share donut + cheque pipeline.
+          One backend call (insights) hydrates all four. Rendered below the headline KPIs so the page
+          tells "today's number" at the top, then "what's actually happening" below. */}
+      <DashboardInsights />
 
       <Card title="Quick actions" style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }}>
         <Row gutter={[16, 16]}>

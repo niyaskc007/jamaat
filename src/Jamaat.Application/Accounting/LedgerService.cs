@@ -551,6 +551,76 @@ public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domai
             .OrderByDescending(x => x.Amount)
             .ToList();
     }
+
+    public async Task<DashboardInsightsDto> InsightsAsync(CancellationToken ct = default)
+    {
+        var today = clock.Today;
+        var trendStart = today.AddDays(-29); // 30-day window inclusive
+
+        // Collection trend - daily totals for the last 30 days. Materialise narrow projection
+        // first because EF can't translate the GroupBy + projection back to SQL when the key
+        // includes a value-object-backed string.
+        var trendRaw = await db.Receipts.AsNoTracking()
+            .Where(r => r.Status == ReceiptStatus.Confirmed && r.ReceiptDate >= trendStart && r.ReceiptDate <= today)
+            .Select(r => new { r.ReceiptDate, r.AmountTotal })
+            .ToListAsync(ct);
+        var byDate = trendRaw.GroupBy(x => x.ReceiptDate)
+            .ToDictionary(g => g.Key, g => new { Amount = g.Sum(x => x.AmountTotal), Count = g.Count() });
+        var trend = new List<DailyCollectionPoint>(30);
+        for (var d = trendStart; d <= today; d = d.AddDays(1))
+        {
+            var hit = byDate.TryGetValue(d, out var v) ? v : null;
+            trend.Add(new DailyCollectionPoint(d, hit?.Amount ?? 0m, hit?.Count ?? 0));
+        }
+
+        // Outstanding QH loan balance - sum across all non-terminal loans.
+        var outstandingLoans = await db.QarzanHasanaLoans.AsNoTracking()
+            .Where(l => l.Status != QarzanHasanaStatus.Completed && l.Status != QarzanHasanaStatus.Cancelled && l.Status != QarzanHasanaStatus.Rejected)
+            .SumAsync(l => (decimal?)(l.AmountDisbursed - l.AmountRepaid), ct) ?? 0m;
+
+        // Outstanding returnable obligations - confirmed returnable receipts minus what's been returned.
+        var outstandingReturnable = await db.Receipts.AsNoTracking()
+            .Where(r => r.Status == ReceiptStatus.Confirmed && r.Intention == ContributionIntention.Returnable)
+            .SumAsync(r => (decimal?)(r.AmountTotal - r.AmountReturned), ct) ?? 0m;
+
+        // Pending commitment money - active/paused commitments with remaining > 0.
+        var pendingCommitments = await db.Commitments.AsNoTracking()
+            .Where(c => (c.Status == CommitmentStatus.Active || c.Status == CommitmentStatus.Paused)
+                && c.PaidAmount < c.TotalAmount)
+            .SumAsync(c => (decimal?)(c.TotalAmount - c.PaidAmount), ct) ?? 0m;
+
+        // Overdue returns - returnable receipts past maturity with non-zero balance.
+        var overdueReturns = await db.Receipts.AsNoTracking()
+            .Where(r => r.Status == ReceiptStatus.Confirmed
+                && r.Intention == ContributionIntention.Returnable
+                && r.MaturityDate.HasValue && r.MaturityDate.Value <= today
+                && r.AmountReturned < r.AmountTotal)
+            .CountAsync(ct);
+
+        // Cheque pipeline - count + amount per status. Drives the bar chart on the dashboard.
+        var pdcs = await db.PostDatedCheques.AsNoTracking()
+            .GroupBy(p => p.Status)
+            .Select(g => new { Status = (int)g.Key, Count = g.Count(), Amount = g.Sum(p => p.Amount) })
+            .ToListAsync(ct);
+        var statusLabels = new Dictionary<int, string>
+        {
+            [1] = "Pledged", [2] = "Deposited", [3] = "Cleared", [4] = "Bounced", [5] = "Cancelled",
+        };
+        var pipeline = pdcs
+            .Select(p => new ChequePipelinePoint(p.Status, statusLabels.TryGetValue(p.Status, out var l) ? l : $"#{p.Status}", p.Count, p.Amount))
+            .OrderBy(p => p.Status)
+            .ToList();
+
+        // Default currency from Tenant or fall back to the most-common receipt currency. Cheap
+        // approximation - gets the dashboard rendering even if the base-currency setting is unset.
+        var currency = await db.Receipts.AsNoTracking()
+            .Where(r => r.Status == ReceiptStatus.Confirmed)
+            .GroupBy(r => r.Currency).OrderByDescending(g => g.Count())
+            .Select(g => g.Key).FirstOrDefaultAsync(ct) ?? "AED";
+
+        return new DashboardInsightsDto(trend, outstandingLoans, outstandingReturnable, pendingCommitments,
+            overdueReturns, pipeline, currency);
+    }
 }
 
 public sealed class PeriodService(Persistence.JamaatDbContextFacade db, Domain.Abstractions.IUnitOfWork uow,

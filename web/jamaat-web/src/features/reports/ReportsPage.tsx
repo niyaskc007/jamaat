@@ -1,8 +1,14 @@
 import { useState } from 'react';
-import { Card, DatePicker, Tabs, Table, Select, Empty, Button, Switch, InputNumber } from 'antd';
-import { DownloadOutlined } from '@ant-design/icons';
+import { Card, DatePicker, Table, Select, Empty, Button, Switch, InputNumber, Row, Col } from 'antd';
+import {
+  DownloadOutlined, ArrowLeftOutlined,
+  CalendarOutlined, PieChartOutlined, WalletOutlined, BookOutlined as LedgerIcon,
+  UserOutlined, FileSearchOutlined, BankOutlined, GiftOutlined,
+  HistoryOutlined, ClockCircleOutlined, WarningOutlined,
+} from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { money, formatDate } from '../../shared/format/format';
@@ -36,24 +42,120 @@ function ExportButton({ onClick }: { onClick: () => void }) {
 
 const { RangePicker } = DatePicker;
 
+/// Catalog of every report - drives the landing grid AND the routed sub-page renderer.
+/// Slug doubles as the URL segment, so /reports/daily-collection routes to the matching
+/// component. Add a new report here once and it shows up everywhere.
+type ReportSlug =
+  | 'daily-collection' | 'fund-wise' | 'daily-payments' | 'cash-book'
+  | 'member-contribution' | 'cheque-wise' | 'fund-balance' | 'returnable'
+  | 'outstanding-loans' | 'pending-commitments' | 'overdue-returns';
+
+type ReportEntry = {
+  slug: ReportSlug;
+  title: string;
+  group: 'Daily ops' | 'Fund analytics' | 'Receivables & obligations' | 'Member-centric';
+  description: string;
+  icon: React.ReactNode;
+  color: string;
+  render: () => React.ReactNode;
+};
+
+const REPORTS: ReportEntry[] = [
+  // Daily ops - what cashiers and accountants need every morning
+  { slug: 'daily-collection', title: 'Daily Collection', group: 'Daily ops',
+    description: 'Money in, day by day. Receipt count + total per currency for any date range.',
+    icon: <CalendarOutlined />, color: '#0E5C40', render: () => <DailyCollection /> },
+  { slug: 'daily-payments', title: 'Daily Payments', group: 'Daily ops',
+    description: 'Money out (vouchers), day by day. Pairs with Daily Collection for net flow.',
+    icon: <CalendarOutlined />, color: '#92400E', render: () => <DailyPayments /> },
+  { slug: 'cash-book', title: 'Cash Book', group: 'Daily ops',
+    description: 'Per-account ledger - dr/cr movement with running balance for any account.',
+    icon: <LedgerIcon />, color: '#475569', render: () => <CashBook /> },
+  { slug: 'cheque-wise', title: 'Cheque-wise Receipts', group: 'Daily ops',
+    description: 'Every cheque-mode receipt with bank + cheque #. Drives bank reconciliation.',
+    icon: <BankOutlined />, color: '#1E40AF', render: () => <ChequeWise /> },
+
+  // Fund analytics - which funds are doing what
+  { slug: 'fund-wise', title: 'Fund-wise Collection', group: 'Fund analytics',
+    description: 'Receipts grouped by fund + payment-mode breakdown. Filter by event or category.',
+    icon: <PieChartOutlined />, color: '#0B6E63', render: () => <FundWise /> },
+  { slug: 'fund-balance', title: 'Fund Balance (Dual)', group: 'Fund analytics',
+    description: 'For one fund: total cash in, permanent vs returnable split, net fund strength.',
+    icon: <WalletOutlined />, color: '#7C3AED', render: () => <FundBalance /> },
+  { slug: 'returnable', title: 'Returnable Contributions', group: 'Fund analytics',
+    description: 'Every receipt held under returnable terms - maturity, agreement, balance.',
+    icon: <GiftOutlined />, color: '#B45309', render: () => <ReturnableContributions /> },
+
+  // Receivables & obligations - what the Jamaat owes / is owed
+  { slug: 'outstanding-loans', title: 'Outstanding QH Loans', group: 'Receivables & obligations',
+    description: 'Active QH loans with non-zero balance. Overdue-first ordering for the recovery queue.',
+    icon: <BankOutlined />, color: '#9333EA', render: () => <OutstandingLoans /> },
+  { slug: 'pending-commitments', title: 'Pending Commitments', group: 'Receivables & obligations',
+    description: 'Active commitments still owing money - paid/total instalments + next due date.',
+    icon: <ClockCircleOutlined />, color: '#D97706', render: () => <PendingCommitments /> },
+  { slug: 'overdue-returns', title: 'Overdue Returns', group: 'Receivables & obligations',
+    description: 'Returnable receipts past maturity with non-zero outstanding - the cashier worklist.',
+    icon: <WarningOutlined />, color: '#DC2626', render: () => <OverdueReturns /> },
+
+  // Member-centric
+  { slug: 'member-contribution', title: 'Member Contribution', group: 'Member-centric',
+    description: 'Per-member receipt history with fund + period breakdown. One member at a time.',
+    icon: <UserOutlined />, color: '#0E7490', render: () => <MemberContribution /> },
+];
+
 export function ReportsPage() {
   const { t } = useTranslation('common');
+  const navigate = useNavigate();
+  const { reportSlug } = useParams<{ reportSlug?: string }>();
+
+  // Sub-route mode - render the matching report inline. The card grid links to
+  // /reports/<slug> so the user can bookmark or share a specific report.
+  const active = REPORTS.find((r) => r.slug === reportSlug);
+  if (active) {
+    return (
+      <div>
+        <PageHeader title={active.title} subtitle={active.description}
+          actions={<Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/reports')}>All reports</Button>} />
+        {active.render()}
+      </div>
+    );
+  }
+
+  // Landing - card grid grouped by purpose.
+  const groups = Array.from(new Set(REPORTS.map((r) => r.group)));
   return (
     <div>
-      <PageHeader title={t('nav.reports')} subtitle="Operational and financial reports." />
-      <Tabs defaultActiveKey="daily" items={[
-        { key: 'daily', label: 'Daily Collection', children: <DailyCollection /> },
-        { key: 'fund', label: 'Fund-wise Collection', children: <FundWise /> },
-        { key: 'payments', label: 'Daily Payments', children: <DailyPayments /> },
-        { key: 'cashbook', label: 'Cash Book', children: <CashBook /> },
-        { key: 'member', label: 'Member Contribution', children: <MemberContribution /> },
-        { key: 'cheque', label: 'Cheque-wise', children: <ChequeWise /> },
-        { key: 'fund-balance', label: 'Fund Balance (Dual)', children: <FundBalance /> },
-        { key: 'returnable', label: 'Returnable Contributions', children: <ReturnableContributions /> },
-        { key: 'outstanding-loans', label: 'Outstanding Loans', children: <OutstandingLoans /> },
-        { key: 'pending-commitments', label: 'Pending Commitments', children: <PendingCommitments /> },
-        { key: 'overdue-returns', label: 'Overdue Returns', children: <OverdueReturns /> },
-      ]} />
+      <PageHeader title={t('nav.reports')}
+        subtitle="Operational and financial reports. Each card opens a focused report - bookmark or share the URL." />
+      {groups.map((g) => (
+        <div key={g} style={{ marginBlockEnd: 24 }}>
+          <div style={{
+            fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+            color: 'var(--jm-gray-500)', marginBlockEnd: 10,
+          }}>{g}</div>
+          <Row gutter={[12, 12]}>
+            {REPORTS.filter((r) => r.group === g).map((r) => (
+              <Col key={r.slug} xs={24} sm={12} lg={8} xl={6}>
+                <Link to={`/reports/${r.slug}`} style={{ textDecoration: 'none' }}>
+                  <Card hoverable style={{ blockSize: '100%', border: '1px solid var(--jm-border)' }}>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                      <span style={{
+                        inlineSize: 36, blockSize: 36, borderRadius: 8,
+                        background: `${r.color}1A`, color: r.color,
+                        display: 'grid', placeItems: 'center', fontSize: 18, flexShrink: 0,
+                      }}>{r.icon}</span>
+                      <div>
+                        <div style={{ fontWeight: 600, color: 'var(--jm-gray-900, #1F2937)', marginBlockEnd: 4 }}>{r.title}</div>
+                        <div style={{ fontSize: 12, color: 'var(--jm-gray-600)', lineHeight: 1.5 }}>{r.description}</div>
+                      </div>
+                    </div>
+                  </Card>
+                </Link>
+              </Col>
+            ))}
+          </Row>
+        </div>
+      ))}
     </div>
   );
 }
