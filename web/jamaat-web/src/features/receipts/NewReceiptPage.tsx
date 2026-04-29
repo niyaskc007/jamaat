@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Card, Form, Input, InputNumber, Select, Button, Space, DatePicker, Row, Col, Divider,
-  AutoComplete, App as AntdApp, Alert, Tag,
+  AutoComplete, App as AntdApp, Alert, Tag, Tooltip,
 } from 'antd';
-import { DeleteOutlined, PlusOutlined, SaveOutlined, PrinterOutlined, SearchOutlined, LinkOutlined, DisconnectOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { DeleteOutlined, PlusOutlined, SaveOutlined, PrinterOutlined, SearchOutlined, LinkOutlined, DisconnectOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { membersApi } from '../members/membersApi';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { money } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
@@ -28,6 +29,17 @@ type Line = CreateReceiptLine & { _id: string };
 export function NewReceiptPage() {
   const navigate = useNavigate();
   const { message } = AntdApp.useApp();
+  // Pre-fill from query params (e.g. when launched from a commitment's "Collect payment" button).
+  // Supported: memberId, familyId, commitmentId, commitmentInstallmentId, fundTypeId, currency.
+  const [searchParams] = useSearchParams();
+  const prefill = useMemo(() => ({
+    memberId: searchParams.get('memberId') || undefined,
+    familyId: searchParams.get('familyId') || undefined,
+    commitmentId: searchParams.get('commitmentId') || undefined,
+    commitmentInstallmentId: searchParams.get('commitmentInstallmentId') || undefined,
+    fundTypeId: searchParams.get('fundTypeId') || undefined,
+    currency: searchParams.get('currency') || undefined,
+  }), [searchParams]);
 
   const [receiptDate, setReceiptDate] = useState<Dayjs>(dayjs());
   const [memberSearch, setMemberSearch] = useState('');
@@ -52,8 +64,40 @@ export function NewReceiptPage() {
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const baseCurrency = useBaseCurrency();
   const currenciesQuery = useCurrencies();
-  const [currency, setCurrency] = useState<string>(baseCurrency);
+  const [currency, setCurrency] = useState<string>(prefill.currency ?? baseCurrency);
   useEffect(() => { setCurrency((c) => c || baseCurrency); }, [baseCurrency]);
+
+  // Resolve prefill memberId -> selectedMember once on mount.
+  useEffect(() => {
+    if (!prefill.memberId || selectedMember) return;
+    membersApi.get(prefill.memberId).then((m) => {
+      setSelectedMember({ id: m.id, name: m.fullName, its: m.itsNumber });
+      setMemberSearch(`${m.itsNumber} - ${m.fullName}`);
+    }).catch(() => { /* silent: invalid id is harmless, the picker still works */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Adopt prefill familyId so the "Family beneficiary" alert appears immediately.
+  useEffect(() => {
+    if (prefill.familyId && !familyId) setFamilyId(prefill.familyId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Pre-select the fund + commitment + installment on the first line.
+  useEffect(() => {
+    if (!prefill.commitmentId && !prefill.fundTypeId) return;
+    setLines((prev) => {
+      const first = prev[0];
+      const next: Line = {
+        ...first,
+        fundTypeId: prefill.fundTypeId ?? first.fundTypeId,
+        commitmentId: prefill.commitmentId ?? first.commitmentId,
+        commitmentInstallmentId: prefill.commitmentInstallmentId ?? first.commitmentInstallmentId,
+      };
+      return [next, ...prev.slice(1)];
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fundsQuery = useQuery({ queryKey: ['fundTypes', 'all'], queryFn: () => fundTypesApi.list({ page: 1, pageSize: 200, active: true }) });
   // Identify funds chosen across line items — drives intention/niyyath/maturity/agreement
@@ -268,6 +312,17 @@ export function NewReceiptPage() {
         }
       />
 
+      {prefill.commitmentId && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBlockEnd: 16 }}
+          message="Collecting payment for an existing commitment"
+          description="The fund and commitment have been pre-filled. Pick the instalment under 'Apply to' if you want this payment to count against a specific schedule line; otherwise it will be applied chronologically."
+          closable
+        />
+      )}
+
       <Row gutter={16}>
         <Col xs={24} lg={16}>
           <Card title="Member & Lines" style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)', marginBlockEnd: 16 }}>
@@ -350,9 +405,21 @@ export function NewReceiptPage() {
             <table style={{ inlineSize: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  <th style={{ textAlign: 'start', padding: 8, blockSize: 32 }}>Fund</th>
-                  <th style={{ textAlign: 'start', padding: 8 }}>Purpose</th>
-                  <th style={{ textAlign: 'start', padding: 8, inlineSize: 120 }}>Period</th>
+                  <th style={{ textAlign: 'start', padding: 8, blockSize: 32 }}>
+                    <Tooltip title="Which fund this contribution goes towards. Pick from the master Fund Types list - examples: Sabil, Wajebaat, Madrasa, Niyaz.">
+                      <span>Fund <QuestionCircleOutlined style={{ color: 'var(--jm-gray-400)', fontSize: 11 }} /></span>
+                    </Tooltip>
+                  </th>
+                  <th style={{ textAlign: 'start', padding: 8 }}>
+                    <Tooltip title="Optional free-text reason printed on the receipt body. Use it for one-off donations to clarify intent (e.g. 'Towards Ashara catering'). Leave blank for routine contributions.">
+                      <span>Purpose <QuestionCircleOutlined style={{ color: 'var(--jm-gray-400)', fontSize: 11 }} /></span>
+                    </Tooltip>
+                  </th>
+                  <th style={{ textAlign: 'start', padding: 8, inlineSize: 140 }}>
+                    <Tooltip title="The time period this payment covers - shown on the receipt and used by reports. Examples: 'Jan 2026', 'FY 2026-27', 'Term 1 / 2026'. Required only for funds whose master record asks for it (e.g. Madrasa fees, monthly Sabil); optional otherwise.">
+                      <span>Period <QuestionCircleOutlined style={{ color: 'var(--jm-gray-400)', fontSize: 11 }} /></span>
+                    </Tooltip>
+                  </th>
                   <th style={{ textAlign: 'end', padding: 8, inlineSize: 140 }}>Amount</th>
                   <th style={{ inlineSize: 40 }} />
                 </tr>
@@ -382,11 +449,12 @@ export function NewReceiptPage() {
                           />
                         </td>
                         <td style={{ padding: 8 }}>
-                          <Input value={ln.purpose ?? ''} onChange={(e) => updateLine(ln._id, { purpose: e.target.value })} placeholder="Optional" />
+                          <Input value={ln.purpose ?? ''} onChange={(e) => updateLine(ln._id, { purpose: e.target.value })}
+                            placeholder="e.g. Towards Ashara catering" />
                         </td>
                         <td style={{ padding: 8 }}>
                           <Input value={ln.periodReference ?? ''} onChange={(e) => updateLine(ln._id, { periodReference: e.target.value })}
-                            placeholder={fund?.requiresPeriodReference ? 'Required' : 'Optional'} />
+                            placeholder={fund?.requiresPeriodReference ? 'Required, e.g. Jan 2026' : 'e.g. FY 2026-27'} />
                         </td>
                         <td style={{ padding: 8 }}>
                           <InputNumber value={ln.amount} onChange={(v) => updateLine(ln._id, { amount: Number(v) || 0 })}

@@ -29,14 +29,19 @@ export function LoginPage() {
   const returnToQS = new URLSearchParams(location.search).get('returnTo');
   const from = returnToQS ?? (location.state as { from?: string } | null)?.from ?? '/dashboard';
 
-  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<LoginForm>({
+  const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = useForm<LoginForm>({
     resolver: zodResolver(schema),
     defaultValues: { email: 'admin@jamaat.local', password: 'Admin@12345', remember: true },
   });
+  // AntD Inputs aren't auto-controlled by react-hook-form's `register` - the DOM value
+  // doesn't refresh when we call setValue from the dev-account picker. Watching here and
+  // passing `value` makes the inputs fully controlled so clicks visibly fill both fields.
+  const emailValue = watch('email');
+  const passwordValue = watch('password');
 
   const fillPersona = (email: string, password: string) => {
-    setValue('email', email, { shouldValidate: true });
-    setValue('password', password, { shouldValidate: true });
+    setValue('email', email, { shouldValidate: true, shouldDirty: true });
+    setValue('password', password, { shouldValidate: true, shouldDirty: true });
   };
 
   const onSubmit = async (data: LoginForm) => {
@@ -60,7 +65,7 @@ export function LoginPage() {
 
   return (
     <div className="jm-login-root">
-      {/* LEFT — brand panel */}
+      {/* LEFT - brand panel */}
       <div className="jm-login-brand">
         <IslamicPattern opacity={0.1} colour="#C9A34B" />
         <div style={{ position: 'relative', zIndex: 1 }}>
@@ -111,7 +116,7 @@ export function LoginPage() {
         </div>
       </div>
 
-      {/* RIGHT — form panel */}
+      {/* RIGHT - form panel */}
       <div className="jm-login-form">
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <LanguageSwitcher />
@@ -134,6 +139,8 @@ export function LoginPage() {
               >
                 <Input
                   {...register('email')}
+                  value={emailValue}
+                  onChange={(e) => setValue('email', e.target.value, { shouldValidate: true })}
                   size="large"
                   prefix={<MailOutlined style={{ color: 'var(--jm-gray-400)' }} />}
                   autoComplete="username"
@@ -148,6 +155,8 @@ export function LoginPage() {
               >
                 <Input.Password
                   {...register('password')}
+                  value={passwordValue}
+                  onChange={(e) => setValue('password', e.target.value, { shouldValidate: true })}
                   size="large"
                   prefix={<LockOutlined style={{ color: 'var(--jm-gray-400)' }} />}
                   autoComplete="current-password"
@@ -183,7 +192,7 @@ export function LoginPage() {
                 style={{ marginBlockStart: 24 }}
                 items={[{
                   key: 'dev',
-                  label: <Typography.Text type="secondary" style={{ fontSize: 12 }}>Development accounts — click to fill</Typography.Text>,
+                  label: <Typography.Text type="secondary" style={{ fontSize: 12 }}>Development accounts - click to fill</Typography.Text>,
                   children: (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {DEV_USERS.map((p) => (

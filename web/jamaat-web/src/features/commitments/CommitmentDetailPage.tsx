@@ -5,7 +5,7 @@ import {
 import type { TableProps } from 'antd';
 import {
   ArrowLeftOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined,
-  FileDoneOutlined, FileTextOutlined, ReloadOutlined,
+  FileDoneOutlined, FileTextOutlined, ReloadOutlined, DollarCircleOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -74,14 +74,39 @@ export function CommitmentDetailPage() {
     { title: 'Status', dataIndex: 'status', width: 140,
       render: (s: Installment['status']) => <Tag color={InstallmentStatusColor[s]} style={{ margin: 0 }}>{InstallmentStatusLabel[s]}</Tag> },
     { title: 'Last payment', dataIndex: 'lastPaymentDate', width: 140,
-      render: (v: string | null | undefined) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+      render: (v: string | null | undefined) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
     {
-      key: 'actions', width: 100, align: 'end',
-      render: (_: unknown, row) => row.status === 3 || row.status === 5
-        ? null
-        : <Button size="small" type="text" icon={<FileDoneOutlined />} onClick={() => setWaiving(row)}>Waive</Button>,
+      key: 'actions', width: 200, align: 'end',
+      render: (_: unknown, row) => {
+        if (row.status === 3 || row.status === 5) return null;
+        return (
+          <Space size={4}>
+            {isActive && (
+              <Button size="small" type="primary" icon={<DollarCircleOutlined />}
+                onClick={() => goToCollectPayment(row.id)}>
+                Pay
+              </Button>
+            )}
+            <Button size="small" type="text" icon={<FileDoneOutlined />} onClick={() => setWaiving(row)}>Waive</Button>
+          </Space>
+        );
+      },
     },
   ];
+
+  /// Hop to the receipt form, pre-filled with this commitment + (optionally) a specific installment.
+  /// Family-typed commitments don't carry a single memberId, so we send familyId instead and let the
+  /// cashier pick which family member is paying.
+  function goToCollectPayment(installmentId?: string) {
+    const params = new URLSearchParams();
+    params.set('commitmentId', c.id);
+    params.set('fundTypeId', c.fundTypeId);
+    params.set('currency', c.currency);
+    if (c.memberId) params.set('memberId', c.memberId);
+    if (c.familyId) params.set('familyId', c.familyId);
+    if (installmentId) params.set('commitmentInstallmentId', installmentId);
+    navigate(`/receipts/new?${params.toString()}`);
+  }
 
   const isDraft = c.status === 1;
   const isActive = c.status === 2;
@@ -97,6 +122,11 @@ export function CommitmentDetailPage() {
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/commitments')}>Back</Button>
             <Button icon={<FileTextOutlined />} onClick={() => setAgreementOpen(true)} disabled={!data.agreementText}>View agreement</Button>
             <Button icon={<ReloadOutlined />} onClick={() => refreshMut.mutate()} loading={refreshMut.isPending}>Refresh overdue</Button>
+            {isActive && (
+              <Button type="primary" icon={<DollarCircleOutlined />} onClick={() => goToCollectPayment()}>
+                Collect payment
+              </Button>
+            )}
             {/* All status transitions go through an explicit modal — never a native confirm.
                 Each transition spells out the consequences so the operator knows what's about
                 to happen (especially for Cancel which is a final state). */}
