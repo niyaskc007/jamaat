@@ -68,17 +68,17 @@ export function HelpPage() {
     },
     {
       key: 'enrollments',
-      title: 'Fund Enrollments',
+      title: 'Patronages',
       icon: <GiftOutlined />,
       permissions: ['enrollment.view', 'enrollment.create', 'enrollment.approve'],
       path: '/fund-enrollments',
-      summary: 'Enrol a member into a specific fund (Sabil, Wajebaat, Madrasa, etc.) so the fund appears on receipt allocation.',
+      summary: 'Register a member as an ongoing patron of a specific fund (Sabil, Wajebaat, Madrasa, etc.) so the fund appears on receipt allocation.',
       steps: [
-        'New enrollment → pick member + fund + rate (if applicable).',
+        'New patronage -> pick member + fund + rate (if applicable).',
         'Approve if required by the fund type.',
-        'Now visible on Receipt form under "Allocate to enrollment".',
+        'Now visible on Receipt form under "Allocate to patronage".',
       ],
-      gotchas: ['Madrasa and Qarzan Hasana require a period/year reference on the enrollment.'],
+      gotchas: ['Madrasa and Qarzan Hasana require a period/year reference on the patronage.'],
     },
     {
       key: 'qh',

@@ -91,7 +91,7 @@ export function MemberProfilePage() {
                 <StatPill label="Receipts" value={money(summary.totalReceipts, 'AED')} />
                 <StatPill label="Commitments" value={`${summary.activeCommitmentCount}`} sub={money(summary.totalOutstandingCommitments, 'AED')} />
                 <StatPill label="QH loans" value={`${summary.activeLoanCount}`} sub={money(summary.totalOutstandingQarzanHasana, 'AED')} />
-                <StatPill label="Enrollments" value={`${summary.activeEnrollmentCount}`} />
+                <StatPill label="Patronages" value={`${summary.activeEnrollmentCount}`} />
               </Space>
             </Col>
           )}

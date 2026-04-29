@@ -187,7 +187,7 @@ export function ReceiptDetailPage() {
                 if (row.fundEnrollmentId) {
                   return (
                     <span style={{ fontSize: 12 }}>
-                      <Tag color="cyan" style={{ margin: 0 }}>Enrollment</Tag>{' '}
+                      <Tag color="cyan" style={{ margin: 0 }}>Patronage</Tag>{' '}
                       <Button type="link" size="small" style={{ padding: 0 }}
                         onClick={() => navigate(`/fund-enrollments`)}>
                         {row.fundEnrollmentCode}

@@ -91,7 +91,7 @@ export function AppLayout() {
     if (any('event.view', 'event.manage', 'event.scan'))
       ops.push({ key: '/events', icon: <CalendarOutlined />, label: 'Events' });
     if (any('commitment.view')) ops.push({ key: '/commitments', icon: <HeartOutlined />, label: 'Commitments' });
-    if (any('enrollment.view')) ops.push({ key: '/fund-enrollments', icon: <GiftOutlined />, label: 'Enrollments' });
+    if (any('enrollment.view')) ops.push({ key: '/fund-enrollments', icon: <GiftOutlined />, label: 'Patronages' });
     if (any('qh.view')) ops.push({ key: '/qarzan-hasana', icon: <BankOutlined />, label: 'Qarzan Hasana' });
     if (any('receipt.view')) ops.push({ key: '/receipts', icon: <FileTextOutlined />, label: t('nav.receipts') });
     if (any('commitment.view')) ops.push({ key: '/cheques', icon: <BankOutlined />, label: 'Cheques' });
@@ -341,7 +341,7 @@ function resolveBreadcrumb(path: string, t: (k: string) => string): { title: Rea
       admin: t('nav.sectionAdmin'),
       help: 'Help & Docs',
       events: 'Events',
-      'fund-enrollments': 'Enrollments',
+      'fund-enrollments': 'Patronages',
       'qarzan-hasana': 'Qarzan Hasana',
     };
     const top = labelMap[parts[0]] ?? parts[0];

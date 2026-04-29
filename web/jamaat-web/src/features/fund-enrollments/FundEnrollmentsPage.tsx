@@ -101,7 +101,7 @@ export function FundEnrollmentsPage() {
         if (row.status !== 4 && row.status !== 5) {
           items.push({ type: 'divider' });
           items.push({ key: 'cancel', icon: <StopOutlined />, label: 'Cancel', danger: true,
-            onClick: () => modal.confirm({ title: 'Cancel enrollment?', onOk: () => cancelMut.mutateAsync(row.id) }) });
+            onClick: () => modal.confirm({ title: 'Cancel patronage?', onOk: () => cancelMut.mutateAsync(row.id) }) });
         }
         return <Dropdown menu={{ items }} trigger={['click']}><Button type="text" icon={<MoreOutlined />} /></Dropdown>;
       },
@@ -115,12 +115,12 @@ export function FundEnrollmentsPage() {
   return (
     <div>
       <PageHeader
-        title="Fund Enrollments"
-        subtitle="Long-lived per-member subscriptions to Sabil, Wajebaat, Mutafariq and Niyaz funds."
+        title="Patronages"
+        subtitle="Long-lived per-member patronage of Sabil, Wajebaat, Mutafariq and Niyaz funds."
         actions={
           <Space>
             <Button icon={<DownloadOutlined />} onClick={() => downloadServerXlsx('/api/v1/fund-enrollments/export.xlsx', { search, status, fundTypeId: fundFilter } as Record<string, unknown>, `fund-enrollments_${new Date().toISOString().slice(0, 10)}.xlsx`)}>Export XLSX</Button>
-            {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawerOpen(true)}>New enrollment</Button>}
+            {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawerOpen(true)}>New patronage</Button>}
           </Space>
         }
       />
@@ -128,9 +128,9 @@ export function FundEnrollmentsPage() {
       {firstRun ? (
         <ModuleEmptyState
           icon={<GiftOutlined />}
-          title="No enrollments yet"
-          description="Enrol a member into a fund (Sabil, Wajebaat, Niyaz, etc.) so it becomes selectable on the receipt form. Drafts require approval before they go live."
-          primaryAction={canCreate ? { label: 'Create enrollment', onClick: () => setDrawerOpen(true) } : undefined}
+          title="No patronages yet"
+          description="Register a member as a patron of a fund (Sabil, Wajebaat, Niyaz, etc.) so it becomes selectable on the receipt form. Drafts require approval before they go live."
+          primaryAction={canCreate ? { label: 'Create patronage', onClick: () => setDrawerOpen(true) } : undefined}
           helpHref="/help"
         />
       ) : (
@@ -178,7 +178,7 @@ export function FundEnrollmentsPage() {
               description={
                 <div style={{ paddingBlock: 12 }}>
                   <div style={{ fontWeight: 500, color: 'var(--jm-gray-700)' }}>No matches</div>
-                  <div style={{ fontSize: 13, color: 'var(--jm-gray-500)', marginBlockEnd: 12 }}>No enrollments match the current filters.</div>
+                  <div style={{ fontSize: 13, color: 'var(--jm-gray-500)', marginBlockEnd: 12 }}>No patronages match the current filters.</div>
                   <Button onClick={() => { setSearch(''); setStatus(undefined); setFundFilter(undefined); setPage(1); }}>Clear filters</Button>
                 </div>
               } />
@@ -211,12 +211,12 @@ function NewEnrollmentDrawer({ open, onClose }: { open: boolean; onClose: () => 
       memberId, fundTypeId: fundTypeId!, subType: subType || undefined,
       recurrence, startDate: startDate.format('YYYY-MM-DD'), notes: notes || undefined,
     }),
-    onSuccess: () => { message.success('Enrollment created (Draft). Approve to activate.'); void qc.invalidateQueries({ queryKey: ['enrollments'] }); onClose(); },
+    onSuccess: () => { message.success('Patronage created (Draft). Approve to activate.'); void qc.invalidateQueries({ queryKey: ['enrollments'] }); onClose(); },
     onError: (e) => message.error(extractProblem(e).detail ?? 'Failed'),
   });
 
   return (
-    <Drawer open={open} onClose={onClose} width={520} destroyOnHidden title="New fund enrollment"
+    <Drawer open={open} onClose={onClose} width={520} destroyOnHidden title="New patronage"
       footer={<div style={{ textAlign: 'end' }}><Button onClick={onClose} style={{ marginInlineEnd: 8 }}>Cancel</Button>
         <Button type="primary" loading={mut.isPending} disabled={!memberId || !fundTypeId} onClick={() => mut.mutate()}>Create draft</Button></div>}>
       <Form layout="vertical" requiredMark={false}>

@@ -231,7 +231,7 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginBlockEnd: 12 }}>
           Legacy enum (kept while callers migrate):
         </Typography.Text>
-        <Form.Item label="Legacy category" help="Loans block Commitment pledges and Fund Enrollments. Will be replaced by the master classification above in a future release.">
+        <Form.Item label="Legacy category" help="Loans block Commitment pledges and Patronages. Will be replaced by the master classification above in a future release.">
           <Controller name="category" control={control} render={({ field }) => (
             <Select {...field} options={Object.entries(FundCategoryLabel).map(([v, l]) => ({ value: Number(v) as FundCategory, label: l }))} />
           )} />

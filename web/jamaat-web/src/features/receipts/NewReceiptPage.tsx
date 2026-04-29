@@ -247,11 +247,11 @@ export function NewReceiptPage() {
         notes: 'Auto-created from Receipt flow.',
       });
       await fundEnrollmentsApi.approve(draft.id);
-      message.success(`Enrollment ${draft.code} created for ${fundName}.`);
+      message.success(`Patronage ${draft.code} created for ${fundName}.`);
       void enrollmentsQ.refetch();
     } catch (err) {
       const p = extractProblem(err);
-      message.error(p.detail ?? p.title ?? 'Failed to create enrollment');
+      message.error(p.detail ?? p.title ?? 'Failed to create patronage');
     }
   };
 
@@ -555,7 +555,7 @@ export function NewReceiptPage() {
                               <Tooltip title={(
                                 <div style={{ fontSize: 12 }}>
                                   <div><strong>Commitment (pledge):</strong> a specific promise like "AED 1,200 over 12 monthly instalments". Pick this if the member made a pledge they're paying down.</div>
-                                  <div style={{ marginBlockStart: 6 }}><strong>Fund enrollment:</strong> an open-ended subscription to a recurring fund (e.g. monthly Sabeel contributions) - no fixed total, just tracks ongoing payments.</div>
+                                  <div style={{ marginBlockStart: 6 }}><strong>Patronage:</strong> an open-ended subscription to a recurring fund (e.g. monthly Sabeel contributions) - no fixed total, just tracks ongoing payments.</div>
                                   <div style={{ marginBlockStart: 6 }}><strong>QH loan repayment:</strong> applies the payment against an outstanding Qarzan Hasana loan.</div>
                                   <div style={{ marginBlockStart: 6 }}>Leave all blank for a one-off donation.</div>
                                 </div>
@@ -594,7 +594,7 @@ export function NewReceiptPage() {
                               {(enrollmentsQ.data ?? []).filter((e) => e.fundTypeId === ln.fundTypeId).length > 0 && !ln.commitmentId && !ln.qarzanHasanaLoanId && (
                                 <Select
                                   size="small" allowClear style={{ minInlineSize: 260 }}
-                                  placeholder="Fund enrollment"
+                                  placeholder="Patronage"
                                   value={ln.fundEnrollmentId ?? undefined}
                                   onChange={(v) => updateLine(ln._id, { fundEnrollmentId: v ?? undefined })}
                                   options={(enrollmentsQ.data ?? []).filter((e) => e.fundTypeId === ln.fundTypeId).map((e) => ({
@@ -638,8 +638,8 @@ export function NewReceiptPage() {
                           <td colSpan={5} style={{ padding: '8px 12px', fontSize: 12 }}>
                             <Space wrap size={8}>
                               <span style={{ color: '#92400E' }}>
-                                <Tooltip title="An enrollment is an ongoing subscription to a fund (e.g. monthly Sabeel) - it has no fixed total, it just keeps a tally as the member contributes over time. It's optional: receipts post fine without one. Skip this if the member has a Commitment (a pledge with a fixed total) or if this is a one-off donation.">
-                                  <span style={{ borderBlockEnd: '1px dotted #92400E', cursor: 'help' }}>What's an enrollment?</span>
+                                <Tooltip title="A patronage is an ongoing subscription to a fund (e.g. monthly Sabeel) - it has no fixed total, it just keeps a tally as the member contributes over time. It's optional: receipts post fine without one. Skip this if the member has a Commitment (a pledge with a fixed total) or if this is a one-off donation.">
+                                  <span style={{ borderBlockEnd: '1px dotted #92400E', cursor: 'help' }}>What's a patronage?</span>
                                 </Tooltip>
                                 {' '}<strong>{selectedMember.name}</strong> isn't subscribed to <strong>{fund.nameEnglish}</strong>. The receipt still posts; subscribe only if you want recurring contributions tracked separately from this one-off receipt.
                               </span>
