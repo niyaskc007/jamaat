@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  Card, Space, Button, Table, Tag, Descriptions, Progress, Modal, Input, App as AntdApp, Result, Spin, Typography,
+  Card, Space, Button, Table, Tag, Descriptions, Progress, Modal, Input, App as AntdApp, Result, Spin,
 } from 'antd';
 import type { TableProps } from 'antd';
 import {
@@ -8,6 +8,9 @@ import {
   FileDoneOutlined, FileTextOutlined, ReloadOutlined, DollarCircleOutlined, EyeOutlined,
 } from '@ant-design/icons';
 import { CommitmentPaymentsPanel } from './CommitmentPaymentsPanel';
+import { postDatedChequesApi, PdcStatusLabel } from './postDatedChequesApi';
+import { describeUserAgent } from '../../shared/format/userAgent';
+import { AgreementMarkdown } from '../../shared/ui/AgreementMarkdown';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -16,12 +19,11 @@ import {
   commitmentsApi,
   FrequencyLabel, PartyTypeLabel, StatusColor, StatusLabel,
   InstallmentStatusColor, InstallmentStatusLabel,
+  AgreementAcceptanceMethodLabel,
   type Installment,
 } from './commitmentsApi';
 import { extractProblem } from '../../shared/api/client';
 import { PostDatedChequesPanel } from './PostDatedChequesPanel';
-
-const { Paragraph } = Typography;
 
 export function CommitmentDetailPage() {
   const { id = '' } = useParams();
@@ -32,6 +34,15 @@ export function CommitmentDetailPage() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['commitment', id],
     queryFn: () => commitmentsApi.get(id),
+    enabled: !!id,
+  });
+
+  // Pre-cancel readiness: cancellation requires every instalment to be Paid or Waived AND no
+  // cheque sitting in Pledged/Deposited (those are still in the bank pipeline / contributor's
+  // drawer). We render the unmet conditions as a checklist so the admin knows what to clear.
+  const pdcQ = useQuery({
+    queryKey: ['pdcs', id],
+    queryFn: () => postDatedChequesApi.listByCommitment(id),
     enabled: !!id,
   });
 
@@ -61,6 +72,17 @@ export function CommitmentDetailPage() {
   });
 
   function onErr(err: unknown) { const p = extractProblem(err); message.error(p.detail ?? 'Action failed'); }
+
+  // Mirror the backend cancel guards (CommitmentService.CancelAsync) so the UI can disable the
+  // Cancel button and tell the admin exactly which obligations still need to be resolved before
+  // they can attempt to cancel. Both checks must come back empty for cancellation to proceed.
+  // Computed before the loading early-return to keep hook order stable across renders.
+  const cancelBlockers = useMemo(() => {
+    const openInst = (data?.installments ?? []).filter((i) => i.status !== 3 /* Paid */ && i.status !== 5 /* Waived */);
+    const openCheques = (pdcQ.data ?? []).filter((p) => p.status === 1 /* Pledged */ || p.status === 2 /* Deposited */);
+    return { openInst, openCheques };
+  }, [data?.installments, pdcQ.data]);
+  const isCancelBlocked = cancelBlockers.openInst.length > 0 || cancelBlockers.openCheques.length > 0;
 
   if (isLoading || !data) return <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>;
 
@@ -137,7 +159,7 @@ export function CommitmentDetailPage() {
                 Collect payment
               </Button>
             )}
-            {/* All status transitions go through an explicit modal — never a native confirm.
+            {/* All status transitions go through an explicit modal - never a native confirm.
                 Each transition spells out the consequences so the operator knows what's about
                 to happen (especially for Cancel which is a final state). */}
             {isActive && (
@@ -149,7 +171,7 @@ export function CommitmentDetailPage() {
                     <ul style={{ marginBlockStart: 8, paddingInlineStart: 18, color: 'var(--jm-gray-600)', fontSize: 13 }}>
                       <li>The schedule and outstanding balance stay as-is.</li>
                       <li>You can resume it any time to reopen payments.</li>
-                      <li>Any post-dated cheques on file are not affected — clear them only after you resume.</li>
+                      <li>Any post-dated cheques on file are not affected - clear them only after you resume.</li>
                     </ul>
                   </div>
                 ),
@@ -165,7 +187,11 @@ export function CommitmentDetailPage() {
                 onOk: () => resumeMut.mutateAsync(),
               })}>Resume</Button>
             )}
-            {!isClosed && <Button danger icon={<StopOutlined />} onClick={() => setCancelling(true)}>Cancel commitment</Button>}
+            {!isClosed && (
+              <Button danger icon={<StopOutlined />} onClick={() => setCancelling(true)}>
+                Cancel commitment
+              </Button>
+            )}
           </Space>
         }
       />
@@ -191,10 +217,10 @@ export function CommitmentDetailPage() {
               { key: 'freq', label: 'Frequency', children: FrequencyLabel[c.frequency] },
               { key: 'count', label: 'Installments', children: c.numberOfInstallments },
               { key: 'start', label: 'Start', children: formatDate(c.startDate) },
-              { key: 'end', label: 'End', children: c.endDate ? formatDate(c.endDate) : '—' },
+              { key: 'end', label: 'End', children: c.endDate ? formatDate(c.endDate) : '-' },
               { key: 'partial', label: 'Partial payments', children: c.allowPartialPayments ? 'Allowed' : 'Not allowed' },
               { key: 'status', label: 'Status', children: <Tag color={StatusColor[c.status]} style={{ margin: 0 }}>{StatusLabel[c.status]}</Tag> },
-              { key: 'notes', label: 'Notes', span: 2, children: c.notes ?? '—' },
+              { key: 'notes', label: 'Notes', span: 2, children: c.notes ?? '-' },
               ...(c.hasAcceptedAgreement ? [{
                 key: 'accept', label: 'Agreement accepted', span: 2,
                 children: <span>{formatDateTime(c.agreementAcceptedAtUtc)} by {c.agreementAcceptedByName ?? 'system'}</span>,
@@ -262,7 +288,7 @@ export function CommitmentDetailPage() {
       >
         <Space direction="vertical" style={{ inlineSize: '100%' }}>
           {waiving && <div>
-            Waiving installment <strong>#{waiving.installmentNo}</strong> — due {formatDate(waiving.dueDate)} · {money(waiving.scheduledAmount, c.currency)}
+            Waiving installment <strong>#{waiving.installmentNo}</strong> - due {formatDate(waiving.dueDate)} · {money(waiving.scheduledAmount, c.currency)}
           </div>}
           <Input.TextArea
             rows={3}
@@ -273,32 +299,94 @@ export function CommitmentDetailPage() {
         </Space>
       </Modal>
 
+      {/* Cancel modal: when there are open instalments or cheques, the modal becomes a blocker
+          checklist (no reason field, OK disabled) so the operator sees exactly what to clear
+          before cancellation is allowed. Once everything is settled, it switches to the regular
+          reason-entry form. Backend (CancelAsync) enforces the same rules independently. */}
       <Modal
-        title="Cancel commitment"
+        title={isCancelBlocked ? "This commitment can't be cancelled yet" : 'Cancel commitment'}
         open={cancelling}
         onCancel={() => setCancelling(false)}
         onOk={() => cancelMut.mutate()}
         confirmLoading={cancelMut.isPending}
         okText="Cancel commitment"
-        okButtonProps={{ disabled: !cancelReason.trim(), danger: true }}
+        okButtonProps={{ disabled: isCancelBlocked || !cancelReason.trim(), danger: true }}
+        cancelText={isCancelBlocked ? 'Close' : 'Cancel'}
       >
-        <Input.TextArea
-          rows={3}
-          value={cancelReason}
-          onChange={(e) => setCancelReason(e.target.value)}
-          placeholder="Reason for cancellation (required)"
-        />
+        {isCancelBlocked ? (
+          <div>
+            <div style={{ marginBlockEnd: 8 }}>Resolve the following before cancelling:</div>
+            <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+              {cancelBlockers.openInst.length > 0 && (
+                <li style={{ marginBlockEnd: 6 }}>
+                  <strong>{cancelBlockers.openInst.length}</strong> open instalment(s):{' '}
+                  {cancelBlockers.openInst.map((i) => `#${i.installmentNo}`).join(', ')}
+                  <span style={{ color: 'var(--jm-gray-600)' }}> - collect or waive each one.</span>
+                </li>
+              )}
+              {cancelBlockers.openCheques.length > 0 && (
+                <li>
+                  <strong>{cancelBlockers.openCheques.length}</strong> open cheque(s):{' '}
+                  {cancelBlockers.openCheques.map((p) => `${p.chequeNumber} (${PdcStatusLabel[p.status]})`).join(', ')}
+                  <span style={{ color: 'var(--jm-gray-600)' }}> - clear, mark bounced, or cancel (returning to contributor) each one.</span>
+                </li>
+              )}
+            </ul>
+          </div>
+        ) : (
+          <Input.TextArea
+            rows={3}
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Reason for cancellation (required)"
+          />
+        )}
       </Modal>
 
       <Modal
-        title={`Agreement · v${data.agreementTemplateVersion ?? '—'}`}
+        title={`Agreement · v${data.agreementTemplateVersion ?? '-'}`}
         open={agreementOpen}
         onCancel={() => setAgreementOpen(false)}
         footer={<Button onClick={() => setAgreementOpen(false)}>Close</Button>}
         width={720}
       >
         {data.agreementText
-          ? <Paragraph style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{data.agreementText}</Paragraph>
+          ? (
+            <>
+              <AgreementMarkdown source={data.agreementText} />
+              {data.agreementAcceptanceProof && (
+                <div style={{
+                  marginBlockStart: 16, paddingBlockStart: 12, borderBlockStart: '1px solid var(--jm-border)',
+                  fontSize: 12, color: 'var(--jm-gray-700)',
+                }}>
+                  {/* Acceptance proof: who/when/from where. Lets a future audit verify the
+                      acceptance event without leaving the commitment. IP + UA come from the
+                      request headers at AcceptAsync time. */}
+                  <div style={{ fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--jm-gray-500)', marginBlockEnd: 8 }}>
+                    Acceptance proof
+                  </div>
+                  <Descriptions size="small" column={1} colon
+                    items={[
+                      { key: 'who', label: 'Accepted by', children: data.agreementAcceptanceProof.acceptedByName ?? 'system' },
+                      { key: 'when', label: 'At', children: formatDateTime(data.agreementAcceptanceProof.acceptedAtUtc) },
+                      ...(data.agreementAcceptanceProof.method ? [{
+                        key: 'how', label: 'Method',
+                        children: AgreementAcceptanceMethodLabel[data.agreementAcceptanceProof.method],
+                      }] : []),
+                      ...(data.agreementAcceptanceProof.ipAddress ? [{
+                        key: 'ip', label: 'IP address',
+                        children: <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{data.agreementAcceptanceProof.ipAddress}</span>,
+                      }] : []),
+                      ...(data.agreementAcceptanceProof.userAgent ? [{
+                        key: 'device', label: 'Device',
+                        children: <span title={data.agreementAcceptanceProof.userAgent ?? undefined}>{describeUserAgent(data.agreementAcceptanceProof.userAgent)}</span>,
+                      }] : []),
+                    ]}
+                  />
+                </div>
+              )}
+            </>
+          )
           : <Result status="info" title="No agreement accepted yet." />
         }
       </Modal>

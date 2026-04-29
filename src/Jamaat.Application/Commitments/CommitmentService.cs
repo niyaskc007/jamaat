@@ -27,7 +27,7 @@ public interface ICommitmentService
 
 public sealed class CommitmentService(
     JamaatDbContextFacade db, IUnitOfWork uow, ITenantContext tenant,
-    ICurrentUser currentUser, IClock clock,
+    ICurrentUser currentUser, IClock clock, IRequestContext request,
     IValidator<CreateCommitmentDto> createV) : ICommitmentService
 {
     public async Task<PagedResult<CommitmentDto>> ListAsync(CommitmentListQuery q, CancellationToken ct = default)
@@ -81,7 +81,16 @@ public sealed class CommitmentService(
                 i.LastPaymentDate, i.Status, i.WaiverReason, i.WaivedAtUtc, i.WaivedByUserName))
             .ToList();
 
-        return new CommitmentDetailDto(dto, installments, c.AgreementTemplateId, c.AgreementTemplateVersion, c.AgreementText);
+        var proof = c.AgreementAcceptedAtUtc is null ? null
+            : new AgreementAcceptanceProofDto(
+                c.AgreementAcceptedAtUtc.Value,
+                c.AgreementAcceptedByUserId,
+                c.AgreementAcceptedByName,
+                c.AgreementAcceptedIpAddress,
+                c.AgreementAcceptedUserAgent,
+                c.AgreementAcceptanceMethod);
+
+        return new CommitmentDetailDto(dto, installments, c.AgreementTemplateId, c.AgreementTemplateVersion, c.AgreementText, proof);
     }
 
     public Task<IReadOnlyList<CommitmentScheduleLineDto>> PreviewScheduleAsync(PreviewScheduleRequest req, CancellationToken ct = default)
@@ -228,7 +237,10 @@ public sealed class CommitmentService(
             renderedText: dto.RenderedText,
             userId: currentUser.UserId ?? Guid.Empty,
             userName: currentUser.UserName ?? "system",
-            at: clock.UtcNow);
+            at: clock.UtcNow,
+            ipAddress: request.IpAddress,
+            userAgent: request.UserAgent,
+            method: dto.AcceptedByAdmin ? AgreementAcceptanceMethod.Admin : AgreementAcceptanceMethod.Self);
         db.Commitments.Update(commitment);
         await uow.SaveChangesAsync(ct);
 
@@ -258,10 +270,33 @@ public sealed class CommitmentService(
 
     public async Task<Result> CancelAsync(Guid id, CancelCommitmentDto dto, CancellationToken ct = default)
     {
-        var c = await db.Commitments.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var c = await db.Commitments.Include(x => x.Installments).FirstOrDefaultAsync(x => x.Id == id, ct);
         if (c is null) return Result.Failure(Error.NotFound("commitment.not_found", "Commitment not found."));
         if (string.IsNullOrWhiteSpace(dto.Reason))
             return Result.Failure(Error.Validation("commitment.cancel_reason_required", "Cancellation reason is required."));
+
+        // Pre-cancel checks: every instalment must be settled (Paid or Waived) AND no PDC may
+        // still be in flight (Pledged or Deposited). This forces the admin to either collect,
+        // waive, or return cheques first - so cancellation can't strand outstanding obligations
+        // or cheques sitting in someone's drawer.
+        var openInstalments = c.Installments
+            .Where(i => i.Status != InstallmentStatus.Paid && i.Status != InstallmentStatus.Waived)
+            .Select(i => i.InstallmentNo)
+            .OrderBy(n => n)
+            .ToList();
+        if (openInstalments.Count > 0)
+            return Result.Failure(Error.Business("commitment.cancel_blocked_unsettled_instalments",
+                $"Cannot cancel: instalment(s) {string.Join(", ", openInstalments.Select(n => $"#{n}"))} are not yet Paid or Waived. Collect or waive them first."));
+
+        var openCheques = await db.PostDatedCheques.AsNoTracking()
+            .Where(p => p.CommitmentId == id
+                && (p.Status == PostDatedChequeStatus.Pledged || p.Status == PostDatedChequeStatus.Deposited))
+            .Select(p => new { p.ChequeNumber, p.Status })
+            .ToListAsync(ct);
+        if (openCheques.Count > 0)
+            return Result.Failure(Error.Business("commitment.cancel_blocked_open_cheques",
+                $"Cannot cancel: cheque(s) [{string.Join(", ", openCheques.Select(p => p.ChequeNumber))}] are still {string.Join("/", openCheques.Select(p => p.Status.ToString()).Distinct())}. Clear, bounce, or cancel each cheque (returning it to the contributor) first."));
+
         c.Cancel(dto.Reason, clock.UtcNow);
         db.Commitments.Update(c);
         await uow.SaveChangesAsync(ct);
