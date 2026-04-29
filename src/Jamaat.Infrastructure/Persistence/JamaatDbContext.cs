@@ -29,6 +29,7 @@ public class JamaatDbContext : IdentityDbContext<ApplicationUser, ApplicationRol
     public DbSet<FundCategoryEntity> FundCategories => Set<FundCategoryEntity>();
     public DbSet<FundSubCategory> FundSubCategories => Set<FundSubCategory>();
     public DbSet<FundTypeCustomField> FundTypeCustomFields => Set<FundTypeCustomField>();
+    public DbSet<TransactionLabel> TransactionLabels => Set<TransactionLabel>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<ErrorLog> ErrorLogs => Set<ErrorLog>();
