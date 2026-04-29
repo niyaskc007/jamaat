@@ -20,6 +20,10 @@ public sealed record FundTypeDto(
     string? CreditAccountName,
     Guid? DefaultTemplateId,
     string? RulesJson,
+    // New fund-management uplift fields:
+    Guid? FundCategoryId, string? FundCategoryCode, string? FundCategoryName, FundCategoryKind? FundCategoryKind,
+    Guid? FundSubCategoryId, string? FundSubCategoryCode, string? FundSubCategoryName,
+    bool IsReturnable, bool RequiresAgreement, bool RequiresMaturityTracking, bool RequiresNiyyath,
     DateTimeOffset CreatedAtUtc);
 
 public sealed record CreateFundTypeDto(
@@ -34,7 +38,14 @@ public sealed record CreateFundTypeDto(
     PaymentMode AllowedPaymentModes,
     Guid? CreditAccountId,
     string? RulesJson,
-    FundCategory Category = FundCategory.Donation);
+    FundCategory Category = FundCategory.Donation,
+    // Optional in this DTO so existing callers keep working; admin UI passes them.
+    Guid? FundCategoryId = null,
+    Guid? FundSubCategoryId = null,
+    bool IsReturnable = false,
+    bool RequiresAgreement = false,
+    bool RequiresMaturityTracking = false,
+    bool RequiresNiyyath = false);
 
 public sealed record UpdateFundTypeDto(
     string NameEnglish,
@@ -48,7 +59,13 @@ public sealed record UpdateFundTypeDto(
     Guid? CreditAccountId,
     string? RulesJson,
     bool IsActive,
-    FundCategory Category = FundCategory.Donation);
+    FundCategory Category = FundCategory.Donation,
+    Guid? FundCategoryId = null,
+    Guid? FundSubCategoryId = null,
+    bool IsReturnable = false,
+    bool RequiresAgreement = false,
+    bool RequiresMaturityTracking = false,
+    bool RequiresNiyyath = false);
 
 public sealed record FundTypeListQuery(
     int Page = 1, int PageSize = 25, string? SortBy = null, string? SortDir = null,

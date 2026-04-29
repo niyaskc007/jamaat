@@ -1,12 +1,13 @@
 import { useEffect } from 'react';
-import { Drawer, Form, Input, Button, Space, Switch, Checkbox, Select, App as AntdApp } from 'antd';
+import { Drawer, Form, Input, Button, Space, Switch, Checkbox, Select, App as AntdApp, Divider, Typography, Alert } from 'antd';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { extractProblem } from '../../../../shared/api/client';
 import { PaymentModeLabel } from '../shared';
 import { fundTypesApi, FundCategoryLabel, type FundType, type FundCategory } from './fundTypesApi';
+import { fundCategoriesApi, FundCategoryKindLabel } from '../fund-categories/fundCategoriesApi';
 
 const schema = z.object({
   code: z.string().min(1).max(32).regex(/^[A-Za-z0-9_-]+$/, 'Letters, digits, _ and - only'),
@@ -19,6 +20,13 @@ const schema = z.object({
   requiresPeriodReference: z.boolean(),
   allowedPaymentModes: z.number().int().min(0),
   category: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(99)]),
+  // New fund-management classification fields:
+  fundCategoryId: z.string().optional(),
+  fundSubCategoryId: z.string().optional(),
+  isReturnable: z.boolean(),
+  requiresAgreement: z.boolean(),
+  requiresMaturityTracking: z.boolean(),
+  requiresNiyyath: z.boolean(),
   isActive: z.boolean().optional(),
 });
 type Form = z.infer<typeof schema>;
@@ -28,9 +36,12 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
   const { message } = AntdApp.useApp();
   const isEdit = !!fundType;
 
+  const categoriesQ = useQuery({ queryKey: ['fund-categories'], queryFn: () => fundCategoriesApi.list(true), enabled: open });
+  const subsQ = useQuery({ queryKey: ['fund-sub-categories'], queryFn: () => fundCategoriesApi.listSubs(undefined, true), enabled: open });
+
   const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<Form>({
     resolver: zodResolver(schema),
-    defaultValues: { code: '', nameEnglish: '', requiresItsNumber: true, requiresPeriodReference: false, allowedPaymentModes: 7, category: 1, isActive: true },
+    defaultValues: defaults(),
   });
 
   useEffect(() => {
@@ -41,10 +52,17 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         nameArabic: fundType.nameArabic ?? '', nameHindi: fundType.nameHindi ?? '', nameUrdu: fundType.nameUrdu ?? '',
         description: fundType.description ?? '',
         requiresItsNumber: fundType.requiresItsNumber, requiresPeriodReference: fundType.requiresPeriodReference,
-        allowedPaymentModes: fundType.allowedPaymentModes, category: fundType.category, isActive: fundType.isActive,
+        allowedPaymentModes: fundType.allowedPaymentModes, category: fundType.category,
+        fundCategoryId: fundType.fundCategoryId ?? undefined,
+        fundSubCategoryId: fundType.fundSubCategoryId ?? undefined,
+        isReturnable: fundType.isReturnable ?? false,
+        requiresAgreement: fundType.requiresAgreement ?? false,
+        requiresMaturityTracking: fundType.requiresMaturityTracking ?? false,
+        requiresNiyyath: fundType.requiresNiyyath ?? false,
+        isActive: fundType.isActive,
       });
     } else {
-      reset({ code: '', nameEnglish: '', requiresItsNumber: true, requiresPeriodReference: false, allowedPaymentModes: 7, category: 1, isActive: true });
+      reset(defaults());
     }
   }, [open, fundType, reset]);
 
@@ -60,6 +78,12 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         requiresPeriodReference: data.requiresPeriodReference,
         allowedPaymentModes: data.allowedPaymentModes,
         category: data.category,
+        fundCategoryId: data.fundCategoryId || undefined,
+        fundSubCategoryId: data.fundSubCategoryId || undefined,
+        isReturnable: data.isReturnable,
+        requiresAgreement: data.requiresAgreement,
+        requiresMaturityTracking: data.requiresMaturityTracking,
+        requiresNiyyath: data.requiresNiyyath,
       };
       if (isEdit && fundType) {
         return fundTypesApi.update(fundType.id, { ...payload, isActive: data.isActive ?? true });
@@ -76,6 +100,11 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
 
   const currentModes = watch('allowedPaymentModes');
   const toggleMode = (flag: number) => setValue('allowedPaymentModes', (currentModes ^ flag) >>> 0, { shouldDirty: true });
+  const selectedCategoryId = watch('fundCategoryId');
+  const selectedCategory = (categoriesQ.data ?? []).find((c) => c.id === selectedCategoryId);
+  const subOptions = (subsQ.data ?? []).filter((s) => !selectedCategoryId || s.fundCategoryId === selectedCategoryId);
+  const isLoanFund = selectedCategory?.kind === 3;
+  const isTempIncome = selectedCategory?.kind === 2;
 
   return (
     <Drawer
@@ -94,11 +123,68 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         <Form.Item label="Code" required validateStatus={errors.code ? 'error' : ''} help={errors.code?.message}>
           <Controller name="code" control={control} render={({ field }) => <Input {...field} disabled={isEdit} placeholder="NIYAZ" autoFocus />} />
         </Form.Item>
-        <Form.Item label="Category" required help="Loans block Commitment pledges and Fund Enrollments. Only Qarzan Hasana operates on Loan funds.">
+
+        <Divider orientation="left" style={{ marginBlock: 8, fontSize: 13 }}>Classification</Divider>
+
+        <Form.Item label="Fund category" required tooltip="Admin-managed master classification — drives whether contributions post to income, create a return obligation, or sit in a loan fund.">
+          <Controller name="fundCategoryId" control={control} render={({ field }) => (
+            <Select {...field} placeholder="Select category"
+              loading={categoriesQ.isLoading}
+              showSearch optionFilterProp="label"
+              options={(categoriesQ.data ?? []).map((c) => ({
+                value: c.id,
+                label: `${c.name} — ${FundCategoryKindLabel[c.kind]}`,
+              }))}
+              onChange={(v) => { field.onChange(v); setValue('fundSubCategoryId', undefined, { shouldDirty: true }); }}
+              allowClear
+            />
+          )} />
+        </Form.Item>
+
+        <Form.Item label="Sub-category" help={selectedCategoryId ? undefined : 'Pick a category first'}>
+          <Controller name="fundSubCategoryId" control={control} render={({ field }) => (
+            <Select {...field} placeholder="Optional second-tier classification"
+              disabled={!selectedCategoryId}
+              showSearch optionFilterProp="label" allowClear
+              options={subOptions.map((s) => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+            />
+          )} />
+        </Form.Item>
+
+        {(isLoanFund || isTempIncome) && (
+          <Alert
+            type={isLoanFund ? 'info' : 'warning'}
+            showIcon
+            style={{ marginBlockEnd: 12 }}
+            message={isLoanFund
+              ? 'This is a Loan Fund — it can both receive returnable contributions and issue loans. Enable the relevant behaviour flags below.'
+              : 'This is a Temporary Income category — receipts under this fund will be tracked as a return obligation, not as income.'}
+          />
+        )}
+
+        <Form.Item label="Returnable contributions" tooltip="When ON, the fund accepts contributions where the contributor expects the money back. Maturity / agreement tracking applies.">
+          <Controller name="isReturnable" control={control} render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />} />
+        </Form.Item>
+        <Form.Item label="Requires agreement" tooltip="When ON, contributions/loans on this fund must reference an attached agreement document.">
+          <Controller name="requiresAgreement" control={control} render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />} />
+        </Form.Item>
+        <Form.Item label="Requires maturity tracking" tooltip="When ON, returnable contributions track a maturity date — returns before maturity require special approval.">
+          <Controller name="requiresMaturityTracking" control={control} render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />} />
+        </Form.Item>
+        <Form.Item label="Requires Niyyath capture" tooltip="When ON, the contribution form must capture the contributor's Niyyath (intention) — not as a free-text remark, but as a structured field.">
+          <Controller name="requiresNiyyath" control={control} render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />} />
+        </Form.Item>
+
+        <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginBlockEnd: 12 }}>
+          Legacy enum (kept while callers migrate):
+        </Typography.Text>
+        <Form.Item label="Legacy category" help="Loans block Commitment pledges and Fund Enrollments. Will be replaced by the master classification above in a future release.">
           <Controller name="category" control={control} render={({ field }) => (
             <Select {...field} options={Object.entries(FundCategoryLabel).map(([v, l]) => ({ value: Number(v) as FundCategory, label: l }))} />
           )} />
         </Form.Item>
+
+        <Divider orientation="left" style={{ marginBlock: 8, fontSize: 13 }}>Naming</Divider>
         <Form.Item label="Name (English)" required validateStatus={errors.nameEnglish ? 'error' : ''} help={errors.nameEnglish?.message}>
           <Controller name="nameEnglish" control={control} render={({ field }) => <Input {...field} />} />
         </Form.Item>
@@ -128,4 +214,17 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
       </Form>
     </Drawer>
   );
+}
+
+/// Form default values — kept as a function so each open of a "create" drawer starts fresh.
+function defaults(): Form {
+  return {
+    code: '', nameEnglish: '', nameArabic: '', nameHindi: '', nameUrdu: '', description: '',
+    requiresItsNumber: true, requiresPeriodReference: false,
+    allowedPaymentModes: 7, // Cash + Cheque + BankTransfer
+    category: 1,
+    fundCategoryId: undefined, fundSubCategoryId: undefined,
+    isReturnable: false, requiresAgreement: false, requiresMaturityTracking: false, requiresNiyyath: false,
+    isActive: true,
+  };
 }

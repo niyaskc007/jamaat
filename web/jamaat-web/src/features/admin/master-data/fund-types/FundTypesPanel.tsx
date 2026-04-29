@@ -47,8 +47,31 @@ export function FundTypesPanel() {
       ),
     },
     {
-      title: 'Category', dataIndex: 'category', key: 'category', width: 160,
-      render: (c: FundCategory) => <Tag color={FundCategoryColor[c]} style={{ margin: 0 }}>{FundCategoryLabel[c]}</Tag>,
+      title: 'Classification', key: 'classification', width: 220,
+      // Prefer the new master classification when set; fall back to the legacy enum
+      // so older rows still show something useful while admins migrate them.
+      render: (_: unknown, row: FundType) => row.fundCategoryName ? (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontWeight: 500 }}>{row.fundCategoryName}</span>
+          {row.fundSubCategoryName && (
+            <span style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>↳ {row.fundSubCategoryName}</span>
+          )}
+        </div>
+      ) : (
+        <Tag color={FundCategoryColor[row.category]} style={{ margin: 0 }}>{FundCategoryLabel[row.category]}</Tag>
+      ),
+    },
+    {
+      title: 'Behaviour', key: 'flags', width: 220,
+      render: (_: unknown, row: FundType) => (
+        <Space size={4} wrap>
+          {row.isReturnable && <Tag color="gold" style={{ margin: 0 }}>Returnable</Tag>}
+          {row.requiresAgreement && <Tag color="purple" style={{ margin: 0 }}>Agreement</Tag>}
+          {row.requiresMaturityTracking && <Tag color="blue" style={{ margin: 0 }}>Maturity</Tag>}
+          {row.requiresNiyyath && <Tag color="cyan" style={{ margin: 0 }}>Niyyath</Tag>}
+          {!row.isReturnable && !row.requiresAgreement && !row.requiresMaturityTracking && !row.requiresNiyyath && <span style={{ color: 'var(--jm-gray-400)', fontSize: 12 }}>—</span>}
+        </Space>
+      ),
     },
     {
       title: 'Payment modes', dataIndex: 'allowedPaymentModes', key: 'modes', width: 260,

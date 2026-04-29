@@ -48,7 +48,17 @@ public sealed class FundTypeRepository(JamaatDbContext db) : IFundTypeRepository
                 (int)e.AllowedPaymentModes,
                 e.CreditAccountId,
                 db.Accounts.Where(a => a.Id == e.CreditAccountId).Select(a => a.Name).FirstOrDefault(),
-                e.DefaultTemplateId, e.RulesJson, e.CreatedAtUtc))
+                e.DefaultTemplateId, e.RulesJson,
+                // Join the new master tables — both nullable, so left-join semantics via subselects.
+                e.FundCategoryId,
+                db.FundCategories.Where(c => c.Id == e.FundCategoryId).Select(c => c.Code).FirstOrDefault(),
+                db.FundCategories.Where(c => c.Id == e.FundCategoryId).Select(c => c.Name).FirstOrDefault(),
+                db.FundCategories.Where(c => c.Id == e.FundCategoryId).Select(c => (Jamaat.Domain.Enums.FundCategoryKind?)c.Kind).FirstOrDefault(),
+                e.FundSubCategoryId,
+                db.FundSubCategories.Where(s => s.Id == e.FundSubCategoryId).Select(s => s.Code).FirstOrDefault(),
+                db.FundSubCategories.Where(s => s.Id == e.FundSubCategoryId).Select(s => s.Name).FirstOrDefault(),
+                e.IsReturnable, e.RequiresAgreement, e.RequiresMaturityTracking, e.RequiresNiyyath,
+                e.CreatedAtUtc))
             .ToListAsync(ct);
 
         return new PagedResult<FundTypeDto>(items, total, q.Page, q.PageSize);

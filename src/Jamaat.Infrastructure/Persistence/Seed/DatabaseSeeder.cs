@@ -141,6 +141,7 @@ public static class DatabaseSeeder
 
         await SeedCurrenciesAndRatesAsync(db, defaultTenantId, logger, ct);
         await SeedChartOfAccountsAsync(db, defaultTenantId, logger, ct);
+        await SeedFundCategoriesAsync(db, defaultTenantId, logger, ct);
         await SeedFundTypesAsync(db, defaultTenantId, logger, ct);
         await SeedNumberingSeriesAsync(db, defaultTenantId, logger, ct);
         await SeedFinancialPeriodAsync(db, defaultTenantId, logger, ct);
@@ -475,30 +476,78 @@ Accepted on {{today}}.
         if (added > 0) logger.LogInformation("Seeded {Count} chart-of-accounts rows.", added);
     }
 
+    private static async Task SeedFundCategoriesAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
+    {
+        // Idempotent — the migration's SQL also seeds these for any existing tenant, but a brand-new
+        // tenant added later (multi-tenant future) won't hit that path, so we re-check here.
+        var existing = await db.FundCategories.AsNoTracking()
+            .Where(c => c.TenantId == tenantId)
+            .Select(c => c.Code).ToListAsync(ct);
+        var have = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
+
+        var seeds = new (string Code, string Name, FundCategoryKind Kind, int SortOrder, string Description)[]
+        {
+            ("PERM_INCOME", "Permanent Income", FundCategoryKind.PermanentIncome, 10,
+                "Permanent contributions — receipts post to income; no return obligation. (Mohammedi-style schemes belong here.)"),
+            ("TEMP_INCOME", "Temporary Income", FundCategoryKind.TemporaryIncome, 20,
+                "Returnable contributions — receipts create a return obligation; not income. (Hussaini-style schemes belong here.)"),
+            ("LOAN_FUND", "Loan Fund", FundCategoryKind.LoanFund, 30,
+                "Funds that issue loans (e.g. Qarzan Hasana). Same fund may also receive returnable + permanent contributions."),
+            ("COMMIT_SCHEME", "Commitment Scheme", FundCategoryKind.CommitmentScheme, 40,
+                "Schemes structured as commitments / pledges with instalment schedules."),
+            ("FUNCTION", "Function-based Fund", FundCategoryKind.FunctionBased, 50,
+                "Contributions tied to a specific event / majlis / program."),
+        };
+        var added = 0;
+        foreach (var (code, name, kind, sortOrder, description) in seeds)
+        {
+            if (have.Contains(code)) continue;
+            var c = new FundCategoryEntity(Guid.NewGuid(), tenantId, code, name, kind);
+            c.Update(name, kind, description, sortOrder, isActive: true);
+            db.FundCategories.Add(c);
+            added++;
+        }
+        if (added > 0)
+        {
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation("Seeded {Count} fund categories.", added);
+        }
+    }
+
     private static async Task SeedFundTypesAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
     {
         if (await db.FundTypes.AnyAsync(ct)) return;
         var donations = await db.Accounts.FirstOrDefaultAsync(a => a.Code == "4000", ct);
-        var seeds = new (string Code, string Name, bool RequiresPeriod, FundCategory Category)[]
+
+        // Resolve the new master categories so each fund type lands with its FundCategoryId set
+        // out of the box. These were seeded just above.
+        var permIncome = await db.FundCategories.FirstOrDefaultAsync(c => c.TenantId == tenantId && c.Code == "PERM_INCOME", ct);
+        var loanFund = await db.FundCategories.FirstOrDefaultAsync(c => c.TenantId == tenantId && c.Code == "LOAN_FUND", ct);
+
+        var seeds = new (string Code, string Name, bool RequiresPeriod, FundCategory Category, FundCategoryKind Kind, Guid? CategoryId, bool IsReturnable, bool RequiresAgreement, bool RequiresMaturity, bool RequiresNiyyath)[]
         {
-            ("SABIL", "Sabil", false, FundCategory.Donation),
-            ("WAJEBAAT", "Wajebaat", false, FundCategory.Donation),
-            ("NIYAZ", "Niyaz", false, FundCategory.Donation),
-            ("DAREES", "Darees", false, FundCategory.Donation),
-            ("MADRASA", "Madrasa", true, FundCategory.Donation),
-            ("VOLUNTARY", "Voluntary Contribution", false, FundCategory.Donation),
-            ("SILA_FITRA", "Sila Fitra", false, FundCategory.Donation),
-            ("NAZURMAKAM", "Nazurmakam", false, FundCategory.Donation),
-            ("MUTAFRIQ", "Mutafriq (Misc)", false, FundCategory.Donation),
-            ("QARZAN", "Qarzan Hasana", true, FundCategory.Loan),
-            ("CHARITY", "General Charity", false, FundCategory.Charity),
-            ("ZAKAT", "Zakat", false, FundCategory.Charity),
-            ("COMMUNITY_SUPPORT", "Community Support", false, FundCategory.CommunitySupport),
+            ("SABIL", "Sabil", false, FundCategory.Donation, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
+            ("WAJEBAAT", "Wajebaat", false, FundCategory.Donation, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
+            ("NIYAZ", "Niyaz", false, FundCategory.Donation, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
+            ("DAREES", "Darees", false, FundCategory.Donation, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
+            ("MADRASA", "Madrasa", true, FundCategory.Donation, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
+            ("VOLUNTARY", "Voluntary Contribution", false, FundCategory.Donation, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
+            ("SILA_FITRA", "Sila Fitra", false, FundCategory.Donation, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
+            ("NAZURMAKAM", "Nazurmakam", false, FundCategory.Donation, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
+            ("MUTAFRIQ", "Mutafriq (Misc)", false, FundCategory.Donation, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
+            // QH lights up every behaviour flag — it accepts returnable + permanent contributions
+            // AND issues loans, so it's the canonical example of the fund-management uplift.
+            ("QARZAN", "Qarzan Hasana", true, FundCategory.Loan, FundCategoryKind.LoanFund, loanFund?.Id, true, true, true, true),
+            ("CHARITY", "General Charity", false, FundCategory.Charity, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
+            ("ZAKAT", "Zakat", false, FundCategory.Charity, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
+            ("COMMUNITY_SUPPORT", "Community Support", false, FundCategory.CommunitySupport, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
         };
-        foreach (var (code, name, requiresPeriod, category) in seeds)
+        foreach (var s in seeds)
         {
-            var ft = new FundType(Guid.NewGuid(), tenantId, code, name, PaymentMode.Cash | PaymentMode.Cheque | PaymentMode.BankTransfer | PaymentMode.Upi);
-            ft.SetRules(true, requiresPeriod, PaymentMode.Cash | PaymentMode.Cheque | PaymentMode.BankTransfer | PaymentMode.Upi, null, category);
+            var ft = new FundType(Guid.NewGuid(), tenantId, s.Code, s.Name, PaymentMode.Cash | PaymentMode.Cheque | PaymentMode.BankTransfer | PaymentMode.Upi);
+            ft.SetRules(true, s.RequiresPeriod, PaymentMode.Cash | PaymentMode.Cheque | PaymentMode.BankTransfer | PaymentMode.Upi, null, s.Category);
+            if (s.CategoryId is Guid catId)
+                ft.SetClassification(catId, fundSubCategoryId: null, s.Kind, s.IsReturnable, s.RequiresAgreement, s.RequiresMaturity, s.RequiresNiyyath);
             ft.ConfigureAccounting(donations?.Id, null);
             db.FundTypes.Add(ft);
         }

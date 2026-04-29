@@ -35,6 +35,18 @@ export type FundType = {
   creditAccountName?: string | null;
   defaultTemplateId?: string | null;
   rulesJson?: string | null;
+  // New fund-management uplift fields:
+  fundCategoryId?: string | null;
+  fundCategoryCode?: string | null;
+  fundCategoryName?: string | null;
+  fundCategoryKind?: number | null;
+  fundSubCategoryId?: string | null;
+  fundSubCategoryCode?: string | null;
+  fundSubCategoryName?: string | null;
+  isReturnable: boolean;
+  requiresAgreement: boolean;
+  requiresMaturityTracking: boolean;
+  requiresNiyyath: boolean;
   createdAtUtc: string;
 };
 
@@ -56,6 +68,12 @@ export type CreateFundType = {
   creditAccountId?: string | null;
   rulesJson?: string;
   category?: FundCategory;
+  fundCategoryId?: string;
+  fundSubCategoryId?: string;
+  isReturnable?: boolean;
+  requiresAgreement?: boolean;
+  requiresMaturityTracking?: boolean;
+  requiresNiyyath?: boolean;
 };
 
 export type UpdateFundType = Omit<CreateFundType, 'code'> & { isActive: boolean };

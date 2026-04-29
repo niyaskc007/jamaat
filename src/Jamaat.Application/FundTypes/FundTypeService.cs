@@ -1,9 +1,12 @@
 using FluentValidation;
 using Jamaat.Application.Common;
+using Jamaat.Application.Persistence;
 using Jamaat.Contracts.FundTypes;
 using Jamaat.Domain.Abstractions;
 using Jamaat.Domain.Common;
 using Jamaat.Domain.Entities;
+using Jamaat.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
 
 namespace Jamaat.Application.FundTypes;
 
@@ -27,6 +30,7 @@ public interface IFundTypeRepository
 
 public sealed class FundTypeService(
     IFundTypeRepository repo, IUnitOfWork uow, ITenantContext tenant,
+    JamaatDbContextFacade db,
     IValidator<CreateFundTypeDto> createV, IValidator<UpdateFundTypeDto> updateV) : IFundTypeService
 {
     public Task<PagedResult<FundTypeDto>> ListAsync(FundTypeListQuery q, CancellationToken ct = default) => repo.ListAsync(q, ct);
@@ -34,7 +38,8 @@ public sealed class FundTypeService(
     public async Task<Result<FundTypeDto>> GetAsync(Guid id, CancellationToken ct = default)
     {
         var e = await repo.GetByIdAsync(id, ct);
-        return e is null ? Error.NotFound("fundtype.not_found", "Fund type not found.") : Map(e);
+        if (e is null) return Error.NotFound("fundtype.not_found", "Fund type not found.");
+        return await MapWithCategoryAsync(e, ct);
     }
 
     public async Task<Result<FundTypeDto>> CreateAsync(CreateFundTypeDto dto, CancellationToken ct = default)
@@ -47,9 +52,12 @@ public sealed class FundTypeService(
         e.UpdateNames(dto.NameEnglish, dto.NameArabic, dto.NameHindi, dto.NameUrdu, dto.Description);
         e.SetRules(dto.RequiresItsNumber, dto.RequiresPeriodReference, dto.AllowedPaymentModes, dto.RulesJson, dto.Category);
         e.ConfigureAccounting(dto.CreditAccountId, null);
+        await ApplyClassificationAsync(e, dto.FundCategoryId, dto.FundSubCategoryId,
+            dto.IsReturnable, dto.RequiresAgreement, dto.RequiresMaturityTracking, dto.RequiresNiyyath, ct);
+
         await repo.AddAsync(e, ct);
         await uow.SaveChangesAsync(ct);
-        return Map(e);
+        return await MapWithCategoryAsync(e, ct);
     }
 
     public async Task<Result<FundTypeDto>> UpdateAsync(Guid id, UpdateFundTypeDto dto, CancellationToken ct = default)
@@ -62,9 +70,11 @@ public sealed class FundTypeService(
         e.SetRules(dto.RequiresItsNumber, dto.RequiresPeriodReference, dto.AllowedPaymentModes, dto.RulesJson, dto.Category);
         e.ConfigureAccounting(dto.CreditAccountId, null);
         if (dto.IsActive) e.Activate(); else e.Deactivate();
+        await ApplyClassificationAsync(e, dto.FundCategoryId, dto.FundSubCategoryId,
+            dto.IsReturnable, dto.RequiresAgreement, dto.RequiresMaturityTracking, dto.RequiresNiyyath, ct);
         repo.Update(e);
         await uow.SaveChangesAsync(ct);
-        return Map(e);
+        return await MapWithCategoryAsync(e, ct);
     }
 
     public async Task<Result> DeleteAsync(Guid id, CancellationToken ct = default)
@@ -77,10 +87,45 @@ public sealed class FundTypeService(
         return Result.Success();
     }
 
-    internal static FundTypeDto Map(FundType e) => new(
+    /// Resolve the new master FundCategory + sub-category for the given DTO ids and write them
+    /// to the entity. Validates that both belong to the current tenant; if FundCategoryId is
+    /// null (legacy callers), skips the write — the legacy <see cref="FundCategory"/> enum stays
+    /// authoritative until the caller is migrated.
+    private async Task ApplyClassificationAsync(FundType e, Guid? fundCategoryId, Guid? fundSubCategoryId,
+        bool isReturnable, bool requiresAgreement, bool requiresMaturity, bool requiresNiyyath, CancellationToken ct)
+    {
+        if (fundCategoryId is null) return;
+        var category = await db.FundCategories.AsNoTracking().FirstOrDefaultAsync(c => c.Id == fundCategoryId.Value, ct)
+            ?? throw new InvalidOperationException("Fund category not found.");
+        if (fundSubCategoryId is Guid subId)
+        {
+            var sub = await db.FundSubCategories.AsNoTracking().FirstOrDefaultAsync(s => s.Id == subId, ct);
+            if (sub is null || sub.FundCategoryId != category.Id)
+                throw new InvalidOperationException("Sub-category does not belong to the chosen category.");
+        }
+        e.SetClassification(category.Id, fundSubCategoryId, category.Kind,
+            isReturnable, requiresAgreement, requiresMaturity, requiresNiyyath);
+    }
+
+    private async Task<FundTypeDto> MapWithCategoryAsync(FundType e, CancellationToken ct)
+    {
+        FundCategoryEntity? cat = null;
+        FundSubCategory? sub = null;
+        if (e.FundCategoryId is Guid cid)
+            cat = await db.FundCategories.AsNoTracking().FirstOrDefaultAsync(c => c.Id == cid, ct);
+        if (e.FundSubCategoryId is Guid sid)
+            sub = await db.FundSubCategories.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sid, ct);
+        return Map(e, cat, sub);
+    }
+
+    internal static FundTypeDto Map(FundType e, FundCategoryEntity? cat = null, FundSubCategory? sub = null) => new(
         e.Id, e.Code, e.NameEnglish, e.NameArabic, e.NameHindi, e.NameUrdu, e.Description,
         e.IsActive, e.RequiresItsNumber, e.RequiresPeriodReference, e.Category, e.IsLoan, (int)e.AllowedPaymentModes,
-        e.CreditAccountId, null, e.DefaultTemplateId, e.RulesJson, e.CreatedAtUtc);
+        e.CreditAccountId, null, e.DefaultTemplateId, e.RulesJson,
+        e.FundCategoryId, cat?.Code, cat?.Name, cat?.Kind,
+        e.FundSubCategoryId, sub?.Code, sub?.Name,
+        e.IsReturnable, e.RequiresAgreement, e.RequiresMaturityTracking, e.RequiresNiyyath,
+        e.CreatedAtUtc);
 }
 
 public sealed class CreateFundTypeValidator : AbstractValidator<CreateFundTypeDto>

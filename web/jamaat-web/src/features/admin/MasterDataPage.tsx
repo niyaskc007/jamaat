@@ -1,8 +1,9 @@
 import { useSearchParams } from 'react-router-dom';
 import { Tabs } from 'antd';
-import { DatabaseOutlined, FieldNumberOutlined, BankOutlined, BookOutlined, DollarOutlined, CalendarOutlined, LineChartOutlined, GlobalOutlined, FileTextOutlined, HomeOutlined, HeartOutlined, TagsOutlined, SettingOutlined } from '@ant-design/icons';
+import { DatabaseOutlined, FieldNumberOutlined, BankOutlined, BookOutlined, DollarOutlined, CalendarOutlined, LineChartOutlined, GlobalOutlined, FileTextOutlined, HomeOutlined, HeartOutlined, TagsOutlined, SettingOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { FundTypesPanel } from './master-data/fund-types/FundTypesPanel';
+import { FundCategoriesPanel } from './master-data/fund-categories/FundCategoriesPanel';
 import { NumberingSeriesPanel } from './master-data/numbering-series/NumberingSeriesPanel';
 import { BankAccountsPanel } from './master-data/bank-accounts/BankAccountsPanel';
 import { ChartOfAccountsPanel } from './master-data/chart-of-accounts/ChartOfAccountsPanel';
@@ -29,6 +30,7 @@ export function MasterDataPage() {
         items={[
           { key: 'currencies', label: (<span><GlobalOutlined /> Currencies</span>), children: <CurrenciesPanel /> },
           { key: 'exchange-rates', label: (<span><LineChartOutlined /> Exchange Rates</span>), children: <ExchangeRatesPanel /> },
+          { key: 'fund-categories', label: (<span><AppstoreOutlined /> Fund Categories</span>), children: <FundCategoriesPanel /> },
           { key: 'fund-types', label: (<span><DatabaseOutlined /> Fund Types</span>), children: <FundTypesPanel /> },
           { key: 'expense-types', label: (<span><DollarOutlined /> Expense Types</span>), children: <ExpenseTypesPanel /> },
           { key: 'numbering-series', label: (<span><FieldNumberOutlined /> Numbering Series</span>), children: <NumberingSeriesPanel /> },

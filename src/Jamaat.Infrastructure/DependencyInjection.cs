@@ -99,6 +99,7 @@ public static class DependencyInjection
         services.AddScoped<IMemberService, MemberService>();
         services.AddScoped<IErrorLogService, ErrorLogService>();
         services.AddScoped<IFundTypeService, FundTypeService>();
+        services.AddScoped<Application.FundCategories.IFundCategoryService, Application.FundCategories.FundCategoryService>();
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<INumberingSeriesService, NumberingSeriesService>();
         services.AddScoped<IBankAccountService, BankAccountService>();

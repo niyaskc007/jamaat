@@ -15,6 +15,8 @@ public abstract class JamaatDbContextFacade
     public abstract DbSet<LedgerEntry> Entries { get; }
     public abstract DbSet<FinancialPeriod> FinancialPeriods { get; }
     public abstract DbSet<FundType> FundTypes { get; }
+    public abstract DbSet<FundCategoryEntity> FundCategories { get; }
+    public abstract DbSet<FundSubCategory> FundSubCategories { get; }
     public abstract DbSet<ExpenseType> ExpenseTypes { get; }
     public abstract DbSet<Account> Accounts { get; }
     public abstract DbSet<Member> Members { get; }
