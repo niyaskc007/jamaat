@@ -228,6 +228,56 @@ public sealed class ReportsController(IReportsService svc, IExcelExporter excel)
         return Xlsx(excel.Build(new[] { sheet }), $"cheque-wise_{from:yyyyMMdd}_{to:yyyyMMdd}.xlsx");
     }
 
+    // --- Fund balance (dual view) -----------------------------------------
+
+    [HttpGet("fund-balance")]
+    [Authorize(Policy = "reports.view")]
+    public async Task<IActionResult> FundBalance([FromQuery] Guid fundTypeId, CancellationToken ct)
+        => Ok(await svc.FundBalanceAsync(fundTypeId, ct));
+
+    // --- Returnable contributions / maturity -------------------------------
+
+    [HttpGet("returnable-contributions")]
+    [Authorize(Policy = "reports.view")]
+    public async Task<IActionResult> ReturnableContributions([FromQuery] Guid? fundTypeId, CancellationToken ct)
+        => Ok(await svc.ReturnableContributionsAsync(fundTypeId, ct));
+
+    [HttpGet("returnable-contributions.xlsx")]
+    [Authorize(Policy = "reports.export")]
+    public async Task<IActionResult> ReturnableContributionsXlsx([FromQuery] Guid? fundTypeId, CancellationToken ct)
+    {
+        var rows = await svc.ReturnableContributionsAsync(fundTypeId, ct);
+        var sheet = new ExcelSheet(
+            "Returnable contributions",
+            new[]
+            {
+                new ExcelColumn("Receipt date", ExcelColumnType.Date),
+                new ExcelColumn("Receipt #"),
+                new ExcelColumn("ITS"),
+                new ExcelColumn("Member"),
+                new ExcelColumn("Fund code"),
+                new ExcelColumn("Fund name"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+                new ExcelColumn("Returned", ExcelColumnType.Currency),
+                new ExcelColumn("Outstanding", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+                new ExcelColumn("Maturity", ExcelColumnType.Date),
+                new ExcelColumn("Matured?"),
+                new ExcelColumn("Agreement"),
+                new ExcelColumn("Niyyath"),
+            },
+            rows.Select(r => (IReadOnlyList<object?>)new object?[]
+            {
+                r.ReceiptDate, r.ReceiptNumber, r.ItsNumber, r.MemberName,
+                r.FundTypeCode, r.FundTypeName,
+                r.AmountTotal, r.AmountReturned, r.AmountReturnable, r.Currency,
+                r.MaturityDate, r.IsMatured ? "Yes" : "No",
+                r.AgreementReference, r.NiyyathNote,
+            }).ToList());
+        return Xlsx(excel.Build(new[] { sheet }),
+            $"returnable-contributions_{(fundTypeId is Guid f ? f.ToString("N") + "_" : string.Empty)}{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
+
     private FileContentResult Xlsx(byte[] bytes, string filename) =>
         File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
 }

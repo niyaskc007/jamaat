@@ -27,6 +27,11 @@ public interface IReportsService
     Task<IReadOnlyList<ReportCashBookRow>> CashBookAsync(Guid accountId, DateOnly from, DateOnly to, CancellationToken ct = default);
     Task<IReadOnlyList<ReportMemberContributionRow>> MemberContributionAsync(Guid memberId, DateOnly from, DateOnly to, CancellationToken ct = default);
     Task<IReadOnlyList<ReportChequeWiseRow>> ChequeWiseAsync(DateOnly from, DateOnly to, CancellationToken ct = default);
+    /// <summary>Dual-balance view of a single fund: total cash received (permanent + returnable)
+    /// vs net fund strength (after subtracting outstanding return obligations).</summary>
+    Task<ReportFundBalanceDto> FundBalanceAsync(Guid fundTypeId, CancellationToken ct = default);
+    /// <summary>List every returnable receipt with maturity status + remaining balance.</summary>
+    Task<IReadOnlyList<ReportReturnableContributionRow>> ReturnableContributionsAsync(Guid? fundTypeId, CancellationToken ct = default);
 }
 
 public interface IDashboardService

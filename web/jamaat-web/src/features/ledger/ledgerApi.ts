@@ -67,6 +67,23 @@ export const reportsApi = {
       chequeNumber?: string | null; chequeDate?: string | null; bankAccountName?: string | null;
       amount: number; currency: string; status: string;
     }[]>('/api/v1/reports/cheque-wise', { params: { from, to } })).data,
+  /// Dual-balance view of a fund (batch 5 of fund-management uplift).
+  fundBalance: async (fundTypeId: string) =>
+    (await api.get<{
+      fundTypeId: string; fundTypeCode: string; fundTypeName: string; currency: string;
+      totalCashReceived: number; permanentReceived: number; returnableReceived: number;
+      alreadyReturned: number; outstandingReturnObligation: number; netFundStrength: number;
+      receiptCount: number;
+    }>('/api/v1/reports/fund-balance', { params: { fundTypeId } })).data,
+  returnableContributions: async (fundTypeId?: string) =>
+    (await api.get<{
+      receiptId: string; receiptNumber?: string | null; receiptDate: string;
+      itsNumber: string; memberName: string;
+      fundTypeCode: string; fundTypeName: string;
+      amountTotal: number; amountReturned: number; amountReturnable: number; currency: string;
+      maturityDate?: string | null; isMatured: boolean;
+      agreementReference?: string | null; niyyathNote?: string | null;
+    }[]>('/api/v1/reports/returnable-contributions', { params: { fundTypeId } })).data,
 };
 
 export const dashboardApi = {

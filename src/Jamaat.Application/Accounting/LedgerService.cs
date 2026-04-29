@@ -174,6 +174,91 @@ public sealed class ReportsService(Persistence.JamaatDbContextFacade db) : IRepo
             x.BaseAmount, x.BaseCurrency)).ToList();
     }
 
+    public async Task<ReportFundBalanceDto> FundBalanceAsync(Guid fundTypeId, CancellationToken ct = default)
+    {
+        // Total cash received (any status that posted to the ledger — Confirmed only) per
+        // intention. We aggregate by line amount because returnable receipts post to a
+        // liability account, but the user-facing total is what they put in the cash drawer.
+        var fund = await db.Funds.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fundTypeId, ct);
+        if (fund is null) throw new InvalidOperationException("Fund type not found.");
+
+        // Pull receipts that touch this fund — any line.FundTypeId == fundTypeId — that are Confirmed.
+        var raw = await (from r in db.Receipts.AsNoTracking()
+                         where r.Status == ReceiptStatus.Confirmed
+                            && r.Lines.Any(l => l.FundTypeId == fundTypeId)
+                         from l in r.Lines
+                         where l.FundTypeId == fundTypeId
+                         select new { r.Id, l.Amount, r.Currency, r.Intention, r.AmountReturned, r.AmountTotal })
+                       .ToListAsync(ct);
+
+        // PermanentReceived = sum of Permanent lines for this fund.
+        // ReturnableReceived = sum of Returnable lines.
+        // AlreadyReturned: pro-rata share of the receipt's AmountReturned that maps to this fund's lines
+        //   (most of our returnable receipts are single-line, so this devolves to the simple case).
+        var permanentReceived = raw.Where(x => x.Intention == ContributionIntention.Permanent).Sum(x => x.Amount);
+        var returnableReceived = raw.Where(x => x.Intention == ContributionIntention.Returnable).Sum(x => x.Amount);
+        var alreadyReturned = raw.Where(x => x.Intention == ContributionIntention.Returnable)
+            .GroupBy(x => x.Id)
+            .Sum(g =>
+            {
+                var receiptTotal = g.First().AmountTotal;
+                var receiptReturned = g.First().AmountReturned;
+                var fundShare = g.Sum(x => x.Amount);
+                return receiptTotal == 0 ? 0 : Math.Round(receiptReturned * fundShare / receiptTotal, 2, MidpointRounding.AwayFromZero);
+            });
+
+        var totalCashReceived = permanentReceived + returnableReceived;
+        var outstanding = Math.Max(0m, returnableReceived - alreadyReturned);
+        var netFundStrength = totalCashReceived - outstanding;
+
+        var currency = raw.Select(x => x.Currency).FirstOrDefault() ?? "AED";
+        var receiptCount = raw.Select(x => x.Id).Distinct().Count();
+
+        return new ReportFundBalanceDto(
+            fundTypeId, fund.Code, fund.NameEnglish, currency,
+            totalCashReceived, permanentReceived, returnableReceived,
+            alreadyReturned, outstanding, netFundStrength, receiptCount);
+    }
+
+    public async Task<IReadOnlyList<ReportReturnableContributionRow>> ReturnableContributionsAsync(Guid? fundTypeId, CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // One row per receipt-line matching a returnable receipt (so admins can see which fund
+        // each line went to even when the receipt has multiple). Most returnable receipts are
+        // single-line, so this is usually 1:1 with the receipt.
+        var rows = await (from r in db.Receipts.AsNoTracking()
+                          where r.Status == ReceiptStatus.Confirmed
+                             && r.Intention == ContributionIntention.Returnable
+                          from l in r.Lines
+                          where !fundTypeId.HasValue || l.FundTypeId == fundTypeId.Value
+                          join f in db.Funds.AsNoTracking() on l.FundTypeId equals f.Id
+                          orderby r.MaturityDate, r.ReceiptDate descending
+                          select new
+                          {
+                              r.Id, r.ReceiptNumber, r.ReceiptDate,
+                              r.ItsNumberSnapshot, r.MemberNameSnapshot,
+                              FundCode = f.Code, FundName = f.NameEnglish,
+                              l.Amount, // line amount within this receipt
+                              r.AmountReturned, r.AmountTotal, r.Currency,
+                              r.MaturityDate, r.AgreementReference, r.NiyyathNote,
+                          }).ToListAsync(ct);
+
+        return rows.Select(x =>
+        {
+            // Pro-rata: per-line returned share + remaining.
+            var fundShareReturned = x.AmountTotal == 0 ? 0m : Math.Round(x.AmountReturned * x.Amount / x.AmountTotal, 2, MidpointRounding.AwayFromZero);
+            var remaining = Math.Max(0m, x.Amount - fundShareReturned);
+            var matured = !x.MaturityDate.HasValue || today >= x.MaturityDate.Value;
+            return new ReportReturnableContributionRow(
+                x.Id, x.ReceiptNumber, x.ReceiptDate,
+                x.ItsNumberSnapshot, x.MemberNameSnapshot,
+                x.FundCode, x.FundName,
+                x.Amount, fundShareReturned, remaining, x.Currency,
+                x.MaturityDate, matured, x.AgreementReference, x.NiyyathNote);
+        }).ToList();
+    }
+
     public async Task<IReadOnlyList<ReportChequeWiseRow>> ChequeWiseAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
     {
         var fromDate = from;

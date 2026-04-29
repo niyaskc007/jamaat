@@ -9,6 +9,8 @@ import { money, formatDate } from '../../shared/format/format';
 import { reportsApi } from '../ledger/ledgerApi';
 import { accountsApi } from '../admin/master-data/chart-of-accounts/accountsApi';
 import { membersApi } from '../members/membersApi';
+import { fundTypesApi } from '../admin/master-data/fund-types/fundTypesApi';
+import { Tag } from 'antd';
 import { useBaseCurrency } from '../../shared/hooks/useBaseCurrency';
 import { useAuth } from '../../shared/auth/useAuth';
 import { api } from '../../shared/api/client';
@@ -42,6 +44,8 @@ export function ReportsPage() {
         { key: 'cashbook', label: 'Cash Book', children: <CashBook /> },
         { key: 'member', label: 'Member Contribution', children: <MemberContribution /> },
         { key: 'cheque', label: 'Cheque-wise', children: <ChequeWise /> },
+        { key: 'fund-balance', label: 'Fund Balance (Dual)', children: <FundBalance /> },
+        { key: 'returnable', label: 'Returnable Contributions', children: <ReturnableContributions /> },
       ]} />
     </div>
   );
@@ -208,6 +212,115 @@ function MemberContribution() {
           </Table.Summary.Row>
         ) : null}
         locale={{ emptyText: <Empty description={memberId ? 'No contributions in this period' : 'Select a member to view their contribution history'} /> }}
+      />
+    </Card>
+  );
+}
+
+function FundBalance() {
+  // Dual-balance view per fund (batch 5 of fund-management uplift).
+  // Shows total cash received, returnable obligation, and net fund strength side-by-side
+  // so the Jamaat doesn't mistake returnable money for permanent income.
+  const fundsQ = useQuery({ queryKey: ['fundTypes', 'all'], queryFn: () => fundTypesApi.list({ page: 1, pageSize: 200, active: true }) });
+  const [fundTypeId, setFundTypeId] = useState<string | undefined>();
+  const { data, isLoading } = useQuery({
+    queryKey: ['rpt', 'fund-balance', fundTypeId],
+    queryFn: () => fundTypeId ? reportsApi.fundBalance(fundTypeId) : Promise.resolve(null),
+    enabled: !!fundTypeId,
+  });
+
+  return (
+    <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 24 } }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBlockEnd: 16 }}>
+        <Select style={{ inlineSize: 320 }} placeholder="Select fund"
+          showSearch optionFilterProp="label"
+          value={fundTypeId} onChange={setFundTypeId}
+          options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} — ${f.nameEnglish}` }))} />
+      </div>
+      {!fundTypeId && <Empty description="Select a fund to see its dual-balance view" />}
+      {fundTypeId && isLoading && <div style={{ padding: 24, textAlign: 'center' }}>Loading…</div>}
+      {data && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {/* Left column: total cash view */}
+          <Card size="small" title="Total cash received">
+            <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter Tight', 'Inter', sans-serif" }} className="jm-tnum">
+              {money(data.totalCashReceived, data.currency)}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', marginBlockStart: 8 }}>
+              Permanent: <span className="jm-tnum">{money(data.permanentReceived, data.currency)}</span>
+              <br />
+              Returnable: <span className="jm-tnum">{money(data.returnableReceived, data.currency)}</span>
+              <br />
+              {data.receiptCount} receipt(s) confirmed
+            </div>
+          </Card>
+          {/* Right column: net fund strength */}
+          <Card size="small" title="Net fund strength" style={{ background: 'rgba(11,110,99,0.05)' }}>
+            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--jm-primary-500)', fontFamily: "'Inter Tight', 'Inter', sans-serif" }} className="jm-tnum">
+              {money(data.netFundStrength, data.currency)}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', marginBlockStart: 8 }}>
+              Total received: <span className="jm-tnum">{money(data.totalCashReceived, data.currency)}</span>
+              <br />
+              Less outstanding obligation: <span className="jm-tnum">−{money(data.outstandingReturnObligation, data.currency)}</span>
+              <br />
+              Already returned: <span className="jm-tnum">{money(data.alreadyReturned, data.currency)}</span>
+            </div>
+          </Card>
+        </div>
+      )}
+      {data && (
+        <Empty
+          image={null}
+          imageStyle={{ display: 'none' }}
+          description={
+            <div style={{ marginBlockStart: 16, fontSize: 12, color: 'var(--jm-gray-500)', textAlign: 'left' }}>
+              <strong>Why two numbers?</strong> Total cash is what the fund has received from contributors.
+              Net strength subtracts the still-outstanding return obligation — that part of the cash is
+              effectively borrowed from contributors and must be returned. Without this distinction,
+              reports would treat returnable money as permanent income and overstate the fund.
+            </div>
+          }
+        />
+      )}
+    </Card>
+  );
+}
+
+function ReturnableContributions() {
+  // Lists every returnable receipt with its maturity status, agreement, and remaining
+  // returnable balance. Hub for the contribution-return workflow once the return-processing
+  // UI ships in a follow-up.
+  const fundsQ = useQuery({ queryKey: ['fundTypes', 'all'], queryFn: () => fundTypesApi.list({ page: 1, pageSize: 200, active: true }) });
+  const [fundTypeId, setFundTypeId] = useState<string | undefined>();
+  const { hasPermission } = useAuth();
+  const { data, isLoading } = useQuery({
+    queryKey: ['rpt', 'returnable', fundTypeId],
+    queryFn: () => reportsApi.returnableContributions(fundTypeId),
+  });
+  return (
+    <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
+      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <Select style={{ inlineSize: 320 }} placeholder="All funds (or pick one)"
+          allowClear showSearch optionFilterProp="label"
+          value={fundTypeId} onChange={setFundTypeId}
+          options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} — ${f.nameEnglish}` }))} />
+        <div style={{ flex: 1 }} />
+        {hasPermission('reports.export') && <ExportButton onClick={() => downloadXlsx('/api/v1/reports/returnable-contributions.xlsx', fundTypeId ? { fundTypeId } : {}, `returnable-contributions_${new Date().toISOString().slice(0, 10)}.xlsx`)} />}
+      </div>
+      <Table rowKey={(r) => r.receiptId} size="middle" loading={isLoading} dataSource={data ?? []} pagination={{ pageSize: 25 }}
+        columns={[
+          { title: 'Receipt date', dataIndex: 'receiptDate', key: 'rd', width: 120, render: (v: string) => formatDate(v) },
+          { title: 'Receipt #', dataIndex: 'receiptNumber', key: 'rn', width: 130, render: (v?: string | null) => v ?? '—' },
+          { title: 'Member', dataIndex: 'memberName', key: 'mn', render: (v: string, row) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.itsNumber}</span> · {v}</span> },
+          { title: 'Fund', dataIndex: 'fundTypeName', key: 'f', render: (v: string, row) => `${row.fundTypeCode} — ${v}` },
+          { title: 'Amount', dataIndex: 'amountTotal', key: 'a', align: 'right', width: 130, render: (v: number, row) => <span className="jm-tnum">{money(v, row.currency)}</span> },
+          { title: 'Returned', dataIndex: 'amountReturned', key: 'rt', align: 'right', width: 130, render: (v: number, row) => v ? <span className="jm-tnum" style={{ color: 'var(--jm-gray-700)' }}>{money(v, row.currency)}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+          { title: 'Outstanding', dataIndex: 'amountReturnable', key: 'ob', align: 'right', width: 130, render: (v: number, row) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, row.currency)}</span> },
+          { title: 'Maturity', dataIndex: 'maturityDate', key: 'm', width: 120, render: (v: string | null, row) => v ? <span><span style={{ display: 'block' }}>{formatDate(v)}</span><Tag color={row.isMatured ? 'green' : 'gold'} style={{ margin: 0, fontSize: 11 }}>{row.isMatured ? 'Matured' : 'Not matured'}</Tag></span> : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+          { title: 'Agreement', dataIndex: 'agreementReference', key: 'ag', width: 150, render: (v?: string | null) => v ? <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>{v}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+        ]}
+        locale={{ emptyText: <Empty description="No returnable contributions" /> }}
       />
     </Card>
   );

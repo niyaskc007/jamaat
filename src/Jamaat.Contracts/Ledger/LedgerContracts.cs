@@ -57,3 +57,27 @@ public sealed record ReportChequeWiseRow(
     string ItsNumber, string MemberName,
     string? ChequeNumber, DateOnly? ChequeDate, string? BankAccountName,
     decimal Amount, string Currency, string Status);
+
+/// Dual-balance view of a fund. <see cref="TotalCashReceived"/> is everything that came in
+/// (permanent + returnable). <see cref="OutstandingReturnObligation"/> is the remaining
+/// returnable money still owed to contributors. <see cref="NetFundStrength"/> = total - obligation.
+public sealed record ReportFundBalanceDto(
+    Guid FundTypeId, string FundTypeCode, string FundTypeName, string Currency,
+    decimal TotalCashReceived,
+    decimal PermanentReceived,
+    decimal ReturnableReceived,
+    decimal AlreadyReturned,
+    decimal OutstandingReturnObligation,
+    decimal NetFundStrength,
+    int ReceiptCount);
+
+/// One row per returnable receipt — used by the returnable-inflows / maturity report.
+public sealed record ReportReturnableContributionRow(
+    Guid ReceiptId, string? ReceiptNumber, DateOnly ReceiptDate,
+    string ItsNumber, string MemberName,
+    string FundTypeCode, string FundTypeName,
+    decimal AmountTotal, decimal AmountReturned, decimal AmountReturnable,
+    string Currency,
+    DateOnly? MaturityDate, bool IsMatured,
+    string? AgreementReference,
+    string? NiyyathNote);
