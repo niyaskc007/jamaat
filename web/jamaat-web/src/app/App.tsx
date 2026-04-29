@@ -30,6 +30,7 @@ import { MasterDataPage } from '../features/admin/MasterDataPage';
 import { IntegrationsPage } from '../features/admin/IntegrationsPage';
 import { AuditPage } from '../features/admin/AuditPage';
 import { ErrorLogsPage } from '../features/admin/error-logs/ErrorLogsPage';
+import { NotificationLogPage } from '../features/admin/notifications/NotificationLogPage';
 import { HelpPage } from '../features/help/HelpPage';
 import { MePage } from '../features/me/MePage';
 import { RequireAuth } from '../shared/auth/RequireAuth';
@@ -83,6 +84,7 @@ export function App() {
         <Route path="admin/integrations" element={<Gate anyOf={['admin.integration']}><IntegrationsPage /></Gate>} />
         <Route path="admin/audit" element={<Gate anyOf={['admin.audit']}><AuditPage /></Gate>} />
         <Route path="admin/error-logs" element={<Gate anyOf={['admin.errorlogs']}><ErrorLogsPage /></Gate>} />
+        <Route path="admin/notifications" element={<Gate anyOf={['admin.audit']}><NotificationLogPage /></Gate>} />
         <Route path="help" element={<HelpPage />} />
         <Route path="me" element={<MePage />} />
       </Route>

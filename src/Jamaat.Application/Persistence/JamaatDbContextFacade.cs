@@ -27,6 +27,7 @@ public abstract class JamaatDbContextFacade
     public abstract DbSet<Jamaat.Domain.Entities.NumberingSeries> NumberingSeries { get; }
     public abstract DbSet<ErrorLog> ErrorLogs { get; }
     public abstract DbSet<AuditLog> AuditLogs { get; }
+    public abstract DbSet<NotificationLog> NotificationLogs { get; }
     public abstract DbSet<ReprintLog> ReprintLogs { get; }
     public abstract DbSet<Currency> Currencies { get; }
     public abstract DbSet<ExchangeRate> ExchangeRates { get; }

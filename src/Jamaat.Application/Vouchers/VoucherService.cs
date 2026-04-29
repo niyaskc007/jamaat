@@ -20,6 +20,7 @@ public sealed class VoucherService(
     INumberingService numbering,
     IPostingService posting,
     IFxConverter fx,
+    INotificationSender notifications,
     IServiceProvider services,
     IValidator<CreateVoucherDto> createV) : IVoucherService
 {
@@ -69,6 +70,27 @@ public sealed class VoucherService(
         if (!requiresApproval)
         {
             await ApproveAndPayInternalAsync(v, expenseTypes, ct);
+        }
+        else
+        {
+            // Sitting in PendingApproval - log the queue entry so admins see it. No recipient
+            // because we don't have a per-role distribution list; the dashboard tile surfaces
+            // the count for approvers anyway.
+            await notifications.SendAsync(new NotificationMessage(
+                Kind: NotificationKind.VoucherPendingApproval,
+                Subject: $"[Pending approval] Voucher to {v.PayTo} - {v.Currency} {v.AmountTotal:0.00}",
+                Body: $@"A voucher is awaiting approval.
+
+Pay to       : {v.PayTo}
+Date         : {v.VoucherDate:dd MMM yyyy}
+Amount       : {v.Currency} {v.AmountTotal:0.00}
+Purpose      : {v.Purpose}
+
+Open the dashboard to review and approve.",
+                RecipientEmail: null,
+                RecipientUserId: null,
+                SourceId: v.Id,
+                SourceReference: null), ct);
         }
 
         var fresh = await repo.GetWithLinesAsync(v.Id, ct);

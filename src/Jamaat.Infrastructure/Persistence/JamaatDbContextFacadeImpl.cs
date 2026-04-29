@@ -24,6 +24,7 @@ public sealed class JamaatDbContextFacadeImpl(JamaatDbContext db) : JamaatDbCont
     public override DbSet<Jamaat.Domain.Entities.NumberingSeries> NumberingSeries => db.NumberingSeries;
     public override DbSet<ErrorLog> ErrorLogs => db.ErrorLogs;
     public override DbSet<AuditLog> AuditLogs => db.AuditLogs;
+    public override DbSet<NotificationLog> NotificationLogs => db.NotificationLogs;
     public override DbSet<ReprintLog> ReprintLogs => db.ReprintLogs;
     public override DbSet<Currency> Currencies => db.Currencies;
     public override DbSet<ExchangeRate> ExchangeRates => db.ExchangeRates;

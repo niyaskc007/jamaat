@@ -20,6 +20,7 @@ public sealed class ReceiptService(
     INumberingService numbering,
     IPostingService posting,
     IFxConverter fx,
+    INotificationSender notifications,
     IServiceProvider services,
     IValidator<CreateReceiptDto> createV) : IReceiptService
 {
@@ -253,6 +254,7 @@ public sealed class ReceiptService(
             await repo.AddAsync(receipt, ct);
             await uow.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+            await NotifyReceiptPendingApprovalAsync(receipt, member, ct);
             var draft = await repo.GetWithLinesAsync(receipt.Id, ct);
             return await MapAsync(draft!, ct);
         }
@@ -281,6 +283,10 @@ public sealed class ReceiptService(
         await uow.SaveChangesAsync(ct);
 
         await tx.CommitAsync(ct);
+
+        // Notify the contributor that we've recorded their money. Fire-and-forget - the sender
+        // catches its own failures so SMTP flakiness can never roll back the receipt.
+        await NotifyReceiptConfirmedAsync(receipt, member, ct);
 
         var fresh = await repo.GetWithLinesAsync(receipt.Id, ct);
         return await MapAsync(fresh!, ct);
@@ -373,6 +379,10 @@ public sealed class ReceiptService(
         await posting.PostReceiptAsync(e, ct);
         await uow.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+
+        // Now that approval cleared and the GL is posted, tell the contributor.
+        var member = await db.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == e.MemberId, ct);
+        if (member is not null) await NotifyReceiptConfirmedAsync(e, member, ct);
 
         var fresh = await repo.GetWithLinesAsync(e.Id, ct);
         return await MapAsync(fresh!, ct);
@@ -512,6 +522,10 @@ public sealed class ReceiptService(
         await uow.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
+        // Notify the contributor that their money is on its way back.
+        var member = await db.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == e.MemberId, ct);
+        if (member is not null) await NotifyContributionReturnedAsync(e, member, dto.Amount, voucher.VoucherNumber, ct);
+
         var fresh = await repo.GetWithLinesAsync(e.Id, ct);
         return await MapAsync(fresh!, ct);
     }
@@ -528,6 +542,103 @@ public sealed class ReceiptService(
         await uow.SaveChangesAsync(ct);
         var fresh = await repo.GetWithLinesAsync(e.Id, ct);
         return await MapAsync(fresh!, ct);
+    }
+
+    // ---- Notification helpers --------------------------------------------------------------
+    // Subject lines look up the per-fund TransactionLabel (Contribution / ContributionReturn)
+    // so admin-configurable wording flows through to email subjects + the audit log. The body
+    // is plain text - templating engines and HTML can come later.
+
+    private async Task NotifyReceiptConfirmedAsync(Receipt receipt, Member member, CancellationToken ct)
+    {
+        var subjectPrefix = await ResolveLabelAsync(receipt, TransactionLabelType.Contribution, ct) ?? "Receipt";
+        var subject = $"{subjectPrefix} - {receipt.ReceiptNumber} - {receipt.Currency} {receipt.AmountTotal:0.00}";
+        var body = $@"Dear {member.FullName},
+
+Thank you. We've recorded your contribution.
+
+Receipt #     : {receipt.ReceiptNumber}
+Date          : {receipt.ReceiptDate:dd MMM yyyy}
+Amount        : {receipt.Currency} {receipt.AmountTotal:0.00}
+Payment mode  : {receipt.PaymentMode}
+Type          : {(receipt.IsReturnable ? "Returnable contribution" : "Permanent contribution")}
+
+You can view the full receipt in your member portal.
+
+Jamaat";
+        await notifications.SendAsync(new NotificationMessage(
+            Kind: NotificationKind.ReceiptConfirmed,
+            Subject: subject, Body: body,
+            RecipientEmail: member.Email,
+            RecipientUserId: null,
+            SourceId: receipt.Id,
+            SourceReference: receipt.ReceiptNumber), ct);
+    }
+
+    private async Task NotifyReceiptPendingApprovalAsync(Receipt receipt, Member member, CancellationToken ct)
+    {
+        var subjectPrefix = await ResolveLabelAsync(receipt, TransactionLabelType.Contribution, ct) ?? "Receipt";
+        // No recipient email here - we don't have a "pending-approvals distribution list" yet,
+        // so the row goes to NotificationLog only. The dashboard tile already surfaces the
+        // count, so approvers see the queue without depending on email.
+        var subject = $"[Pending approval] {subjectPrefix} from {member.FullName}";
+        var body = $@"A receipt is awaiting approval.
+
+Member       : {member.FullName} (ITS {member.ItsNumber.Value})
+Date         : {receipt.ReceiptDate:dd MMM yyyy}
+Amount       : {receipt.Currency} {receipt.AmountTotal:0.00}
+Payment mode : {receipt.PaymentMode}
+
+Open the dashboard to review and approve.";
+        await notifications.SendAsync(new NotificationMessage(
+            Kind: NotificationKind.ReceiptPendingApproval,
+            Subject: subject, Body: body,
+            RecipientEmail: null,
+            RecipientUserId: null,
+            SourceId: receipt.Id,
+            SourceReference: null), ct);
+    }
+
+    private async Task NotifyContributionReturnedAsync(Receipt receipt, Member member, decimal amount, string? voucherNumber, CancellationToken ct)
+    {
+        var subjectPrefix = await ResolveLabelAsync(receipt, TransactionLabelType.ContributionReturn, ct) ?? "Contribution return";
+        var subject = $"{subjectPrefix} - {voucherNumber ?? receipt.ReceiptNumber} - {receipt.Currency} {amount:0.00}";
+        var body = $@"Dear {member.FullName},
+
+Your returnable contribution receipt {receipt.ReceiptNumber} has been processed for return.
+
+Voucher #    : {voucherNumber ?? "-"}
+Amount       : {receipt.Currency} {amount:0.00}
+Returned to  : {(receipt.AmountReturned >= receipt.AmountTotal ? "fully" : "partially")} returned ({receipt.Currency} {receipt.AmountReturned:0.00} of {receipt.AmountTotal:0.00})
+
+If you have questions, please reach out to the Jamaat office.
+
+Jamaat";
+        await notifications.SendAsync(new NotificationMessage(
+            Kind: NotificationKind.ContributionReturned,
+            Subject: subject, Body: body,
+            RecipientEmail: member.Email,
+            RecipientUserId: null,
+            SourceId: receipt.Id,
+            SourceReference: voucherNumber ?? receipt.ReceiptNumber), ct);
+    }
+
+    /// <summary>Resolve the TransactionLabel for the given type, scoped to the receipt's
+    /// first-line fund. Per-fund label > system-wide label > null fallback.</summary>
+    private async Task<string?> ResolveLabelAsync(Receipt receipt, TransactionLabelType labelType, CancellationToken ct)
+    {
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        var firstLineFundId = receipt.Lines.OrderBy(l => l.LineNo).FirstOrDefault()?.FundTypeId;
+        if (firstLineFundId is Guid fid)
+        {
+            var perFund = await db.TransactionLabels.AsNoTracking()
+                .Where(t => t.FundTypeId == fid && t.LabelType == labelType && t.IsActive)
+                .Select(t => t.Label).FirstOrDefaultAsync(ct);
+            if (perFund is not null) return perFund;
+        }
+        return await db.TransactionLabels.AsNoTracking()
+            .Where(t => t.FundTypeId == null && t.LabelType == labelType && t.IsActive)
+            .Select(t => t.Label).FirstOrDefaultAsync(ct);
     }
 
     public async Task<Result> LogReprintAsync(Guid id, ReprintReceiptDto dto, CancellationToken ct = default)

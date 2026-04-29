@@ -34,6 +34,7 @@ public class JamaatDbContext : IdentityDbContext<ApplicationUser, ApplicationRol
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<ErrorLog> ErrorLogs => Set<ErrorLog>();
+    public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
     public DbSet<NumberingSeries> NumberingSeries => Set<NumberingSeries>();
     public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
     public DbSet<FinancialPeriod> FinancialPeriods => Set<FinancialPeriod>();

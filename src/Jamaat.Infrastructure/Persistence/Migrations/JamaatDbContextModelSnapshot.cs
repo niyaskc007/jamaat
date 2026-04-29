@@ -2195,6 +2195,68 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.ToTable("MemberOrganisationMembership", "dbo");
                 });
 
+            modelBuilder.Entity("Jamaat.Domain.Entities.NotificationLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("AttemptedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Recipient")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<Guid?>("RecipientUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SourceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SourceReference")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceId")
+                        .HasFilter("[SourceId] IS NOT NULL");
+
+                    b.HasIndex("TenantId", "AttemptedAtUtc");
+
+                    b.HasIndex("TenantId", "Kind", "Status");
+
+                    b.ToTable("NotificationLog", "log");
+                });
+
             modelBuilder.Entity("Jamaat.Domain.Entities.NumberingSeries", b =>
                 {
                     b.Property<Guid>("Id")

@@ -146,6 +146,14 @@ public static class DependencyInjection
             config.GetSection(Application.Receipts.ReceiptDocumentStorageOptions.SectionName));
         services.AddSingleton<Application.Receipts.IReceiptDocumentStorage, Storage.LocalFileSystemReceiptDocumentStorage>();
 
+        // Notifications - one sender that adapts based on config. Default behaviour (Notifications:Enabled=false
+        // or no SMTP host) is log-only: every notification is written to NotificationLog without delivery.
+        // Audit trail is captured from day one; admins flip the switch when SMTP is ready.
+        services.Configure<Notifications.NotificationSenderOptions>(
+            config.GetSection(Notifications.NotificationSenderOptions.SectionName));
+        services.AddScoped<Domain.Abstractions.INotificationSender, Notifications.NotificationSender>();
+        services.AddScoped<Application.Notifications.INotificationQueryService, Application.Notifications.NotificationQueryService>();
+
         // Excel exporter / reader - ClosedXML-backed, stateless, safe as singletons.
         services.AddSingleton<Application.Common.IExcelExporter, Export.ClosedXmlExcelExporter>();
         services.AddSingleton<Application.Common.IExcelReader, Export.ClosedXmlExcelReader>();
