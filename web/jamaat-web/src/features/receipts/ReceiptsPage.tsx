@@ -6,7 +6,7 @@ import {
   PrinterOutlined, StopOutlined, RollbackOutlined, FileTextOutlined,
 } from '@ant-design/icons';
 import { useQuery, keepPreviousData, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -32,7 +32,16 @@ export function ReceiptsPage() {
   const canCreate = hasPermission('receipt.create');
   const { message, modal } = AntdApp.useApp();
 
-  const [query, setQuery] = useState<ReceiptListQuery>({ page: 1, pageSize: 25 });
+  // Honour ?status=N from the URL so the dashboard "Pending approvals" tile can deep-link
+  // straight into the filtered list. Only read once on mount; the user's subsequent filter
+  // edits update local state, not the URL.
+  const [searchParams] = useSearchParams();
+  const initialStatus = (() => {
+    const raw = searchParams.get('status');
+    const n = raw ? Number(raw) : NaN;
+    return n === 1 || n === 2 || n === 3 || n === 4 ? (n as ReceiptStatus) : undefined;
+  })();
+  const [query, setQuery] = useState<ReceiptListQuery>({ page: 1, pageSize: 25, status: initialStatus });
   const [search, setSearch] = useState('');
   const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [importOpen, setImportOpen] = useState(false);

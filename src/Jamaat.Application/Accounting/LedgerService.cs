@@ -506,11 +506,13 @@ public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domai
             .SumAsync(r => (decimal?)r.AmountTotal, ct) ?? 0;
         var members = await db.Members.AsNoTracking().CountAsync(m => m.Status == MemberStatus.Active, ct);
         var pending = await db.Vouchers.AsNoTracking().CountAsync(v => v.Status == VoucherStatus.PendingApproval, ct);
+        var pendingReceipts = await db.Receipts.AsNoTracking().CountAsync(r => r.Status == ReceiptStatus.Draft, ct);
         var syncErrors = await db.ErrorLogs.AsNoTracking().CountAsync(e => e.Status == ErrorStatus.Reported, ct);
 
         return new DashboardStatsDto(
             todayTotal, todayCount, members, mtdTotal,
-            ydayTotal, ydayCount, pending, syncErrors, "INR");
+            ydayTotal, ydayCount, pending, syncErrors, "INR",
+            pendingReceipts);
     }
 
     public async Task<IReadOnlyList<DashboardActivityDto>> RecentActivityAsync(int take, CancellationToken ct = default)

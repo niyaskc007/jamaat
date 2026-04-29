@@ -213,21 +213,44 @@ export function DashboardPage() {
           </Card>
           <Row gutter={[12, 12]} style={{ marginBlockStart: 16 }}>
             <Col xs={12}>
-              <Card size="small"
-                style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)', cursor: hasPermission('voucher.approve') ? 'pointer' : 'default' }}
-                onClick={() => hasPermission('voucher.approve') && navigate('/vouchers?status=2')}
-                title={hasPermission('voucher.approve') ? 'Open vouchers awaiting approval' : 'You do not have voucher.approve'}
-              >
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                  <span style={{ inlineSize: 32, blockSize: 32, borderRadius: 8, background: 'rgba(217, 119, 6, 0.12)', color: '#D97706', display: 'grid', placeItems: 'center' }}>
-                    <CheckCircleOutlined />
-                  </span>
-                  <div>
-                    <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending approvals</div>
-                    <div className="jm-tnum" style={{ fontSize: 22, fontWeight: 600, fontFamily: "'Inter Tight', 'Inter', sans-serif" }}>{stats?.pendingApprovals ?? '-'}</div>
-                  </div>
-                </div>
-              </Card>
+              {/* Combined approvals tile - shows the union of voucher + receipt drafts so an
+                  approver sees the whole queue. Subtitle splits the count by source. Clicks
+                  through to receipts list filtered to Draft when receipt drafts dominate, or
+                  to vouchers when those dominate; ties go to receipts. */}
+              {(() => {
+                const vouchers = stats?.pendingApprovals ?? 0;
+                const receipts = stats?.pendingReceipts ?? 0;
+                const total = vouchers + receipts;
+                const canApproveAny = hasPermission('voucher.approve') || hasPermission('receipt.approve');
+                const target = receipts >= vouchers && hasPermission('receipt.approve')
+                  ? '/receipts?status=1'
+                  : hasPermission('voucher.approve')
+                    ? '/vouchers?status=2'
+                    : null;
+                return (
+                  <Card size="small"
+                    style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)', cursor: target ? 'pointer' : 'default' }}
+                    onClick={() => target && navigate(target)}
+                    title={canApproveAny ? 'Open the queue you can act on' : 'You do not have approve permissions'}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <span style={{ inlineSize: 32, blockSize: 32, borderRadius: 8, background: 'rgba(217, 119, 6, 0.12)', color: '#D97706', display: 'grid', placeItems: 'center' }}>
+                        <CheckCircleOutlined />
+                      </span>
+                      <div>
+                        <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending approvals</div>
+                        <div className="jm-tnum" style={{ fontSize: 22, fontWeight: 600, fontFamily: "'Inter Tight', 'Inter', sans-serif" }}>{total || '-'}</div>
+                        {total > 0 && (
+                          <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 2 }}>
+                            {receipts > 0 && <>{receipts} receipt{receipts !== 1 ? 's' : ''}</>}
+                            {receipts > 0 && vouchers > 0 && ' · '}
+                            {vouchers > 0 && <>{vouchers} voucher{vouchers !== 1 ? 's' : ''}</>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })()}
             </Col>
             <Col xs={12}>
               <Card size="small" style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)', cursor: 'pointer' }} onClick={() => navigate('/admin/error-logs')}>

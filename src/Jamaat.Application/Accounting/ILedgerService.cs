@@ -52,7 +52,10 @@ public interface IDashboardService
 
 public sealed record DashboardStatsDto(
     decimal TodayCollection, int ReceiptsToday, int ActiveMembers, decimal MtdCollection,
-    decimal? YesterdayCollection, int? ReceiptsYesterday, int PendingApprovals, int SyncErrors, string Currency);
+    decimal? YesterdayCollection, int? ReceiptsYesterday, int PendingApprovals, int SyncErrors, string Currency,
+    // Number of Draft receipts waiting for an approver. Distinct from PendingApprovals which
+    // counts vouchers - shown side-by-side on the dashboard so an approver sees both queues.
+    int PendingReceipts = 0);
 
 public sealed record DashboardActivityDto(
     string Kind, string Reference, string Title, decimal? Amount, string Currency,

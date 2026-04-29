@@ -129,6 +129,7 @@ export const dashboardApi = {
     todayCollection: number; receiptsToday: number; activeMembers: number;
     mtdCollection: number; yesterdayCollection: number | null; receiptsYesterday: number | null;
     pendingApprovals: number; syncErrors: number; currency: string;
+    pendingReceipts: number;
   }>('/api/v1/dashboard/stats')).data,
   recentActivity: async (take = 10) =>
     (await api.get<{ kind: string; reference: string; title: string; amount: number | null; currency: string; status: string; atUtc: string }[]>('/api/v1/dashboard/recent-activity', { params: { take } })).data,
