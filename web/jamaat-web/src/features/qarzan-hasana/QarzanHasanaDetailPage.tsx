@@ -67,7 +67,7 @@ export function QarzanHasanaDetailPage() {
     onSuccess: () => { onOk(); setCancelOpen(false); }, onError: onErr,
   });
   const disbMut = useMutation({
-    mutationFn: () => qarzanHasanaApi.disburse(id, disbDate),
+    mutationFn: () => qarzanHasanaApi.disburse(id, { disbursedOn: disbDate }),
     onSuccess: () => { onOk(); setDisbOpen(false); }, onError: onErr,
   });
   const waiveMut = useMutation({

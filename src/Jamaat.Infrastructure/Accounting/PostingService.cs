@@ -34,12 +34,17 @@ public sealed class PostingService(
 
         var defaultIncomeAccountId = await ResolveAccountByCodeAsync("4000", ct); // Donations Income
         // Returnable contributions are NOT income - they're a return obligation (liability).
-        // 3500 'Qarzan Hasana' already exists in seeded chart-of-accounts and is the natural
-        // home for QH returnable money; non-QH returnable funds also land here for now (admin
-        // can split into more granular liability accounts later if needed).
-        Guid? returnableLiabilityAccountId = receipt.IsReturnable
+        // The fund type can specify its own LiabilityAccountId so QH-returnable, scheme-temporary,
+        // and other-returnable contributions stay distinct in the GL. When unset, fall back to
+        // the global 3500 'Qarzan Hasana' liability account so existing data keeps balancing.
+        Guid? returnableFallbackLiabilityId = receipt.IsReturnable
             ? await ResolveAccountByCodeAsync("3500", ct)
             : null;
+        // QH Receivable - the asset account that gets reduced when a QH loan is repaid via a
+        // receipt line carrying QarzanHasanaLoanId. Resolved lazily so non-QH systems aren't
+        // forced to seed this account; PostingService throws a clear error if a QH receipt
+        // lands without the account being configured.
+        Guid? qhReceivableAccountId = null;
 
         var entries = new List<LedgerEntry>();
         int lineNo = 1;
@@ -84,15 +89,29 @@ public sealed class PostingService(
         foreach (var item in creditsList)
         {
             var fund = fundTypes.FirstOrDefault(f => f.Id == item.Line.FundTypeId);
-            // Routing rule introduced in batch 4 of the fund-management uplift:
-            //   1. If the receipt is Returnable → credit to the returnable-liability account.
-            //   2. Else if the fund type has its own CreditAccountId → use it.
-            //   3. Else fall back to the default Donations Income account.
-            // This is the difference between income and a return obligation - without it the
-            // financial reports treat returnable money as donations and overstate income.
-            var creditAccountId = receipt.IsReturnable
-                ? returnableLiabilityAccountId!.Value
-                : (fund?.CreditAccountId ?? defaultIncomeAccountId);
+            // Routing rules (priority order):
+            //   1. QH loan repayment (line carries QarzanHasanaLoanId) -> credit QH Receivable
+            //      to reduce the asset balance from the original disbursement. This is what
+            //      makes outstanding loans visible in the GL rather than just on the aggregate.
+            //   2. Returnable receipt -> credit fund.LiabilityAccountId, fallback 3500. Splits
+            //      different returnable buckets (QH-returnable vs scheme-temporary vs other)
+            //      so reports can separate them, and the contribution-return flow can debit
+            //      the same account 1:1.
+            //   3. Permanent receipt -> credit fund.CreditAccountId or default Donations Income.
+            Guid creditAccountId;
+            if (item.Line.QarzanHasanaLoanId is not null)
+            {
+                qhReceivableAccountId ??= await ResolveAccountByCodeAsync("1500", ct);
+                creditAccountId = qhReceivableAccountId.Value;
+            }
+            else if (receipt.IsReturnable)
+            {
+                creditAccountId = fund?.LiabilityAccountId ?? returnableFallbackLiabilityId!.Value;
+            }
+            else
+            {
+                creditAccountId = fund?.CreditAccountId ?? defaultIncomeAccountId;
+            }
 
             entries.Add(new LedgerEntry(
                 tenantId: tenant.TenantId,
@@ -190,6 +209,126 @@ public sealed class PostingService(
 
         EnsureBalanced(totalDebit, totalCredit);
         db.LedgerEntries.AddRange(entries);
+    }
+
+    public async Task PostContributionReturnAsync(Voucher voucher, Receipt sourceReceipt, CancellationToken ct = default)
+    {
+        var periodId = voucher.FinancialPeriodId
+            ?? throw new InvalidOperationException("Voucher must be assigned to a financial period before posting.");
+        if (!sourceReceipt.IsReturnable)
+            throw new InvalidOperationException("Source receipt is not a returnable contribution; cannot post a return.");
+
+        // Match the credit account the receipt originally hit so the obligation cancels 1:1.
+        // PostReceiptAsync prefers fund.LiabilityAccountId, falling back to 3500 - we mirror
+        // that lookup here. If the fund's LiabilityAccountId has changed since the receipt
+        // posted (admin reconfigured), the books will still balance because we follow the
+        // same rule the original credit used at posting time, not the current config.
+        var firstLine = sourceReceipt.Lines.OrderBy(l => l.LineNo).FirstOrDefault()
+            ?? throw new InvalidOperationException("Source receipt has no lines.");
+        var fund = await db.FundTypes.AsNoTracking().FirstOrDefaultAsync(f => f.Id == firstLine.FundTypeId, ct);
+        var liabilityAccountId = fund?.LiabilityAccountId ?? await ResolveAccountByCodeAsync("3500", ct);
+        var assetAccountId = await ResolveAssetAccountAsync(voucher.BankAccountId, ct);
+
+        var amountBase = voucher.BaseAmountTotal;
+        var sourceRef = voucher.VoucherNumber!;
+        int lineNo = 1;
+
+        // DEBIT liability (reduces the obligation we owe the contributor)
+        db.LedgerEntries.Add(new LedgerEntry(
+            tenantId: tenant.TenantId,
+            postingDate: voucher.VoucherDate,
+            financialPeriodId: periodId,
+            sourceType: LedgerSourceType.Voucher,
+            sourceId: voucher.Id,
+            sourceReference: sourceRef,
+            lineNo: lineNo++,
+            accountId: liabilityAccountId,
+            fundTypeId: null,
+            debit: amountBase,
+            credit: 0,
+            currency: voucher.BaseCurrency,
+            narration: $"Return of contribution receipt {sourceReceipt.ReceiptNumber} to {voucher.PayTo}",
+            reversalOfEntryId: null,
+            at: clock.UtcNow,
+            userId: currentUser.UserId));
+
+        // CREDIT cash/bank (money leaving the Jamaat)
+        db.LedgerEntries.Add(new LedgerEntry(
+            tenantId: tenant.TenantId,
+            postingDate: voucher.VoucherDate,
+            financialPeriodId: periodId,
+            sourceType: LedgerSourceType.Voucher,
+            sourceId: voucher.Id,
+            sourceReference: sourceRef,
+            lineNo: lineNo,
+            accountId: assetAccountId,
+            fundTypeId: null,
+            debit: 0,
+            credit: amountBase,
+            currency: voucher.BaseCurrency,
+            narration: $"Voucher {sourceRef} - return of {sourceReceipt.ReceiptNumber}",
+            reversalOfEntryId: null,
+            at: clock.UtcNow,
+            userId: currentUser.UserId));
+
+        EnsureBalanced(amountBase, amountBase);
+    }
+
+    public async Task PostQhLoanDisbursementAsync(Voucher voucher, QarzanHasanaLoan loan, CancellationToken ct = default)
+    {
+        var periodId = voucher.FinancialPeriodId
+            ?? throw new InvalidOperationException("Voucher must be assigned to a financial period before posting.");
+        if (voucher.SourceQarzanHasanaLoanId != loan.Id)
+            throw new InvalidOperationException("Voucher does not reference the supplied QH loan.");
+
+        // QH Receivable is the asset that grows when the Jamaat advances money to a borrower.
+        // Repayments (which arrive as Receipt lines tagged with QarzanHasanaLoanId) reduce
+        // this same account, so the GL balance always equals total outstanding across all loans.
+        var qhReceivableId = await ResolveAccountByCodeAsync("1500", ct);
+        var assetAccountId = await ResolveAssetAccountAsync(voucher.BankAccountId, ct);
+        var amountBase = voucher.BaseAmountTotal;
+        var sourceRef = voucher.VoucherNumber!;
+        int lineNo = 1;
+
+        // DEBIT receivable (asset increases - the borrower now owes us this amount)
+        db.LedgerEntries.Add(new LedgerEntry(
+            tenantId: tenant.TenantId,
+            postingDate: voucher.VoucherDate,
+            financialPeriodId: periodId,
+            sourceType: LedgerSourceType.Voucher,
+            sourceId: voucher.Id,
+            sourceReference: sourceRef,
+            lineNo: lineNo++,
+            accountId: qhReceivableId,
+            fundTypeId: null,
+            debit: amountBase,
+            credit: 0,
+            currency: voucher.BaseCurrency,
+            narration: $"QH loan {loan.Code} disbursed to {voucher.PayTo}",
+            reversalOfEntryId: null,
+            at: clock.UtcNow,
+            userId: currentUser.UserId));
+
+        // CREDIT cash/bank (asset decreases - money leaves the Jamaat)
+        db.LedgerEntries.Add(new LedgerEntry(
+            tenantId: tenant.TenantId,
+            postingDate: voucher.VoucherDate,
+            financialPeriodId: periodId,
+            sourceType: LedgerSourceType.Voucher,
+            sourceId: voucher.Id,
+            sourceReference: sourceRef,
+            lineNo: lineNo,
+            accountId: assetAccountId,
+            fundTypeId: null,
+            debit: 0,
+            credit: amountBase,
+            currency: voucher.BaseCurrency,
+            narration: $"Voucher {sourceRef} - QH disbursement to {loan.Code}",
+            reversalOfEntryId: null,
+            at: clock.UtcNow,
+            userId: currentUser.UserId));
+
+        EnsureBalanced(amountBase, amountBase);
     }
 
     public async Task PostReversalAsync(LedgerSourceType sourceType, Guid sourceId, string reason, CancellationToken ct = default)

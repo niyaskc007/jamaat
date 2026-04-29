@@ -259,6 +259,178 @@ public sealed class ReportsService(Persistence.JamaatDbContextFacade db) : IRepo
         }).ToList();
     }
 
+    public async Task<IReadOnlyList<ReportOutstandingLoanRow>> OutstandingLoansAsync(ReportOutstandingLoansQuery q, CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var query = db.QarzanHasanaLoans.AsNoTracking()
+            .Include(l => l.Installments)
+            .AsQueryable();
+        // Restrict to loans that have actually been disbursed (so AmountOutstanding makes sense)
+        // and that still owe money. Cancelled/Closed loans are excluded by default; the Status
+        // filter lets the user opt back in for audits.
+        if (q.Status is not null)
+            query = query.Where(l => l.Status == q.Status.Value);
+        else
+            query = query.Where(l => l.Status != QarzanHasanaStatus.Completed && l.Status != QarzanHasanaStatus.Cancelled && l.Status != QarzanHasanaStatus.Rejected);
+        if (q.MemberId is not null) query = query.Where(l => l.MemberId == q.MemberId);
+        var loans = await query.ToListAsync(ct);
+
+        // Lookup members in one query rather than N+1.
+        var memberIds = loans.Select(l => l.MemberId).Distinct().ToList();
+        var members = memberIds.Count == 0
+            ? new Dictionary<Guid, (string ItsNumber, string FullName)>()
+            : await db.Members.AsNoTracking().Where(m => memberIds.Contains(m.Id))
+                .ToDictionaryAsync(m => m.Id, m => ValueTuple.Create(m.ItsNumber.Value, m.FullName), ct);
+
+        var rows = loans
+            .Where(l => l.AmountOutstanding > 0)
+            .Select(l =>
+            {
+                var lastPaid = l.Installments
+                    .Where(i => i.LastPaymentDate.HasValue)
+                    .OrderByDescending(i => i.LastPaymentDate)
+                    .FirstOrDefault()?.LastPaymentDate;
+                var overdue = l.Installments.Count(i => i.Status == QarzanHasanaInstallmentStatus.Overdue
+                    || (i.Status == QarzanHasanaInstallmentStatus.Pending && i.DueDate < today));
+                int? age = l.DisbursedOn is DateOnly d ? today.DayNumber - d.DayNumber : null;
+                var (its, name) = members.TryGetValue(l.MemberId, out var m) ? m : ("-", "-");
+                return new ReportOutstandingLoanRow(
+                    l.Id, l.Code,
+                    l.MemberId, its, name,
+                    l.AmountDisbursed, l.AmountRepaid, l.AmountOutstanding, l.ProgressPercent,
+                    l.Currency,
+                    l.DisbursedOn, lastPaid, age,
+                    l.Installments.Count, overdue,
+                    l.Status);
+            })
+            .Where(r => q.OverdueOnly != true || r.OverdueInstallments > 0)
+            .OrderByDescending(r => r.OverdueInstallments)
+            .ThenByDescending(r => r.AmountOutstanding)
+            .ToList();
+        return rows;
+    }
+
+    public async Task<IReadOnlyList<ReportPendingCommitmentRow>> PendingCommitmentsAsync(ReportPendingCommitmentsQuery q, CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var query = db.Commitments.AsNoTracking()
+            .Include(c => c.Installments)
+            .AsQueryable();
+        // Default: active or paused commitments only - completed/cancelled/draft don't have
+        // pending money to chase. Override with explicit Status filter for audit views.
+        if (q.Status is not null)
+            query = query.Where(c => c.Status == q.Status.Value);
+        else
+            query = query.Where(c => c.Status == CommitmentStatus.Active || c.Status == CommitmentStatus.Paused);
+        if (q.MemberId is not null) query = query.Where(c => c.MemberId == q.MemberId);
+        if (q.FamilyId is not null) query = query.Where(c => c.FamilyId == q.FamilyId);
+        if (q.FundTypeId is not null) query = query.Where(c => c.FundTypeId == q.FundTypeId);
+        var commitments = await query.ToListAsync(ct);
+
+        var memberIds = commitments.Where(c => c.MemberId.HasValue).Select(c => c.MemberId!.Value).Distinct().ToList();
+        var members = memberIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.Members.AsNoTracking().Where(m => memberIds.Contains(m.Id))
+                .ToDictionaryAsync(m => m.Id, m => m.ItsNumber.Value, ct);
+        var familyIds = commitments.Where(c => c.FamilyId.HasValue).Select(c => c.FamilyId!.Value).Distinct().ToList();
+        var families = familyIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.Families.AsNoTracking().Where(f => familyIds.Contains(f.Id))
+                .ToDictionaryAsync(f => f.Id, f => f.Code, ct);
+        var fundIds = commitments.Select(c => c.FundTypeId).Distinct().ToList();
+        var funds = fundIds.Count == 0
+            ? new Dictionary<Guid, (string Code, string Name)>()
+            : await db.Funds.AsNoTracking().Where(f => fundIds.Contains(f.Id))
+                .ToDictionaryAsync(f => f.Id, f => ValueTuple.Create(f.Code, f.NameEnglish), ct);
+
+        var rows = commitments
+            .Where(c => c.RemainingAmount > 0)
+            .Select(c =>
+            {
+                var paidCount = c.Installments.Count(i => i.Status == InstallmentStatus.Paid || i.Status == InstallmentStatus.Waived);
+                var overdueCount = c.Installments.Count(i => i.Status == InstallmentStatus.Overdue
+                    || (i.Status == InstallmentStatus.Pending && i.DueDate < today));
+                var nextDue = c.Installments
+                    .Where(i => i.Status != InstallmentStatus.Paid && i.Status != InstallmentStatus.Waived)
+                    .OrderBy(i => i.DueDate)
+                    .Select(i => (DateOnly?)i.DueDate)
+                    .FirstOrDefault();
+                var (fundCode, fundName) = funds.TryGetValue(c.FundTypeId, out var f) ? f : (c.FundNameSnapshot, c.FundNameSnapshot);
+                var memberIts = c.MemberId.HasValue && members.TryGetValue(c.MemberId.Value, out var its) ? its : null;
+                var familyCode = c.FamilyId.HasValue && families.TryGetValue(c.FamilyId.Value, out var fc) ? fc : null;
+                return new ReportPendingCommitmentRow(
+                    c.Id, c.Code, c.PartyType,
+                    c.MemberId, memberIts, c.FamilyId, familyCode,
+                    c.PartyNameSnapshot,
+                    c.FundTypeId, fundCode, fundName,
+                    c.Currency,
+                    c.TotalAmount, c.PaidAmount, c.RemainingAmount, c.ProgressPercent,
+                    c.Installments.Count, paidCount, overdueCount,
+                    nextDue,
+                    c.Status);
+            })
+            .Where(r => q.OverdueOnly != true || r.OverdueInstallments > 0)
+            .OrderByDescending(r => r.OverdueInstallments)
+            .ThenBy(r => r.NextDueDate ?? DateOnly.MaxValue)
+            .ToList();
+        return rows;
+    }
+
+    public async Task<IReadOnlyList<ReportOverdueReturnRow>> OverdueReturnsAsync(ReportOverdueReturnsQuery q, CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        // Returnable receipts past their maturity date that still have outstanding balance.
+        // The matured-but-not-returned cohort is the "exit door is open but money hasn't gone
+        // out yet" set the cashier should be processing.
+        var query = db.Receipts.AsNoTracking()
+            .Where(r => r.Status == ReceiptStatus.Confirmed
+                && r.Intention == ContributionIntention.Returnable
+                && r.MaturityDate.HasValue
+                && r.MaturityDate.Value <= today
+                && r.AmountReturned < r.AmountTotal);
+        if (q.MemberId is not null) query = query.Where(r => r.MemberId == q.MemberId);
+        var receipts = await query.OrderBy(r => r.MaturityDate).ToListAsync(ct);
+        if (receipts.Count == 0) return Array.Empty<ReportOverdueReturnRow>();
+
+        // For per-line fund attribution we'd need to expand lines, but the report shows ONE
+        // row per receipt with the fund of the FIRST line (most returnable receipts are
+        // single-line). Multi-line returnables are rare; we accept the simplification.
+        var receiptIds = receipts.Select(r => r.Id).ToList();
+        var firstLinesRaw = await db.Receipts.AsNoTracking()
+            .Where(r => receiptIds.Contains(r.Id))
+            .SelectMany(r => r.Lines.OrderBy(l => l.LineNo).Take(1).Select(l => new { ReceiptId = r.Id, l.FundTypeId }))
+            .ToListAsync(ct);
+        var firstLines = firstLinesRaw.ToDictionary(x => x.ReceiptId, x => x.FundTypeId);
+
+        var fundIds = firstLines.Values.Distinct().ToList();
+        var funds = fundIds.Count == 0
+            ? new Dictionary<Guid, (string Code, string Name)>()
+            : await db.Funds.AsNoTracking().Where(f => fundIds.Contains(f.Id))
+                .ToDictionaryAsync(f => f.Id, f => ValueTuple.Create(f.Code, f.NameEnglish), ct);
+
+        var rows = receipts
+            .Where(r => firstLines.ContainsKey(r.Id))
+            .Where(r => q.FundTypeId is null || firstLines[r.Id] == q.FundTypeId)
+            .Select(r =>
+            {
+                var fundId = firstLines[r.Id];
+                var (fundCode, fundName) = funds.TryGetValue(fundId, out var f) ? f : ("-", "-");
+                var daysOverdue = today.DayNumber - r.MaturityDate!.Value.DayNumber;
+                return new ReportOverdueReturnRow(
+                    r.Id, r.ReceiptNumber, r.ReceiptDate,
+                    r.MemberId, r.ItsNumberSnapshot, r.MemberNameSnapshot,
+                    fundId, fundCode, fundName,
+                    r.AmountTotal, r.AmountReturned, r.AmountTotal - r.AmountReturned,
+                    r.Currency,
+                    r.MaturityDate.Value, daysOverdue,
+                    r.AgreementReference, r.NiyyathNote);
+            })
+            .Where(r => q.MinDaysOverdue is null || r.DaysOverdue >= q.MinDaysOverdue.Value)
+            .OrderByDescending(r => r.DaysOverdue)
+            .ToList();
+        return rows;
+    }
+
     public async Task<IReadOnlyList<ReportChequeWiseRow>> ChequeWiseAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
     {
         var fromDate = from;

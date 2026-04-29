@@ -62,7 +62,18 @@ public sealed record ApproveL1Dto(decimal AmountApproved, int InstalmentsApprove
 public sealed record ApproveL2Dto(string? Comments);
 public sealed record RejectQhDto(string Reason);
 public sealed record CancelQhDto(string Reason);
-public sealed record DisburseQhDto(Guid? VoucherId, DateOnly DisbursedOn);
+/// Disbursement input. When <see cref="BankAccountId"/> is provided the service issues a
+/// QH-disbursement voucher inline (payment method defaults to the bank account's natural
+/// mode) and posts the GL: Dr QH Receivable / Cr Bank. When <see cref="VoucherId"/> is
+/// provided instead, the loan links to a pre-existing voucher (legacy flow, no posting).
+public sealed record DisburseQhDto(
+    DateOnly DisbursedOn,
+    Guid? VoucherId = null,
+    Guid? BankAccountId = null,
+    PaymentMode? PaymentMode = null,
+    string? ChequeNumber = null,
+    DateOnly? ChequeDate = null,
+    string? Remarks = null);
 public sealed record WaiveQhInstallmentDto(Guid InstallmentId, string Reason);
 
 public sealed record QarzanHasanaListQuery(

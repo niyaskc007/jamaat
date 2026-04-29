@@ -1,4 +1,5 @@
 using FluentValidation;
+using Jamaat.Application.Accounting;
 using Jamaat.Application.Common;
 using Jamaat.Application.Persistence;
 using Jamaat.Contracts.QarzanHasana;
@@ -28,6 +29,7 @@ public interface IQarzanHasanaService
 public sealed class QarzanHasanaService(
     JamaatDbContextFacade db, IUnitOfWork uow, ITenantContext tenant,
     ICurrentUser currentUser, IClock clock,
+    IPostingService posting, IFxConverter fx, INumberingService numbering,
     IValidator<CreateQarzanHasanaDto> createV,
     IValidator<UpdateQarzanHasanaDraftDto> updateV,
     IValidator<ApproveL1Dto> approveL1V) : IQarzanHasanaService
@@ -181,9 +183,61 @@ public sealed class QarzanHasanaService(
     {
         var loan = await db.QarzanHasanaLoans.Include(x => x.Installments).FirstOrDefaultAsync(x => x.Id == id, ct);
         if (loan is null) return Error.NotFound("qh.not_found", "Loan not found.");
-        loan.MarkDisbursed(dto.VoucherId, dto.DisbursedOn);
-        db.QarzanHasanaLoans.Update(loan);
-        await uow.SaveChangesAsync(ct);
+
+        // Two flows:
+        //   (a) BankAccountId provided -> create the disbursement voucher inline AND post the GL
+        //       (Dr QH Receivable / Cr Bank). This is the correct flow that makes outstanding
+        //       loans visible on the balance sheet.
+        //   (b) Pre-existing VoucherId provided -> legacy "link only", no GL changes here. The
+        //       voucher was created via the regular Voucher flow and posted as an expense; the
+        //       admin should clean up the GL manually if they care about the asset reflection.
+        Guid? voucherId = dto.VoucherId;
+        if (dto.BankAccountId is Guid bankId)
+        {
+            var member = await db.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == loan.MemberId, ct);
+            if (member is null) return Error.NotFound("member.not_found", "Borrower record not found.");
+
+            var period = await db.FinancialPeriods.FirstOrDefaultAsync(
+                p => p.Status == PeriodStatus.Open && p.StartDate <= dto.DisbursedOn && p.EndDate >= dto.DisbursedOn, ct);
+            if (period is null) return Error.Business("period.not_open", "No open financial period covers the disbursement date.");
+
+            var disbursementAmount = loan.AmountApproved > 0 ? loan.AmountApproved : loan.AmountRequested;
+
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            var voucher = Voucher.CreateQhLoanDisbursement(
+                id: Guid.NewGuid(),
+                tenantId: tenant.TenantId,
+                sourceQarzanHasanaLoanId: loan.Id,
+                voucherDate: dto.DisbursedOn,
+                payTo: member.FullName,
+                currency: loan.Currency,
+                amount: disbursementAmount);
+            voucher.SetHeader(member.FullName, member.ItsNumber.Value, $"QH loan disbursement - {loan.Code}");
+            voucher.SetPayment(dto.PaymentMode ?? PaymentMode.Cash, bankId, dto.ChequeNumber, dto.ChequeDate, drawnOnBank: null, paymentDate: dto.DisbursedOn);
+            if (!string.IsNullOrWhiteSpace(dto.Remarks)) voucher.SetRemarks(dto.Remarks);
+
+            var conversion = await fx.ConvertToBaseAsync(disbursementAmount, loan.Currency, dto.DisbursedOn, ct);
+            voucher.ApplyFxConversion(conversion.BaseCurrency, conversion.Rate, conversion.BaseAmount);
+            voucher.Submit(requiresApproval: false);
+
+            var (seriesId, voucherNumber) = await numbering.NextAsync(NumberingScope.Voucher, null, dto.DisbursedOn.Year, ct);
+            voucher.MarkPaid(voucherNumber, period.Id, seriesId, currentUser.UserId ?? Guid.Empty, currentUser.UserName ?? "system", clock.UtcNow);
+            db.Vouchers.Add(voucher);
+
+            await posting.PostQhLoanDisbursementAsync(voucher, loan, ct);
+
+            voucherId = voucher.Id;
+            loan.MarkDisbursed(voucherId, dto.DisbursedOn);
+            db.QarzanHasanaLoans.Update(loan);
+            await uow.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+        else
+        {
+            loan.MarkDisbursed(voucherId, dto.DisbursedOn);
+            db.QarzanHasanaLoans.Update(loan);
+            await uow.SaveChangesAsync(ct);
+        }
         return await LoadAsync(id, ct);
     }
 

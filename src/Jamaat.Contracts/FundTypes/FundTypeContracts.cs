@@ -26,6 +26,8 @@ public sealed record FundTypeDto(
     bool IsReturnable, bool RequiresAgreement, bool RequiresMaturityTracking, bool RequiresNiyyath,
     // Batch-6: function-based funds tied to a specific Event.
     Guid? EventId, string? EventName,
+    // Batch-7: per-fund liability account for routing returnable contributions in the GL.
+    Guid? LiabilityAccountId, string? LiabilityAccountName,
     DateTimeOffset CreatedAtUtc);
 
 public sealed record CreateFundTypeDto(
@@ -48,7 +50,8 @@ public sealed record CreateFundTypeDto(
     bool RequiresAgreement = false,
     bool RequiresMaturityTracking = false,
     bool RequiresNiyyath = false,
-    Guid? EventId = null);
+    Guid? EventId = null,
+    Guid? LiabilityAccountId = null);
 
 public sealed record UpdateFundTypeDto(
     string NameEnglish,
@@ -69,7 +72,8 @@ public sealed record UpdateFundTypeDto(
     bool RequiresAgreement = false,
     bool RequiresMaturityTracking = false,
     bool RequiresNiyyath = false,
-    Guid? EventId = null);
+    Guid? EventId = null,
+    Guid? LiabilityAccountId = null);
 
 public sealed record FundTypeListQuery(
     int Page = 1, int PageSize = 25, string? SortBy = null, string? SortDir = null,

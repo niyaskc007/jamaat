@@ -189,6 +189,7 @@ public static class DatabaseSeeder
                 "member.view", "family.view", "commitment.view",
                 "enrollment.view",
                 "receipt.view", "receipt.create", "receipt.confirm", "receipt.reprint", "receipt.cancel", "receipt.reverse",
+                "receipt.return", "receipt.return.early",
                 "voucher.view", "voucher.create", "voucher.approve", "voucher.cancel", "voucher.reverse",
                 "accounting.view", "accounting.journal", "period.open", "period.close",
                 "reports.view", "reports.export",
@@ -450,13 +451,20 @@ Accepted on {{today}}.
             ("1000", "Cash & Bank", AccountType.Asset, true),
             ("1100", "Cash in Hand", AccountType.Asset, false),
             ("1200", "Bank Accounts", AccountType.Asset, false),
+            // Outstanding QH loans live here as an asset - debited on disbursement, credited
+            // on repayment. Lets the balance sheet show how much the Jamaat is owed by borrowers.
+            ("1500", "Qarzan Hasana Loans Receivable", AccountType.Asset, false),
             ("2000", "Liabilities", AccountType.Liability, true),
             ("3000", "Funds", AccountType.Fund, true),
             ("3100", "General Fund", AccountType.Fund, false),
             ("3200", "Niyaz Fund", AccountType.Fund, false),
             ("3300", "Darees Fund", AccountType.Fund, false),
             ("3400", "Madrasa Fund", AccountType.Fund, false),
-            ("3500", "Qarzan Hasana", AccountType.Liability, false),
+            // Default landing spot for returnable contributions when a fund type doesn't
+            // override via FundType.LiabilityAccountId. Kept under "Qarzan Hasana" for the
+            // common QH-returnable case; admins can split into per-bucket liability accounts
+            // (e.g. 3510 "Other returnable contributions") and wire fund types to them.
+            ("3500", "Qarzan Hasana - Returnable Contributions", AccountType.Liability, false),
             ("4000", "Donations Income", AccountType.Income, false),
             ("5000", "Expenses", AccountType.Expense, true),
             ("5100", "Event Expenses", AccountType.Expense, false),
@@ -632,6 +640,8 @@ Accepted on {{today}}.
         "event.view", "event.manage", "event.scan",
         // Receipts
         "receipt.view", "receipt.create", "receipt.confirm", "receipt.reprint", "receipt.cancel", "receipt.reverse",
+        // Process return-to-contributor on a returnable receipt; .early permits before maturity.
+        "receipt.return", "receipt.return.early",
         // Vouchers
         "voucher.view", "voucher.create", "voucher.approve", "voucher.cancel", "voucher.reverse",
         // Accounting

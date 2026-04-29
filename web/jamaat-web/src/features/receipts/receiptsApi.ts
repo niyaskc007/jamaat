@@ -87,12 +87,25 @@ export type CreateReceipt = {
 
 import { openAuthenticatedPdf } from '../../shared/api/pdf';
 
+export type ReturnContribution = {
+  receiptId: string;
+  amount: number;
+  returnDate: string; // yyyy-MM-dd
+  paymentMode: PaymentMode;
+  bankAccountId?: string | null;
+  chequeNumber?: string;
+  chequeDate?: string; // yyyy-MM-dd
+  reason?: string;
+};
+
 export const receiptsApi = {
   list: async (q: ReceiptListQuery) => (await api.get<PagedResult<ReceiptListItem>>('/api/v1/receipts', { params: q })).data,
   get: async (id: string) => (await api.get<Receipt>(`/api/v1/receipts/${id}`)).data,
   create: async (input: CreateReceipt) => (await api.post<Receipt>('/api/v1/receipts', input)).data,
   cancel: async (id: string, reason: string) => (await api.post<Receipt>(`/api/v1/receipts/${id}/cancel`, { reason })).data,
   reverse: async (id: string, reason: string) => (await api.post<Receipt>(`/api/v1/receipts/${id}/reverse`, { reason })).data,
+  returnContribution: async (id: string, input: ReturnContribution) =>
+    (await api.post<Receipt>(`/api/v1/receipts/${id}/return-contribution`, input)).data,
   /** Opens the PDF in a new tab using the blob+auth trick (native window.open would drop the Authorization header). */
   openPdf: (id: string, reprint = false) =>
     openAuthenticatedPdf(`/api/v1/receipts/${id}/pdf${reprint ? '?reprint=true' : ''}`, `receipt-${id}.pdf`),

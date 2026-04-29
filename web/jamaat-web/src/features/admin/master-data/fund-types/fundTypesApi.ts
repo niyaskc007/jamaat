@@ -33,6 +33,8 @@ export type FundType = {
   allowedPaymentModes: number;
   creditAccountId?: string | null;
   creditAccountName?: string | null;
+  liabilityAccountId?: string | null;
+  liabilityAccountName?: string | null;
   defaultTemplateId?: string | null;
   rulesJson?: string | null;
   // New fund-management uplift fields:
@@ -69,6 +71,7 @@ export type CreateFundType = {
   requiresPeriodReference: boolean;
   allowedPaymentModes: number;
   creditAccountId?: string | null;
+  liabilityAccountId?: string | null;
   rulesJson?: string;
   category?: FundCategory;
   fundCategoryId?: string;

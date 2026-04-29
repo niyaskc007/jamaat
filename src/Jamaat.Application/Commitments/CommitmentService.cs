@@ -178,6 +178,9 @@ public sealed class CommitmentService(
 
         var fund = await db.FundTypes.AsNoTracking().FirstOrDefaultAsync(f => f.Id == dto.FundTypeId, ct);
         if (fund is null) return Error.NotFound("fund_type.not_found", "Fund type not found.");
+        if (!fund.IsActive)
+            return Error.Business("fund_type.inactive",
+                $"Fund type {fund.Code} is inactive and cannot accept new commitments. Reactivate it from master data first.");
         if (fund.Category == Domain.Enums.FundCategory.Loan)
             return Error.Business("commitment.loan_fund", "Pledges cannot be made against loan funds. Use Qarzan Hasana for loans.");
 

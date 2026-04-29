@@ -143,8 +143,16 @@ public sealed class ReceiptService(
         var lineFundIds = dto.Lines.Select(l => l.FundTypeId).Distinct().ToList();
         var lineFunds = await db.FundTypes.AsNoTracking()
             .Where(f => lineFundIds.Contains(f.Id))
-            .Select(f => new { f.Id, f.Code, f.NameEnglish, f.IsReturnable, f.RequiresAgreement, f.RequiresMaturityTracking, f.RequiresNiyyath })
+            .Select(f => new { f.Id, f.Code, f.NameEnglish, f.IsActive, f.IsReturnable, f.RequiresAgreement, f.RequiresMaturityTracking, f.RequiresNiyyath })
             .ToListAsync(ct);
+
+        // Block inactive fund types up-front. Inactive funds may be temporarily disabled
+        // (audit, year-end close, deprecated) and must not accept new transactions per the
+        // fund-management spec; the admin can reactivate from master data if needed.
+        var inactiveCodes = lineFunds.Where(f => !f.IsActive).Select(f => f.Code).ToList();
+        if (inactiveCodes.Count > 0)
+            return Error.Business("fund_type.inactive",
+                $"Fund type(s) [{string.Join(", ", inactiveCodes)}] are inactive and cannot accept new receipts. Reactivate the fund or pick a different one.");
 
         if (dto.Intention == ContributionIntention.Returnable)
         {
@@ -309,6 +317,75 @@ public sealed class ReceiptService(
         await posting.PostReversalAsync(LedgerSourceType.Receipt, e.Id, dto.Reason, ct);
         e.MarkReversed(dto.Reason, clock.UtcNow);
         repo.Update(e);
+        await uow.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        var fresh = await repo.GetWithLinesAsync(e.Id, ct);
+        return await MapAsync(fresh!, ct);
+    }
+
+    public async Task<Result<ReceiptDto>> ReturnContributionAsync(Guid receiptId, ReturnContributionDto dto, bool maturityOverride, CancellationToken ct = default)
+    {
+        var e = await repo.GetWithLinesAsync(receiptId, ct);
+        if (e is null) return Error.NotFound("receipt.not_found", "Receipt not found.");
+
+        // Pre-flight checks - all of these are also enforced server-side at the GL level (the
+        // posting will throw if accounts don't balance), but we surface friendly errors first
+        // so the cashier sees a useful message rather than a 500.
+        if (e.Status != ReceiptStatus.Confirmed)
+            return Error.Business("receipt.not_confirmed", "Only confirmed receipts can have a return processed against them.");
+        if (!e.IsReturnable)
+            return Error.Business("receipt.not_returnable", "This receipt is a permanent contribution; it cannot be returned. Use Reverse if it was recorded in error.");
+        if (dto.Amount <= 0)
+            return Error.Validation("return.amount_invalid", "Return amount must be positive.");
+        if (dto.Amount > e.AmountReturnable)
+            return Error.Business("return.amount_exceeds",
+                $"Return amount {dto.Amount:0.00} exceeds remaining returnable balance {e.AmountReturnable:0.00}.");
+        var today = clock.Today;
+        if (!e.IsMatured(today) && !maturityOverride)
+            return Error.Business("return.not_matured",
+                $"Receipt is not yet matured (matures on {e.MaturityDate:yyyy-MM-dd}). An admin with maturity-override permission must process the return early, or wait until maturity.");
+        if (dto.PaymentMode == PaymentMode.Cash && dto.BankAccountId is not null)
+            return Error.Validation("return.cash_no_bank", "Cash payments must not specify a bank account.");
+        if (dto.PaymentMode != PaymentMode.Cash && dto.BankAccountId is null)
+            return Error.Validation("return.bank_required", "A bank account is required for non-cash returns.");
+
+        var period = await ResolvePeriodAsync(dto.ReturnDate, ct);
+        if (period is null)
+            return Error.Business("period.not_open", "No open financial period covers the return date.");
+
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        // Build the voucher document (no lines - this is a contribution-return, not an expense).
+        var voucher = Voucher.CreateContributionReturn(
+            id: Guid.NewGuid(),
+            tenantId: tenant.TenantId,
+            sourceReceiptId: e.Id,
+            voucherDate: dto.ReturnDate,
+            payTo: e.MemberNameSnapshot,
+            currency: e.Currency,
+            amount: dto.Amount);
+        voucher.SetHeader(e.MemberNameSnapshot, e.ItsNumberSnapshot, $"Return of contribution receipt {e.ReceiptNumber}");
+        voucher.SetPayment(dto.PaymentMode, dto.BankAccountId, dto.ChequeNumber, dto.ChequeDate, drawnOnBank: null, paymentDate: dto.ReturnDate);
+        if (!string.IsNullOrWhiteSpace(dto.Reason)) voucher.SetRemarks(dto.Reason);
+
+        var conversion = await fx.ConvertToBaseAsync(voucher.AmountTotal, voucher.Currency, voucher.VoucherDate, ct);
+        voucher.ApplyFxConversion(conversion.BaseCurrency, conversion.Rate, conversion.BaseAmount);
+        voucher.Submit(requiresApproval: false);
+
+        // Allocate a voucher number + financial period, then post the GL.
+        var (seriesId, voucherNumber) = await numbering.NextAsync(NumberingScope.Voucher, null, dto.ReturnDate.Year, ct);
+        voucher.MarkPaid(voucherNumber, period.Id, seriesId, currentUser.UserId ?? Guid.Empty, currentUser.UserName ?? "system", clock.UtcNow);
+        db.Vouchers.Add(voucher);
+
+        await posting.PostContributionReturnAsync(voucher, e, ct);
+
+        // Receipt's running total moves up by the amount we just returned. This is the field
+        // the report and PDF read to show "returned to date" + "outstanding".
+        e.RecordReturn(dto.Amount);
+        repo.Update(e);
+
         await uow.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 

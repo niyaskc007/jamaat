@@ -278,6 +278,131 @@ public sealed class ReportsController(IReportsService svc, IExcelExporter excel)
             $"returnable-contributions_{(fundTypeId is Guid f ? f.ToString("N") + "_" : string.Empty)}{DateTime.UtcNow:yyyyMMdd}.xlsx");
     }
 
+    // --- Outstanding QH loan balances --------------------------------------
+
+    [HttpGet("outstanding-loans")]
+    [Authorize(Policy = "reports.view")]
+    public async Task<IActionResult> OutstandingLoans([FromQuery] ReportOutstandingLoansQuery q, CancellationToken ct)
+        => Ok(await svc.OutstandingLoansAsync(q, ct));
+
+    [HttpGet("outstanding-loans.xlsx")]
+    [Authorize(Policy = "reports.export")]
+    public async Task<IActionResult> OutstandingLoansXlsx([FromQuery] ReportOutstandingLoansQuery q, CancellationToken ct)
+    {
+        var rows = await svc.OutstandingLoansAsync(q, ct);
+        var sheet = new ExcelSheet(
+            "Outstanding loans",
+            new[]
+            {
+                new ExcelColumn("Loan #"),
+                new ExcelColumn("ITS"),
+                new ExcelColumn("Member"),
+                new ExcelColumn("Disbursed", ExcelColumnType.Currency),
+                new ExcelColumn("Repaid", ExcelColumnType.Currency),
+                new ExcelColumn("Outstanding", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+                new ExcelColumn("Progress %", ExcelColumnType.Number, "0.0"),
+                new ExcelColumn("Disbursed on", ExcelColumnType.Date),
+                new ExcelColumn("Last payment", ExcelColumnType.Date),
+                new ExcelColumn("Age (days)", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Instalments", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Overdue", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Status"),
+            },
+            rows.Select(r => (IReadOnlyList<object?>)new object?[]
+            {
+                r.Code, r.MemberItsNumber, r.MemberName,
+                r.AmountDisbursed, r.AmountRepaid, r.AmountOutstanding, r.Currency, r.ProgressPercent,
+                r.DisbursedOn, r.LastPaymentDate, r.AgeDays,
+                r.InstallmentCount, r.OverdueInstallments, r.Status.ToString(),
+            }).ToList());
+        return Xlsx(excel.Build(new[] { sheet }), $"outstanding-loans_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
+
+    // --- Pending commitments ----------------------------------------------
+
+    [HttpGet("pending-commitments")]
+    [Authorize(Policy = "reports.view")]
+    public async Task<IActionResult> PendingCommitments([FromQuery] ReportPendingCommitmentsQuery q, CancellationToken ct)
+        => Ok(await svc.PendingCommitmentsAsync(q, ct));
+
+    [HttpGet("pending-commitments.xlsx")]
+    [Authorize(Policy = "reports.export")]
+    public async Task<IActionResult> PendingCommitmentsXlsx([FromQuery] ReportPendingCommitmentsQuery q, CancellationToken ct)
+    {
+        var rows = await svc.PendingCommitmentsAsync(q, ct);
+        var sheet = new ExcelSheet(
+            "Pending commitments",
+            new[]
+            {
+                new ExcelColumn("Code"),
+                new ExcelColumn("Party"),
+                new ExcelColumn("ITS / Family"),
+                new ExcelColumn("Fund code"),
+                new ExcelColumn("Fund"),
+                new ExcelColumn("Total", ExcelColumnType.Currency),
+                new ExcelColumn("Paid", ExcelColumnType.Currency),
+                new ExcelColumn("Remaining", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+                new ExcelColumn("Progress %", ExcelColumnType.Number, "0.0"),
+                new ExcelColumn("Inst (paid/total)"),
+                new ExcelColumn("Overdue", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Next due", ExcelColumnType.Date),
+                new ExcelColumn("Status"),
+            },
+            rows.Select(r => (IReadOnlyList<object?>)new object?[]
+            {
+                r.Code, r.PartyName, r.MemberItsNumber ?? r.FamilyCode,
+                r.FundTypeCode, r.FundTypeName,
+                r.TotalAmount, r.PaidAmount, r.RemainingAmount, r.Currency, r.ProgressPercent,
+                $"{r.PaidInstallments}/{r.InstallmentCount}",
+                r.OverdueInstallments, r.NextDueDate, r.Status.ToString(),
+            }).ToList());
+        return Xlsx(excel.Build(new[] { sheet }), $"pending-commitments_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
+
+    // --- Overdue (matured but not returned) returnable contributions ------
+
+    [HttpGet("overdue-returns")]
+    [Authorize(Policy = "reports.view")]
+    public async Task<IActionResult> OverdueReturns([FromQuery] ReportOverdueReturnsQuery q, CancellationToken ct)
+        => Ok(await svc.OverdueReturnsAsync(q, ct));
+
+    [HttpGet("overdue-returns.xlsx")]
+    [Authorize(Policy = "reports.export")]
+    public async Task<IActionResult> OverdueReturnsXlsx([FromQuery] ReportOverdueReturnsQuery q, CancellationToken ct)
+    {
+        var rows = await svc.OverdueReturnsAsync(q, ct);
+        var sheet = new ExcelSheet(
+            "Overdue returns",
+            new[]
+            {
+                new ExcelColumn("Receipt #"),
+                new ExcelColumn("Receipt date", ExcelColumnType.Date),
+                new ExcelColumn("ITS"),
+                new ExcelColumn("Member"),
+                new ExcelColumn("Fund code"),
+                new ExcelColumn("Fund"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+                new ExcelColumn("Returned", ExcelColumnType.Currency),
+                new ExcelColumn("Outstanding", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+                new ExcelColumn("Maturity", ExcelColumnType.Date),
+                new ExcelColumn("Days overdue", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Agreement"),
+                new ExcelColumn("Niyyath"),
+            },
+            rows.Select(r => (IReadOnlyList<object?>)new object?[]
+            {
+                r.ReceiptNumber, r.ReceiptDate, r.ItsNumber, r.MemberName,
+                r.FundTypeCode, r.FundTypeName,
+                r.AmountTotal, r.AmountReturned, r.AmountOutstanding, r.Currency,
+                r.MaturityDate, r.DaysOverdue,
+                r.AgreementReference, r.NiyyathNote,
+            }).ToList());
+        return Xlsx(excel.Build(new[] { sheet }), $"overdue-returns_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
+
     private FileContentResult Xlsx(byte[] bytes, string filename) =>
         File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
 }

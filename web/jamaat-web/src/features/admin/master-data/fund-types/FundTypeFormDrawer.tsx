@@ -9,6 +9,7 @@ import { PaymentModeLabel } from '../shared';
 import { fundTypesApi, FundCategoryLabel, type FundType, type FundCategory } from './fundTypesApi';
 import { fundCategoriesApi, FundCategoryKindLabel } from '../fund-categories/fundCategoriesApi';
 import { eventsApi } from '../../../events/eventsApi';
+import { accountsApi } from '../chart-of-accounts/accountsApi';
 
 const schema = z.object({
   code: z.string().min(1).max(32).regex(/^[A-Za-z0-9_-]+$/, 'Letters, digits, _ and - only'),
@@ -30,6 +31,9 @@ const schema = z.object({
   requiresNiyyath: z.boolean(),
   // Batch-6: optional event link for Function-based funds.
   eventId: z.string().optional(),
+  // Batch-7: per-fund liability account so returnable contributions can be split across
+  // QH-returnable, scheme-temporary, and other-returnable buckets in the GL.
+  liabilityAccountId: z.string().optional(),
   isActive: z.boolean().optional(),
 });
 type Form = z.infer<typeof schema>;
@@ -43,6 +47,13 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
   const subsQ = useQuery({ queryKey: ['fund-sub-categories'], queryFn: () => fundCategoriesApi.listSubs(undefined, true), enabled: open });
   // Function-based funds need to pick an event - pull a small list when the form opens.
   const eventsQ = useQuery({ queryKey: ['events', 'for-fund-type'], queryFn: () => eventsApi.list({ pageSize: 200 }), enabled: open });
+  // Liability accounts for the returnable-liability picker. Filter to Liability type only -
+  // crediting an Asset/Income/Expense account here would break the GL.
+  const liabilityAccountsQ = useQuery({
+    queryKey: ['accounts', 'liability'],
+    queryFn: () => accountsApi.list({ page: 1, pageSize: 200, active: true, type: 2 /* Liability */ }),
+    enabled: open,
+  });
 
   const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<Form>({
     resolver: zodResolver(schema),
@@ -65,6 +76,7 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         requiresMaturityTracking: fundType.requiresMaturityTracking ?? false,
         requiresNiyyath: fundType.requiresNiyyath ?? false,
         eventId: fundType.eventId ?? undefined,
+        liabilityAccountId: fundType.liabilityAccountId ?? undefined,
         isActive: fundType.isActive,
       });
     } else {
@@ -91,6 +103,7 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         requiresMaturityTracking: data.requiresMaturityTracking,
         requiresNiyyath: data.requiresNiyyath,
         eventId: data.eventId || undefined,
+        liabilityAccountId: data.liabilityAccountId || null,
       };
       if (isEdit && fundType) {
         return fundTypesApi.update(fundType.id, { ...payload, isActive: data.isActive ?? true });
@@ -185,6 +198,19 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         <Form.Item label="Returnable contributions" tooltip="When ON, the fund accepts contributions where the contributor expects the money back. Maturity / agreement tracking applies.">
           <Controller name="isReturnable" control={control} render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />} />
         </Form.Item>
+        {watch('isReturnable') && (
+          <Form.Item label="Liability account (returnables)"
+            tooltip="The GL account that returnable receipts on this fund credit. Pick a dedicated account to keep this fund's obligations separate from other returnable buckets. Leave blank to fall back to the global Qarzan Hasana liability account.">
+            <Controller name="liabilityAccountId" control={control} render={({ field }) => (
+              <Select {...field}
+                allowClear showSearch optionFilterProp="label" placeholder="Use default (3500)"
+                options={(liabilityAccountsQ.data?.items ?? []).map((a) => ({
+                  value: a.id, label: `${a.code} - ${a.name}`,
+                }))}
+              />
+            )} />
+          </Form.Item>
+        )}
         <Form.Item label="Requires agreement" tooltip="When ON, contributions/loans on this fund must reference an attached agreement document.">
           <Controller name="requiresAgreement" control={control} render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />} />
         </Form.Item>

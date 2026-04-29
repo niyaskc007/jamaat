@@ -37,6 +37,10 @@ public sealed class VoucherConfiguration : IEntityTypeConfiguration<Voucher>
         b.HasOne<BankAccount>().WithMany().HasForeignKey(x => x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<FinancialPeriod>().WithMany().HasForeignKey(x => x.FinancialPeriodId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<NumberingSeries>().WithMany().HasForeignKey(x => x.NumberingSeriesId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Receipt>().WithMany().HasForeignKey(x => x.SourceReceiptId).OnDelete(DeleteBehavior.Restrict);
+        b.HasIndex(x => x.SourceReceiptId).HasFilter("[SourceReceiptId] IS NOT NULL");
+        b.HasOne<QarzanHasanaLoan>().WithMany().HasForeignKey(x => x.SourceQarzanHasanaLoanId).OnDelete(DeleteBehavior.Restrict);
+        b.HasIndex(x => x.SourceQarzanHasanaLoanId).HasFilter("[SourceQarzanHasanaLoanId] IS NOT NULL");
 
         b.OwnsMany(x => x.Lines, ln =>
         {

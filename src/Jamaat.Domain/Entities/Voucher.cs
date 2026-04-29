@@ -52,6 +52,19 @@ public sealed class Voucher : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public Guid? FinancialPeriodId { get; private set; }
     public Guid? NumberingSeriesId { get; private set; }
 
+    /// <summary>When set, this voucher represents a return-of-contribution against the
+    /// referenced returnable Receipt (rather than a regular expense payment). The posting
+    /// engine debits the receipt's liability account instead of an ExpenseType debit account,
+    /// and the voucher carries no <see cref="VoucherLine"/> entries.</summary>
+    public Guid? SourceReceiptId { get; private set; }
+    public bool IsContributionReturn => SourceReceiptId.HasValue;
+
+    /// <summary>When set, this voucher represents a Qarzan Hasana loan disbursement. Posting
+    /// debits the QH Receivable asset account (so outstanding loans are GL-visible) and
+    /// credits the bank/cash account, instead of debiting an expense account.</summary>
+    public Guid? SourceQarzanHasanaLoanId { get; private set; }
+    public bool IsQhLoanDisbursement => SourceQarzanHasanaLoanId.HasValue;
+
     public DateTimeOffset CreatedAtUtc { get; private set; } = DateTimeOffset.UtcNow;
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
@@ -97,8 +110,47 @@ public sealed class Voucher : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public void Submit(bool requiresApproval)
     {
         if (Status != VoucherStatus.Draft) throw new InvalidOperationException("Only drafts can be submitted.");
-        if (_lines.Count == 0) throw new InvalidOperationException("Voucher must have at least one line.");
+        // Contribution-return and QH-disbursement vouchers post directly from a single source
+        // amount + a known target account, so they don't carry per-line ExpenseType allocations.
+        // All other vouchers must have at least one line so the debit side has something to expense.
+        var allowsLineless = IsContributionReturn || IsQhLoanDisbursement;
+        if (!allowsLineless && _lines.Count == 0)
+            throw new InvalidOperationException("Voucher must have at least one line.");
         Status = requiresApproval ? VoucherStatus.PendingApproval : VoucherStatus.Approved;
+    }
+
+    /// <summary>Constructs a voucher representing a return-of-contribution. The amount is the
+    /// total returned to the contributor; lines are deliberately omitted. Posting reads
+    /// <see cref="SourceReceiptId"/> to route the debit to the receipt's liability account.</summary>
+    public static Voucher CreateContributionReturn(
+        Guid id, Guid tenantId, Guid sourceReceiptId,
+        DateOnly voucherDate, string payTo, string currency, decimal amount)
+    {
+        if (sourceReceiptId == Guid.Empty) throw new ArgumentException("Source receipt required.", nameof(sourceReceiptId));
+        if (amount <= 0) throw new ArgumentException("Return amount must be positive.", nameof(amount));
+        var v = new Voucher(id, tenantId, voucherDate, payTo, currency)
+        {
+            SourceReceiptId = sourceReceiptId,
+            AmountTotal = amount,
+        };
+        return v;
+    }
+
+    /// <summary>Constructs a voucher representing a QH loan disbursement. Posting will debit
+    /// the QH Receivable asset account (creating the loan's outstanding balance in the GL)
+    /// and credit the bank/cash account.</summary>
+    public static Voucher CreateQhLoanDisbursement(
+        Guid id, Guid tenantId, Guid sourceQarzanHasanaLoanId,
+        DateOnly voucherDate, string payTo, string currency, decimal amount)
+    {
+        if (sourceQarzanHasanaLoanId == Guid.Empty) throw new ArgumentException("Source loan required.", nameof(sourceQarzanHasanaLoanId));
+        if (amount <= 0) throw new ArgumentException("Disbursement amount must be positive.", nameof(amount));
+        var v = new Voucher(id, tenantId, voucherDate, payTo, currency)
+        {
+            SourceQarzanHasanaLoanId = sourceQarzanHasanaLoanId,
+            AmountTotal = amount,
+        };
+        return v;
     }
 
     public void Approve(Guid userId, string userName, DateTimeOffset at)

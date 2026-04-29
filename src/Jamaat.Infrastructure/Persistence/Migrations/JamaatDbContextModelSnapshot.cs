@@ -1507,6 +1507,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<Guid?>("LiabilityAccountId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("NameArabic")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -3120,6 +3123,12 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("ReversedAtUtc")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<Guid?>("SourceQarzanHasanaLoanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SourceReceiptId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
@@ -3146,6 +3155,12 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.HasIndex("FinancialPeriodId");
 
                     b.HasIndex("NumberingSeriesId");
+
+                    b.HasIndex("SourceQarzanHasanaLoanId")
+                        .HasFilter("[SourceQarzanHasanaLoanId] IS NOT NULL");
+
+                    b.HasIndex("SourceReceiptId")
+                        .HasFilter("[SourceReceiptId] IS NOT NULL");
 
                     b.HasIndex("TenantId", "Status");
 
@@ -4040,6 +4055,16 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.HasOne("Jamaat.Domain.Entities.NumberingSeries", null)
                         .WithMany()
                         .HasForeignKey("NumberingSeriesId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Jamaat.Domain.Entities.Receipt", null)
+                        .WithMany()
+                        .HasForeignKey("SourceReceiptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Jamaat.Domain.Entities.QarzanHasanaLoan", null)
+                        .WithMany()
+                        .HasForeignKey("SourceQarzanHasanaLoanId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.OwnsMany("Jamaat.Domain.Entities.VoucherLine", "Lines", b1 =>

@@ -81,8 +81,20 @@ export const qarzanHasanaApi = {
     (await api.post(`/api/v1/qarzan-hasana/${id}/approve-l2`, { comments })).data,
   reject: async (id: string, reason: string): Promise<QhLoan> => (await api.post(`/api/v1/qarzan-hasana/${id}/reject`, { reason })).data,
   cancel: async (id: string, reason: string): Promise<QhLoan> => (await api.post(`/api/v1/qarzan-hasana/${id}/cancel`, { reason })).data,
-  disburse: async (id: string, disbursedOn: string, voucherId?: string): Promise<QhLoan> =>
-    (await api.post(`/api/v1/qarzan-hasana/${id}/disburse`, { voucherId, disbursedOn })).data,
+  /// Two ways to call:
+  ///   - Legacy "link existing voucher" - pass voucherId; loan is marked Disbursed but no GL changes here.
+  ///   - "Issue voucher inline" - pass bankAccountId (+ optional payment-mode/cheque info). The service
+  ///     creates a QH-disbursement voucher, posts Dr QH Receivable / Cr Bank, and links it to the loan.
+  disburse: async (id: string, input: {
+    disbursedOn: string;
+    voucherId?: string;
+    bankAccountId?: string;
+    paymentMode?: number;
+    chequeNumber?: string;
+    chequeDate?: string;
+    remarks?: string;
+  }): Promise<QhLoan> =>
+    (await api.post(`/api/v1/qarzan-hasana/${id}/disburse`, input)).data,
   waive: async (id: string, installmentId: string, reason: string) => {
     await api.post(`/api/v1/qarzan-hasana/${id}/waive-installment`, { installmentId, reason });
   },

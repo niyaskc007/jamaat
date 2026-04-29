@@ -32,6 +32,12 @@ public interface IReportsService
     Task<ReportFundBalanceDto> FundBalanceAsync(Guid fundTypeId, CancellationToken ct = default);
     /// <summary>List every returnable receipt with maturity status + remaining balance.</summary>
     Task<IReadOnlyList<ReportReturnableContributionRow>> ReturnableContributionsAsync(Guid? fundTypeId, CancellationToken ct = default);
+    /// <summary>QH loans with non-zero outstanding balance + age + overdue-instalment count.</summary>
+    Task<IReadOnlyList<ReportOutstandingLoanRow>> OutstandingLoansAsync(ReportOutstandingLoansQuery q, CancellationToken ct = default);
+    /// <summary>Active commitments still owing money (open instalments), with overdue + next-due summary.</summary>
+    Task<IReadOnlyList<ReportPendingCommitmentRow>> PendingCommitmentsAsync(ReportPendingCommitmentsQuery q, CancellationToken ct = default);
+    /// <summary>Returnable receipts past maturity that still have outstanding balance.</summary>
+    Task<IReadOnlyList<ReportOverdueReturnRow>> OverdueReturnsAsync(ReportOverdueReturnsQuery q, CancellationToken ct = default);
 }
 
 public interface IDashboardService

@@ -53,6 +53,11 @@ public sealed class FundType : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public PaymentMode AllowedPaymentModes { get; private set; }
     public Guid? DefaultTemplateId { get; private set; }
     public Guid? CreditAccountId { get; private set; }
+    /// <summary>Liability account that returnable contributions on this fund credit.
+    /// When null, posting falls back to a global liability account (3500). Used to keep
+    /// QH-returnable, scheme-temporary, and other-returnable buckets distinct in the GL
+    /// rather than collapsing every returnable receipt into one obligation account.</summary>
+    public Guid? LiabilityAccountId { get; private set; }
     /// JSON for fund-specific rules (e.g. Qarzan Hasana period constraints).
     public string? RulesJson { get; private set; }
 
@@ -71,10 +76,11 @@ public sealed class FundType : AggregateRoot<Guid>, ITenantScoped, IAuditable
         Description = description;
     }
 
-    public void ConfigureAccounting(Guid? creditAccountId, Guid? defaultTemplateId)
+    public void ConfigureAccounting(Guid? creditAccountId, Guid? defaultTemplateId, Guid? liabilityAccountId = null)
     {
         CreditAccountId = creditAccountId;
         DefaultTemplateId = defaultTemplateId;
+        LiabilityAccountId = liabilityAccountId;
     }
 
     public void SetRules(bool requiresIts, bool requiresPeriod, PaymentMode allowedModes, string? rulesJson, FundCategory category = FundCategory.Donation)

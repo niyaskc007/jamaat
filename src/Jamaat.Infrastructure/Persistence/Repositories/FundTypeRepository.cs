@@ -60,6 +60,8 @@ public sealed class FundTypeRepository(JamaatDbContext db) : IFundTypeRepository
                 e.IsReturnable, e.RequiresAgreement, e.RequiresMaturityTracking, e.RequiresNiyyath,
                 e.EventId,
                 db.Events.Where(ev => ev.Id == e.EventId).Select(ev => ev.Name).FirstOrDefault(),
+                e.LiabilityAccountId,
+                db.Accounts.Where(a => a.Id == e.LiabilityAccountId).Select(a => a.Name).FirstOrDefault(),
                 e.CreatedAtUtc))
             .ToListAsync(ct);
 

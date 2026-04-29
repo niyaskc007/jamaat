@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, DatePicker, Tabs, Table, Select, Empty, Button } from 'antd';
+import { Card, DatePicker, Tabs, Table, Select, Empty, Button, Switch, InputNumber } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,8 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { money, formatDate } from '../../shared/format/format';
 import { reportsApi } from '../ledger/ledgerApi';
+import { QhStatusLabel, QhStatusColor, type QhStatus } from '../qarzan-hasana/qarzanHasanaApi';
+import { StatusLabel as CommitmentStatusLabel, StatusColor as CommitmentStatusColor, type CommitmentStatus } from '../commitments/commitmentsApi';
 import { accountsApi } from '../admin/master-data/chart-of-accounts/accountsApi';
 import { membersApi } from '../members/membersApi';
 import { fundTypesApi } from '../admin/master-data/fund-types/fundTypesApi';
@@ -46,6 +48,9 @@ export function ReportsPage() {
         { key: 'cheque', label: 'Cheque-wise', children: <ChequeWise /> },
         { key: 'fund-balance', label: 'Fund Balance (Dual)', children: <FundBalance /> },
         { key: 'returnable', label: 'Returnable Contributions', children: <ReturnableContributions /> },
+        { key: 'outstanding-loans', label: 'Outstanding Loans', children: <OutstandingLoans /> },
+        { key: 'pending-commitments', label: 'Pending Commitments', children: <PendingCommitments /> },
+        { key: 'overdue-returns', label: 'Overdue Returns', children: <OverdueReturns /> },
       ]} />
     </div>
   );
@@ -350,6 +355,161 @@ function ChequeWise() {
           { title: 'Status', dataIndex: 'status', key: 's', width: 110 },
         ]}
         locale={{ emptyText: <Empty description="No cheque receipts in this period" /> }}
+      />
+    </Card>
+  );
+}
+
+/// Outstanding QH loan balances. Each row = one loan with non-zero outstanding amount.
+/// Default sort puts loans with overdue instalments first so the recovery queue is at the top.
+function OutstandingLoans() {
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [status, setStatus] = useState<QhStatus | undefined>();
+  const { hasPermission } = useAuth();
+  const { data, isLoading } = useQuery({
+    queryKey: ['rpt', 'outstanding-loans', status, overdueOnly],
+    queryFn: () => reportsApi.outstandingLoans({ status, overdueOnly }),
+  });
+  const params = {
+    ...(status !== undefined ? { status: String(status) } : {}),
+    ...(overdueOnly ? { overdueOnly: 'true' } : {}),
+  };
+  return (
+    <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
+      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Select style={{ inlineSize: 200 }} placeholder="All active statuses" allowClear
+          value={status} onChange={(v) => setStatus(v)}
+          options={[5, 6, 8].map((s) => ({ value: s, label: QhStatusLabel[s as QhStatus] }))} />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Switch checked={overdueOnly} onChange={setOverdueOnly} size="small" />
+          <span style={{ fontSize: 13 }}>Overdue only</span>
+        </span>
+        <div style={{ flex: 1 }} />
+        {hasPermission('reports.export') && <ExportButton onClick={() => downloadXlsx('/api/v1/reports/outstanding-loans.xlsx', params, `outstanding-loans_${new Date().toISOString().slice(0, 10)}.xlsx`)} />}
+      </div>
+      <Table rowKey={(r) => r.loanId} size="middle" loading={isLoading} dataSource={data ?? []} pagination={{ pageSize: 25 }}
+        columns={[
+          { title: 'Loan #', dataIndex: 'code', key: 'code', width: 120, render: (v: string) => <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{v}</span> },
+          { title: 'Member', key: 'm', render: (_, row) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.memberItsNumber}</span> · {row.memberName}</span> },
+          { title: 'Disbursed', dataIndex: 'amountDisbursed', key: 'd', align: 'right', width: 130, render: (v: number, row) => <span className="jm-tnum">{money(v, row.currency)}</span> },
+          { title: 'Repaid', dataIndex: 'amountRepaid', key: 'r', align: 'right', width: 130, render: (v: number, row) => <span className="jm-tnum" style={{ color: 'var(--jm-gray-700)' }}>{money(v, row.currency)}</span> },
+          { title: 'Outstanding', dataIndex: 'amountOutstanding', key: 'o', align: 'right', width: 140, render: (v: number, row) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, row.currency)}</span> },
+          { title: 'Progress', dataIndex: 'progressPercent', key: 'p', width: 100, render: (v: number) => <span className="jm-tnum">{v.toFixed(1)}%</span> },
+          { title: 'Disbursed on', dataIndex: 'disbursedOn', key: 'do', width: 120, render: (v?: string | null) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
+          { title: 'Last payment', dataIndex: 'lastPaymentDate', key: 'lp', width: 120, render: (v?: string | null) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
+          { title: 'Age', dataIndex: 'ageDays', key: 'age', width: 80, render: (v?: number | null) => v != null ? <span className="jm-tnum">{v}d</span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
+          { title: 'Inst', key: 'i', width: 90, render: (_, row) => <span className="jm-tnum">{row.installmentCount}</span> },
+          { title: 'Overdue', dataIndex: 'overdueInstallments', key: 'ov', width: 90, render: (v: number) => v > 0 ? <Tag color="red" style={{ margin: 0 }}>{v}</Tag> : <span style={{ color: 'var(--jm-gray-400)' }}>0</span> },
+          { title: 'Status', dataIndex: 'status', key: 's', width: 110, render: (v: number) => <Tag color={QhStatusColor[v as QhStatus]} style={{ margin: 0 }}>{QhStatusLabel[v as QhStatus]}</Tag> },
+        ]}
+        locale={{ emptyText: <Empty description="No outstanding loans" /> }}
+      />
+    </Card>
+  );
+}
+
+/// Pending commitments - active or paused commitments that still owe money. Default sort
+/// surfaces overdue commitments first; secondary sort by next-due-date so chasers can work
+/// the list top-to-bottom in calendar order.
+function PendingCommitments() {
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [status, setStatus] = useState<CommitmentStatus | undefined>();
+  const fundsQ = useQuery({ queryKey: ['fundTypes', 'all'], queryFn: () => fundTypesApi.list({ page: 1, pageSize: 200, active: true }) });
+  const [fundTypeId, setFundTypeId] = useState<string | undefined>();
+  const { hasPermission } = useAuth();
+  const { data, isLoading } = useQuery({
+    queryKey: ['rpt', 'pending-commitments', status, fundTypeId, overdueOnly],
+    queryFn: () => reportsApi.pendingCommitments({ status, fundTypeId, overdueOnly }),
+  });
+  const params = {
+    ...(status !== undefined ? { status: String(status) } : {}),
+    ...(fundTypeId ? { fundTypeId } : {}),
+    ...(overdueOnly ? { overdueOnly: 'true' } : {}),
+  };
+  return (
+    <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
+      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Select style={{ inlineSize: 180 }} placeholder="Active + Paused" allowClear
+          value={status} onChange={(v) => setStatus(v)}
+          options={[1, 2, 5, 6].map((s) => ({ value: s, label: CommitmentStatusLabel[s as CommitmentStatus] }))} />
+        <Select style={{ inlineSize: 280 }} placeholder="All funds" allowClear showSearch optionFilterProp="label"
+          value={fundTypeId} onChange={setFundTypeId}
+          options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} - ${f.nameEnglish}` }))} />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Switch checked={overdueOnly} onChange={setOverdueOnly} size="small" />
+          <span style={{ fontSize: 13 }}>Overdue only</span>
+        </span>
+        <div style={{ flex: 1 }} />
+        {hasPermission('reports.export') && <ExportButton onClick={() => downloadXlsx('/api/v1/reports/pending-commitments.xlsx', params, `pending-commitments_${new Date().toISOString().slice(0, 10)}.xlsx`)} />}
+      </div>
+      <Table rowKey={(r) => r.commitmentId} size="middle" loading={isLoading} dataSource={data ?? []} pagination={{ pageSize: 25 }}
+        columns={[
+          { title: 'Code', dataIndex: 'code', key: 'code', width: 110, render: (v: string) => <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{v}</span> },
+          { title: 'Party', key: 'p', render: (_, row) => (
+            <span>{row.partyName}
+              <span style={{ display: 'block', fontSize: 11, color: 'var(--jm-gray-500)' }} className="jm-tnum">
+                {row.memberItsNumber ?? row.familyCode ?? '-'}
+              </span>
+            </span>
+          ) },
+          { title: 'Fund', dataIndex: 'fundTypeName', key: 'f', render: (v: string, row) => `${row.fundTypeCode} - ${v}` },
+          { title: 'Total', dataIndex: 'totalAmount', key: 't', align: 'right', width: 120, render: (v: number, row) => <span className="jm-tnum">{money(v, row.currency)}</span> },
+          { title: 'Paid', dataIndex: 'paidAmount', key: 'pd', align: 'right', width: 120, render: (v: number, row) => <span className="jm-tnum" style={{ color: 'var(--jm-gray-700)' }}>{money(v, row.currency)}</span> },
+          { title: 'Remaining', dataIndex: 'remainingAmount', key: 'r', align: 'right', width: 130, render: (v: number, row) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, row.currency)}</span> },
+          { title: 'Inst (paid/total)', key: 'inst', width: 130, render: (_, row) => <span className="jm-tnum">{row.paidInstallments}/{row.installmentCount}</span> },
+          { title: 'Overdue', dataIndex: 'overdueInstallments', key: 'ov', width: 90, render: (v: number) => v > 0 ? <Tag color="red" style={{ margin: 0 }}>{v}</Tag> : <span style={{ color: 'var(--jm-gray-400)' }}>0</span> },
+          { title: 'Next due', dataIndex: 'nextDueDate', key: 'nd', width: 120, render: (v?: string | null) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
+          { title: 'Status', dataIndex: 'status', key: 's', width: 110, render: (v: number) => <Tag color={CommitmentStatusColor[v as CommitmentStatus]} style={{ margin: 0 }}>{CommitmentStatusLabel[v as CommitmentStatus]}</Tag> },
+        ]}
+        locale={{ emptyText: <Empty description="No pending commitments" /> }}
+      />
+    </Card>
+  );
+}
+
+/// Returnable receipts past their maturity date with non-zero outstanding balance. The
+/// "exit door is open but money hasn't gone out yet" worklist - tells the cashier exactly
+/// which contributors are owed money the Jamaat is sitting on.
+function OverdueReturns() {
+  const fundsQ = useQuery({ queryKey: ['fundTypes', 'all'], queryFn: () => fundTypesApi.list({ page: 1, pageSize: 200, active: true }) });
+  const [fundTypeId, setFundTypeId] = useState<string | undefined>();
+  const [minDays, setMinDays] = useState<number | null>(null);
+  const { hasPermission } = useAuth();
+  const { data, isLoading } = useQuery({
+    queryKey: ['rpt', 'overdue-returns', fundTypeId, minDays],
+    queryFn: () => reportsApi.overdueReturns({ fundTypeId, minDaysOverdue: minDays ?? undefined }),
+  });
+  const params = {
+    ...(fundTypeId ? { fundTypeId } : {}),
+    ...(minDays ? { minDaysOverdue: String(minDays) } : {}),
+  };
+  return (
+    <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
+      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Select style={{ inlineSize: 280 }} placeholder="All funds" allowClear showSearch optionFilterProp="label"
+          value={fundTypeId} onChange={setFundTypeId}
+          options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} - ${f.nameEnglish}` }))} />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+          Min days overdue
+          <InputNumber size="small" min={0} value={minDays} onChange={(v) => setMinDays(v ?? null)} style={{ inlineSize: 80 }} />
+        </span>
+        <div style={{ flex: 1 }} />
+        {hasPermission('reports.export') && <ExportButton onClick={() => downloadXlsx('/api/v1/reports/overdue-returns.xlsx', params, `overdue-returns_${new Date().toISOString().slice(0, 10)}.xlsx`)} />}
+      </div>
+      <Table rowKey={(r) => r.receiptId} size="middle" loading={isLoading} dataSource={data ?? []} pagination={{ pageSize: 25 }}
+        columns={[
+          { title: 'Receipt #', dataIndex: 'receiptNumber', key: 'rn', width: 130, render: (v?: string | null) => v ? <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{v}</span> : '-' },
+          { title: 'Receipt date', dataIndex: 'receiptDate', key: 'rd', width: 120, render: (v: string) => formatDate(v) },
+          { title: 'Member', key: 'm', render: (_, row) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.itsNumber}</span> · {row.memberName}</span> },
+          { title: 'Fund', dataIndex: 'fundTypeName', key: 'f', render: (v: string, row) => `${row.fundTypeCode} - ${v}` },
+          { title: 'Amount', dataIndex: 'amountTotal', key: 'a', align: 'right', width: 120, render: (v: number, row) => <span className="jm-tnum">{money(v, row.currency)}</span> },
+          { title: 'Returned', dataIndex: 'amountReturned', key: 'rt', align: 'right', width: 120, render: (v: number, row) => v ? <span className="jm-tnum" style={{ color: 'var(--jm-gray-700)' }}>{money(v, row.currency)}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
+          { title: 'Outstanding', dataIndex: 'amountOutstanding', key: 'o', align: 'right', width: 130, render: (v: number, row) => <span className="jm-tnum" style={{ fontWeight: 600, color: '#92400E' }}>{money(v, row.currency)}</span> },
+          { title: 'Maturity', dataIndex: 'maturityDate', key: 'md', width: 120, render: (v: string) => formatDate(v) },
+          { title: 'Days overdue', dataIndex: 'daysOverdue', key: 'do', width: 110, render: (v: number) => <Tag color={v > 30 ? 'red' : 'gold'} style={{ margin: 0 }} className="jm-tnum">{v}</Tag> },
+          { title: 'Agreement', dataIndex: 'agreementReference', key: 'ag', width: 140, render: (v?: string | null) => v ? <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>{v}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
+        ]}
+        locale={{ emptyText: <Empty description="No matured-but-not-returned contributions" /> }}
       />
     </Card>
   );

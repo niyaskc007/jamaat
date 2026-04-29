@@ -1,13 +1,15 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, Descriptions, Tag, Table, Button, Space, Spin, Alert, App as AntdApp, Input } from 'antd';
-import { PrinterOutlined, RollbackOutlined, StopOutlined, ArrowLeftOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
+import { Card, Descriptions, Tag, Table, Button, Space, Spin, Alert, App as AntdApp, Input, Modal, Form, InputNumber, DatePicker, Select } from 'antd';
+import { PrinterOutlined, RollbackOutlined, StopOutlined, ArrowLeftOutlined, RedoOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { money, formatDateTime } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
-import { receiptsApi, PaymentModeLabel, ReceiptStatusLabel, type ReceiptStatus } from './receiptsApi';
+import { receiptsApi, PaymentModeLabel, ReceiptStatusLabel, type ReceiptStatus, type Receipt, type PaymentMode } from './receiptsApi';
 import { useAuth } from '../../shared/auth/useAuth';
+import { bankAccountsApi } from '../admin/master-data/bank-accounts/bankAccountsApi';
 
 export function ReceiptDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,6 +20,9 @@ export function ReceiptDetailPage() {
   const canReprint = hasPermission('receipt.reprint');
   const canCancel = hasPermission('receipt.cancel');
   const canReverse = hasPermission('receipt.reverse');
+  const canReturn = hasPermission('receipt.return');
+  const canReturnEarly = hasPermission('receipt.return.early');
+  const [returnOpen, setReturnOpen] = useState(false);
   const { data, isLoading, isError } = useQuery({
     queryKey: ['receipt', id], queryFn: () => receiptsApi.get(id!),
     enabled: !!id,
@@ -182,32 +187,263 @@ export function ReceiptDetailPage() {
         />
       </Card>
 
+      {/* Returnable-contribution panel - only visible for confirmed Returnable receipts.
+          Shows the running balance, maturity status, and the "Process return" trigger.
+          Returns are normal-business actions (not destructive), so this card uses
+          neutral/positive styling instead of the danger-zone treatment below. */}
+      {data.intention === 2 && data.status === 2 && canReturn && (
+        <ReturnableContributionPanel
+          receipt={data}
+          onProcessReturn={() => setReturnOpen(true)}
+          canReturnEarly={canReturnEarly}
+        />
+      )}
+
       {(canCancel || canReverse) && (
-        <div style={{ marginBlockStart: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          {canCancel && (
-            <Button
-              icon={<StopOutlined />}
-              disabled={data.status !== 2 || cancelMut.isPending}
-              loading={cancelMut.isPending}
-              onClick={() => promptReason(modal, 'Cancel receipt', 'Reason for cancellation', (r) => cancelMut.mutate(r))}
-            >
-              Cancel
-            </Button>
-          )}
-          {canReverse && (
-            <Button
-              danger
-              icon={<RollbackOutlined />}
-              disabled={data.status !== 2 || reverseMut.isPending}
-              loading={reverseMut.isPending}
-              onClick={() => promptReason(modal, 'Reverse receipt', 'Reason for reversal', (r) => reverseMut.mutate(r))}
-            >
-              Reverse
-            </Button>
-          )}
-        </div>
+        // Destructive zone, sectioned off so "Cancel receipt" doesn't read as a generic
+        // dismiss/back button. Both actions are voiding operations on a confirmed receipt
+        // (Cancel = mark cancelled & roll back the ledger; Reverse = create reversal entries
+        // that undo it but keep the audit trail intact). Both are danger-styled so the
+        // user can't mistake them for navigation.
+        <Card size="small" style={{ marginBlockStart: 16, borderColor: 'var(--jm-danger, #DC2626)', background: '#FEF2F2' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 13, color: '#991B1B' }}>
+              <strong>Danger zone</strong>{' '}
+              <span style={{ color: '#7F1D1D' }}>- voiding actions on a confirmed receipt. Both reverse the ledger; Cancel marks it cancelled, Reverse creates an audit-trailed reversal.</span>
+            </div>
+            <Space>
+              {canCancel && (
+                <Button
+                  danger
+                  icon={<StopOutlined />}
+                  disabled={data.status !== 2 || cancelMut.isPending}
+                  loading={cancelMut.isPending}
+                  onClick={() => promptReason(modal, 'Cancel receipt', 'Reason for cancellation', (r) => cancelMut.mutate(r))}
+                >
+                  Cancel receipt
+                </Button>
+              )}
+              {canReverse && (
+                <Button
+                  danger
+                  type="primary"
+                  icon={<RollbackOutlined />}
+                  disabled={data.status !== 2 || reverseMut.isPending}
+                  loading={reverseMut.isPending}
+                  onClick={() => promptReason(modal, 'Reverse receipt', 'Reason for reversal', (r) => reverseMut.mutate(r))}
+                >
+                  Reverse receipt
+                </Button>
+              )}
+            </Space>
+          </div>
+        </Card>
+      )}
+
+      {data.intention === 2 && data.status === 2 && canReturn && (
+        <ReturnContributionModal
+          open={returnOpen}
+          receipt={data}
+          canReturnEarly={canReturnEarly}
+          onClose={() => setReturnOpen(false)}
+          onDone={() => {
+            setReturnOpen(false);
+            void qc.invalidateQueries({ queryKey: ['receipt', id] });
+            void qc.invalidateQueries({ queryKey: ['receipts'] });
+          }}
+        />
       )}
     </div>
+  );
+}
+
+/// Returnable-contribution summary panel. Shows running balance + maturity status, gates
+/// the "Process return" button. Reads the receipt's intention/maturity/amount-returned
+/// fields straight from the API; nothing is computed server-side here.
+function ReturnableContributionPanel({
+  receipt, onProcessReturn, canReturnEarly,
+}: {
+  receipt: Receipt;
+  onProcessReturn: () => void;
+  canReturnEarly: boolean;
+}) {
+  const today = dayjs().format('YYYY-MM-DD');
+  const matured = !receipt.maturityDate || receipt.maturityDate <= today;
+  const remaining = receipt.amountTotal - receipt.amountReturned;
+  const fullyReturned = remaining <= 0.005;
+  const canClick = !fullyReturned && (matured || canReturnEarly);
+  const blockedReason = fullyReturned
+    ? 'Fully returned - no remaining balance.'
+    : !matured && !canReturnEarly
+      ? `Not yet matured. Matures on ${dayjs(receipt.maturityDate!).format('DD MMM YYYY')}. An admin with maturity-override permission can process the return early.`
+      : null;
+
+  return (
+    <Card size="small" style={{ marginBlockStart: 16, borderColor: '#FCD34D', background: '#FFFBEB' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minInlineSize: 280 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#92400E', marginBlockEnd: 6 }}>
+            Returnable contribution
+          </div>
+          <Space size={20} wrap>
+            <span>
+              <span style={{ fontSize: 11, color: 'var(--jm-gray-600)', display: 'block' }}>Original</span>
+              <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(receipt.amountTotal, receipt.currency)}</span>
+            </span>
+            <span>
+              <span style={{ fontSize: 11, color: 'var(--jm-gray-600)', display: 'block' }}>Returned</span>
+              <span className="jm-tnum" style={{ fontWeight: 600, color: '#0E5C40' }}>{money(receipt.amountReturned, receipt.currency)}</span>
+            </span>
+            <span>
+              <span style={{ fontSize: 11, color: 'var(--jm-gray-600)', display: 'block' }}>Outstanding</span>
+              <span className="jm-tnum" style={{ fontWeight: 700, fontSize: 16, color: fullyReturned ? '#9CA3AF' : '#92400E' }}>
+                {money(remaining, receipt.currency)}
+              </span>
+            </span>
+            {receipt.maturityDate && (
+              <span>
+                <span style={{ fontSize: 11, color: 'var(--jm-gray-600)', display: 'block' }}>Maturity</span>
+                <span className="jm-tnum" style={{ fontWeight: 600 }}>
+                  {dayjs(receipt.maturityDate).format('DD MMM YYYY')}
+                  {matured
+                    ? <CheckCircleOutlined style={{ marginInlineStart: 6, color: '#0E5C40' }} />
+                    : <ClockCircleOutlined style={{ marginInlineStart: 6, color: '#B45309' }} />}
+                </span>
+              </span>
+            )}
+          </Space>
+        </div>
+        <div>
+          <Button type="primary" icon={<RedoOutlined />} disabled={!canClick} onClick={onProcessReturn}
+            title={blockedReason ?? undefined}>
+            Process return
+          </Button>
+        </div>
+      </div>
+      {!matured && !canReturnEarly && !fullyReturned && (
+        <div style={{ marginBlockStart: 8, fontSize: 12, color: '#92400E' }}>
+          {blockedReason}
+        </div>
+      )}
+      {!matured && canReturnEarly && !fullyReturned && (
+        <div style={{ marginBlockStart: 8, fontSize: 12, color: '#92400E' }}>
+          Not yet matured (matures {dayjs(receipt.maturityDate!).format('DD MMM YYYY')}). You have early-return permission - the system will accept a pre-maturity return.
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function ReturnContributionModal({
+  open, receipt, canReturnEarly, onClose, onDone,
+}: {
+  open: boolean;
+  receipt: Receipt;
+  canReturnEarly: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { message } = AntdApp.useApp();
+  const [form] = Form.useForm();
+  const banksQ = useQuery({
+    queryKey: ['bank-accounts', 'all'],
+    queryFn: () => bankAccountsApi.list({ page: 1, pageSize: 100, active: true }),
+    enabled: open,
+  });
+  const remaining = receipt.amountTotal - receipt.amountReturned;
+  const today = dayjs().format('YYYY-MM-DD');
+  const matured = !receipt.maturityDate || receipt.maturityDate <= today;
+
+  const mut = useMutation({
+    mutationFn: (v: { amount: number; returnDate: Dayjs; paymentMode: PaymentMode; bankAccountId?: string; chequeNumber?: string; chequeDate?: Dayjs; reason?: string }) =>
+      receiptsApi.returnContribution(receipt.id, {
+        receiptId: receipt.id,
+        amount: v.amount,
+        returnDate: v.returnDate.format('YYYY-MM-DD'),
+        paymentMode: v.paymentMode,
+        bankAccountId: v.paymentMode === 1 ? null : v.bankAccountId,
+        chequeNumber: v.paymentMode === 2 ? v.chequeNumber : undefined,
+        chequeDate: v.paymentMode === 2 ? v.chequeDate?.format('YYYY-MM-DD') : undefined,
+        reason: v.reason,
+      }),
+    onSuccess: (r) => {
+      message.success(`Return processed. Voucher issued. Outstanding now ${money(r.amountTotal - r.amountReturned, r.currency)}.`);
+      form.resetFields();
+      onDone();
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to process return.'),
+  });
+
+  return (
+    <Modal
+      open={open}
+      title={`Process return - receipt ${receipt.receiptNumber}`}
+      onCancel={onClose}
+      onOk={() => form.submit()}
+      okText="Process return"
+      okButtonProps={{ type: 'primary', loading: mut.isPending }}
+      width={560}
+      destroyOnHidden
+    >
+      <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', padding: 10, borderRadius: 6, marginBlockEnd: 12, fontSize: 13 }}>
+        Returning <strong>{receipt.memberNameSnapshot}</strong>'s contribution. Outstanding balance: <strong>{money(remaining, receipt.currency)}</strong>.
+        {!matured && (
+          <div style={{ marginBlockStart: 6, color: '#92400E' }}>
+            <ClockCircleOutlined /> Not yet matured (matures {dayjs(receipt.maturityDate!).format('DD MMM YYYY')}).
+            {canReturnEarly ? ' You have early-return permission.' : ' Maturity-override permission required.'}
+          </div>
+        )}
+      </div>
+      <Form form={form} layout="vertical" requiredMark={false}
+        initialValues={{ amount: remaining, returnDate: dayjs(), paymentMode: 1 }}
+        onFinish={(v) => mut.mutate(v)}>
+        <Form.Item name="amount" label="Return amount"
+          rules={[
+            { required: true, type: 'number', min: 0.01, message: 'Amount must be positive.' },
+            { type: 'number', max: remaining, message: `Max returnable is ${money(remaining, receipt.currency)}.` },
+          ]}>
+          <InputNumber style={{ inlineSize: '100%' }} addonAfter={receipt.currency} step={100} />
+        </Form.Item>
+        <Form.Item name="returnDate" label="Return date" rules={[{ required: true }]}>
+          <DatePicker style={{ inlineSize: 220 }} format="DD MMM YYYY" disabledDate={(d) => d && d.isAfter(dayjs(), 'day')} />
+        </Form.Item>
+        <Form.Item name="paymentMode" label="Payment mode" rules={[{ required: true }]}>
+          <Select options={[
+            { value: 1, label: 'Cash' }, { value: 2, label: 'Cheque' },
+            { value: 4, label: 'Bank transfer' }, { value: 8, label: 'Card' },
+            { value: 16, label: 'Online' }, { value: 32, label: 'UPI' },
+          ]} />
+        </Form.Item>
+        <Form.Item noStyle shouldUpdate={(p, n) => p.paymentMode !== n.paymentMode}>
+          {({ getFieldValue }) => {
+            const mode = getFieldValue('paymentMode');
+            if (mode === 1) return null; // cash needs no bank
+            return (
+              <>
+                <Form.Item name="bankAccountId" label="Pay from bank account" rules={[{ required: true }]}
+                  tooltip="The bank account the funds are leaving from. The voucher will credit this account.">
+                  <Select placeholder="Select bank account"
+                    options={(banksQ.data?.items ?? []).map((b) => ({ value: b.id, label: `${b.name} · ${b.accountNumber}` }))} />
+                </Form.Item>
+                {mode === 2 && (
+                  <>
+                    <Form.Item name="chequeNumber" label="Cheque number" rules={[{ required: true, max: 64 }]}>
+                      <Input placeholder="e.g. 100123" />
+                    </Form.Item>
+                    <Form.Item name="chequeDate" label="Cheque date" rules={[{ required: true }]}>
+                      <DatePicker style={{ inlineSize: 220 }} format="DD MMM YYYY" />
+                    </Form.Item>
+                  </>
+                )}
+              </>
+            );
+          }}
+        </Form.Item>
+        <Form.Item name="reason" label="Reason / notes">
+          <Input.TextArea rows={2} maxLength={500} placeholder="Optional - kept on the voucher's audit trail." />
+        </Form.Item>
+      </Form>
+    </Modal>
   );
 }
 

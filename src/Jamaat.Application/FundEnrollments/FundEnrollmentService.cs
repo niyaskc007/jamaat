@@ -66,6 +66,9 @@ public sealed class FundEnrollmentService(
             return Error.NotFound("member.not_found", "Member not found.");
         var fund = await db.FundTypes.AsNoTracking().FirstOrDefaultAsync(f => f.Id == dto.FundTypeId, ct);
         if (fund is null) return Error.NotFound("fund_type.not_found", "Fund type not found.");
+        if (!fund.IsActive)
+            return Error.Business("fund_type.inactive",
+                $"Fund type {fund.Code} is inactive and cannot accept new enrollments.");
         if (fund.IsLoan) return Error.Business("enrollment.loan_fund", "Enrollments cannot be opened on a loan fund.");
         if (await db.FundEnrollments.AnyAsync(e => e.MemberId == dto.MemberId && e.FundTypeId == dto.FundTypeId
                 && (e.Status == FundEnrollmentStatus.Active || e.Status == FundEnrollmentStatus.Draft), ct))

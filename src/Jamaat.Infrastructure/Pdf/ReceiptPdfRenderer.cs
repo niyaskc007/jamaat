@@ -1,6 +1,7 @@
 using System.Globalization;
 using Jamaat.Application.Receipts;
 using Jamaat.Contracts.Receipts;
+using Jamaat.Domain.Enums;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -14,6 +15,14 @@ public sealed class ReceiptPdfRenderer : IReceiptPdfRenderer
     public byte[] Render(ReceiptDto r, bool reprint)
     {
         var fxApplied = r.Currency != r.BaseCurrency && r.FxRate != 1m;
+        // The contributor's Niyyath drives the document's whole framing: a Permanent contribution
+        // is a donation (no obligation, treated as income), a Returnable contribution is a
+        // future obligation we hold until matured + settled. Both must be unambiguous on paper.
+        var isReturnable = r.Intention == ContributionIntention.Returnable;
+        var headerSubtitle = isReturnable ? "Returnable contribution receipt" : "Donation receipt";
+        var natureLabel = isReturnable ? "Returnable per agreed terms" : "Non-returnable donation";
+        var natureColor = isReturnable ? "#B45309" /* amber-700 */ : "#0E5C40" /* green-700 */;
+        var natureBg = isReturnable ? "#FEF3C7" /* amber-100 */ : "#DCFCE7" /* green-100 */;
 
         return Document.Create(doc =>
         {
@@ -30,7 +39,7 @@ public sealed class ReceiptPdfRenderer : IReceiptPdfRenderer
                         row.RelativeItem().Column(c =>
                         {
                             c.Item().Text("JAMAAT").FontSize(22).Bold().FontColor("#0B6E63");
-                            c.Item().PaddingTop(2).Text("Donation receipt").FontSize(9).FontColor("#64748B");
+                            c.Item().PaddingTop(2).Text(headerSubtitle).FontSize(9).FontColor("#64748B");
                         });
                         row.ConstantItem(170).AlignRight().Column(c =>
                         {
@@ -49,6 +58,15 @@ public sealed class ReceiptPdfRenderer : IReceiptPdfRenderer
                 p.Content().Column(col =>
                 {
                     col.Spacing(14);
+
+                    // Receipt nature pill - colour-codes the intention so a glance tells a contributor
+                    // (or auditor) whether the amount is held as a future obligation or treated as donation.
+                    col.Item().Background(natureBg).Padding(8).Row(row =>
+                    {
+                        row.RelativeItem().Text(natureLabel).Bold().FontSize(10).FontColor(natureColor);
+                        row.ConstantItem(110).AlignRight().Text(isReturnable ? "Subject to terms" : "Final")
+                            .FontSize(9).FontColor(natureColor);
+                    });
 
                     col.Item().Background("#F8FAFC").Border(1).BorderColor("#E5E9EF").Padding(14).Row(row =>
                     {
@@ -108,6 +126,53 @@ public sealed class ReceiptPdfRenderer : IReceiptPdfRenderer
                             .Bold().FontSize(13).FontColor("#0B6E63");
                     });
 
+                    // Returnable-only block: print the contributor's Niyyath, the agreed maturity date,
+                    // the agreement reference, and (if any returns have already been processed) the
+                    // running total of returns + remaining outstanding obligation. This is the audit
+                    // trail the spec demands so contributors can never mistake a returnable contribution
+                    // for a donation later.
+                    if (isReturnable)
+                    {
+                        col.Item().Border(1).BorderColor("#FCD34D").Background("#FFFBEB").Padding(12).Column(c =>
+                        {
+                            c.Item().Text("RETURNABLE CONTRIBUTION DETAILS")
+                                .Bold().FontSize(9).FontColor("#92400E").LetterSpacing(0.05f);
+                            c.Item().PaddingTop(6).Row(row =>
+                            {
+                                row.RelativeItem().Column(left =>
+                                {
+                                    if (!string.IsNullOrWhiteSpace(r.NiyyathNote))
+                                    {
+                                        left.Item().Text("Niyyath / intention").FontSize(8).FontColor("#92400E");
+                                        left.Item().Text(r.NiyyathNote!).FontSize(10);
+                                    }
+                                    if (!string.IsNullOrWhiteSpace(r.AgreementReference))
+                                    {
+                                        left.Item().PaddingTop(6).Text("Agreement reference").FontSize(8).FontColor("#92400E");
+                                        left.Item().Text(r.AgreementReference!).FontSize(10).FontFamily("Consolas");
+                                    }
+                                });
+                                row.ConstantItem(180).Column(right =>
+                                {
+                                    if (r.MaturityDate is DateOnly md)
+                                    {
+                                        right.Item().Text("Matures on").FontSize(8).FontColor("#92400E");
+                                        right.Item().Text(md.ToString("dd MMM yyyy", CultureInfo.InvariantCulture))
+                                            .Bold().FontSize(11);
+                                    }
+                                    if (r.AmountReturned > 0)
+                                    {
+                                        right.Item().PaddingTop(6).Text("Returned to date").FontSize(8).FontColor("#92400E");
+                                        right.Item().Text(PdfFormatting.Money(r.AmountReturned, r.Currency)).FontSize(10);
+                                        right.Item().Text("Outstanding").FontSize(8).FontColor("#92400E");
+                                        right.Item().Text(PdfFormatting.Money(r.AmountTotal - r.AmountReturned, r.Currency))
+                                            .Bold().FontSize(10).FontColor("#0B6E63");
+                                    }
+                                });
+                            });
+                        });
+                    }
+
                     col.Item().Row(row =>
                     {
                         row.RelativeItem().Column(c =>
@@ -131,7 +196,7 @@ public sealed class ReceiptPdfRenderer : IReceiptPdfRenderer
                         });
                     });
 
-                    col.Item().PaddingTop(28).Row(row =>
+                    col.Item().PaddingTop(20).Row(row =>
                     {
                         row.RelativeItem().Column(c =>
                         {
@@ -145,6 +210,16 @@ public sealed class ReceiptPdfRenderer : IReceiptPdfRenderer
                             c.Item().AlignRight().PaddingTop(4).Text("Authorised signatory").FontSize(9).FontColor("#64748B");
                         });
                     });
+
+                    // Returnable-only legal-style disclaimer at the bottom. Restates that the
+                    // amount is held under agreement and not income, so the contributor's copy
+                    // can never be mistaken for a permanent-donation receipt.
+                    if (isReturnable)
+                    {
+                        col.Item().PaddingTop(8).Background("#F1F4F7").Padding(10).Text(
+                            "This receipt acknowledges a returnable contribution. The amount is held by the Jamaat as a fund obligation under the agreement and Niyyath stated above; it is not a donation. Return is subject to the agreed maturity date, available fund balance, and the Jamaat's approval rules.")
+                            .FontSize(8).FontColor("#475569").Italic();
+                    }
                 });
 
                 p.Footer().AlignCenter().Text(t => t.Span("System-generated receipt").FontSize(8).FontColor("#94A1B2"));

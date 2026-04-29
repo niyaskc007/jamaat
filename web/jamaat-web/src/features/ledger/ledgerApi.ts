@@ -84,6 +84,39 @@ export const reportsApi = {
       maturityDate?: string | null; isMatured: boolean;
       agreementReference?: string | null; niyyathNote?: string | null;
     }[]>('/api/v1/reports/returnable-contributions', { params: { fundTypeId } })).data,
+  outstandingLoans: async (q: { memberId?: string; status?: number; overdueOnly?: boolean }) =>
+    (await api.get<{
+      loanId: string; code: string;
+      memberId: string; memberItsNumber: string; memberName: string;
+      amountDisbursed: number; amountRepaid: number; amountOutstanding: number; progressPercent: number;
+      currency: string;
+      disbursedOn?: string | null; lastPaymentDate?: string | null; ageDays?: number | null;
+      installmentCount: number; overdueInstallments: number;
+      status: number;
+    }[]>('/api/v1/reports/outstanding-loans', { params: q })).data,
+  pendingCommitments: async (q: { status?: number; memberId?: string; familyId?: string; fundTypeId?: string; overdueOnly?: boolean }) =>
+    (await api.get<{
+      commitmentId: string; code: string;
+      partyType: number;
+      memberId?: string | null; memberItsNumber?: string | null;
+      familyId?: string | null; familyCode?: string | null;
+      partyName: string;
+      fundTypeId: string; fundTypeCode: string; fundTypeName: string;
+      currency: string;
+      totalAmount: number; paidAmount: number; remainingAmount: number; progressPercent: number;
+      installmentCount: number; paidInstallments: number; overdueInstallments: number;
+      nextDueDate?: string | null;
+      status: number;
+    }[]>('/api/v1/reports/pending-commitments', { params: q })).data,
+  overdueReturns: async (q: { memberId?: string; fundTypeId?: string; minDaysOverdue?: number }) =>
+    (await api.get<{
+      receiptId: string; receiptNumber?: string | null; receiptDate: string;
+      memberId: string; itsNumber: string; memberName: string;
+      fundTypeId: string; fundTypeCode: string; fundTypeName: string;
+      amountTotal: number; amountReturned: number; amountOutstanding: number; currency: string;
+      maturityDate: string; daysOverdue: number;
+      agreementReference?: string | null; niyyathNote?: string | null;
+    }[]>('/api/v1/reports/overdue-returns', { params: q })).data,
 };
 
 export const dashboardApi = {

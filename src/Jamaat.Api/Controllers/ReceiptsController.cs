@@ -124,6 +124,18 @@ public sealed class ReceiptsController(IReceiptService svc, IExcelExporter excel
         return r.IsSuccess ? Ok(r.Value) : ControllerResults.Problem(this, r.Error);
     }
 
+    /// <summary>Process a return-to-contributor against a confirmed Returnable receipt. The
+    /// caller's permissions decide whether maturity-before-return is permitted (early-return
+    /// requires receipt.return.early in addition to receipt.return).</summary>
+    [HttpPost("{id:guid}/return-contribution")]
+    [Authorize(Policy = "receipt.return")]
+    public async Task<IActionResult> ReturnContribution(Guid id, [FromBody] ReturnContributionDto dto, CancellationToken ct)
+    {
+        var hasOverride = User.HasClaim(c => c.Type == "permission" && c.Value == "receipt.return.early");
+        var r = await svc.ReturnContributionAsync(id, dto, hasOverride, ct);
+        return r.IsSuccess ? Ok(r.Value) : ControllerResults.Problem(this, r.Error);
+    }
+
     [HttpGet("{id:guid}/pdf")]
     [Authorize(Policy = "receipt.view")]
     public async Task<IActionResult> Pdf(Guid id, [FromQuery] bool reprint, CancellationToken ct)

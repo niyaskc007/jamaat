@@ -51,7 +51,7 @@ public sealed class FundTypeService(
         var e = new FundType(Guid.NewGuid(), tenant.TenantId, dto.Code, dto.NameEnglish, dto.AllowedPaymentModes);
         e.UpdateNames(dto.NameEnglish, dto.NameArabic, dto.NameHindi, dto.NameUrdu, dto.Description);
         e.SetRules(dto.RequiresItsNumber, dto.RequiresPeriodReference, dto.AllowedPaymentModes, dto.RulesJson, dto.Category);
-        e.ConfigureAccounting(dto.CreditAccountId, null);
+        e.ConfigureAccounting(dto.CreditAccountId, null, dto.LiabilityAccountId);
         await ApplyClassificationAsync(e, dto.FundCategoryId, dto.FundSubCategoryId,
             dto.IsReturnable, dto.RequiresAgreement, dto.RequiresMaturityTracking, dto.RequiresNiyyath, ct);
         e.LinkEvent(dto.EventId);
@@ -69,7 +69,7 @@ public sealed class FundTypeService(
 
         e.UpdateNames(dto.NameEnglish, dto.NameArabic, dto.NameHindi, dto.NameUrdu, dto.Description);
         e.SetRules(dto.RequiresItsNumber, dto.RequiresPeriodReference, dto.AllowedPaymentModes, dto.RulesJson, dto.Category);
-        e.ConfigureAccounting(dto.CreditAccountId, null);
+        e.ConfigureAccounting(dto.CreditAccountId, null, dto.LiabilityAccountId);
         if (dto.IsActive) e.Activate(); else e.Deactivate();
         await ApplyClassificationAsync(e, dto.FundCategoryId, dto.FundSubCategoryId,
             dto.IsReturnable, dto.RequiresAgreement, dto.RequiresMaturityTracking, dto.RequiresNiyyath, ct);
@@ -131,6 +131,7 @@ public sealed class FundTypeService(
         e.FundSubCategoryId, sub?.Code, sub?.Name,
         e.IsReturnable, e.RequiresAgreement, e.RequiresMaturityTracking, e.RequiresNiyyath,
         e.EventId, eventName,
+        e.LiabilityAccountId, null,
         e.CreatedAtUtc);
 }
 

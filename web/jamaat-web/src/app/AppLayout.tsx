@@ -36,12 +36,24 @@ import { LanguageSwitcher } from '../shared/i18n/LanguageSwitcher';
 
 const { Sider, Content } = Layout;
 
+/// Persist the sidebar's collapsed state across sessions. Otherwise a user with a small
+/// laptop screen has to collapse the sider every time they reload the app, and a user with
+/// a large screen has to expand it after an inadvertent collapse propagates everywhere.
+const COLLAPSED_KEY = 'jm:sider-collapsed';
+
 export function AppLayout() {
   const { t } = useTranslation('common');
   const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem(COLLAPSED_KEY) === '1'; } catch { return false; }
+  });
+  const toggleCollapsed = () => setCollapsed((v) => {
+    const next = !v;
+    try { localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0'); } catch { /* ignore */ }
+    return next;
+  });
 
   // Global cashier-friendly shortcuts. Alt+N jumps to New Receipt; "/" jumps to
   // the Members search page (global top-bar search isn't wired yet - when it is,
@@ -135,6 +147,9 @@ export function AppLayout() {
 
   return (
     <Layout style={{ minBlockSize: '100dvh' }}>
+      {/* Three-row flex layout: pinned logo header, scrollable menu, pinned collapse footer.
+          The middle row owns vertical overflow so long nav lists (especially when an admin
+          has every section visible) stay reachable without growing the page. */}
       <Sider
         width={240}
         collapsedWidth={72}
@@ -147,11 +162,14 @@ export function AppLayout() {
           insetBlockStart: 0,
           blockSize: '100dvh',
           borderInlineEnd: '1px solid var(--jm-sider-border)',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         <div
           style={{
             blockSize: 56,
+            flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
             paddingInline: collapsed ? 0 : 20,
@@ -162,7 +180,13 @@ export function AppLayout() {
           <Logo size={28} variant="light" withWord={!collapsed} />
         </div>
 
-        <div style={{ padding: '16px 8px 0' }}>
+        <div className="jm-sider-scroll" style={{
+          flex: 1,
+          minBlockSize: 0,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          padding: '12px 8px',
+        }}>
           <Menu
             theme="dark"
             mode="inline"
@@ -174,25 +198,28 @@ export function AppLayout() {
           />
         </div>
 
-        {/* Collapse toggle pinned bottom */}
+        {/* Pinned footer with the collapse toggle. Always visible regardless of nav length. */}
         <div
           style={{
-            position: 'absolute',
-            insetBlockEnd: 12,
-            insetInlineStart: 0,
-            insetInlineEnd: 0,
+            flexShrink: 0,
+            blockSize: 44,
             display: 'flex',
-            justifyContent: 'center',
+            alignItems: 'center',
+            justifyContent: collapsed ? 'center' : 'flex-end',
+            paddingInline: 12,
+            borderBlockStart: '1px solid var(--jm-sider-border)',
           }}
         >
-          <Button
-            type="text"
-            size="small"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={() => setCollapsed((v) => !v)}
-            style={{ color: 'var(--jm-sider-fg-muted)' }}
-            aria-label="Toggle navigation"
-          />
+          <Tooltip title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} placement="right">
+            <Button
+              type="text"
+              size="small"
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={toggleCollapsed}
+              style={{ color: 'var(--jm-sider-fg-muted)' }}
+              aria-label="Toggle navigation"
+            />
+          </Tooltip>
         </div>
       </Sider>
 
