@@ -16,6 +16,7 @@ public sealed class JamaatDbContextFacadeImpl(JamaatDbContext db) : JamaatDbCont
     public override DbSet<FundSubCategory> FundSubCategories => db.FundSubCategories;
     public override DbSet<FundTypeCustomField> FundTypeCustomFields => db.FundTypeCustomFields;
     public override DbSet<TransactionLabel> TransactionLabels => db.TransactionLabels;
+    public override DbSet<PostDatedCheque> PostDatedCheques => db.PostDatedCheques;
     public override DbSet<ExpenseType> ExpenseTypes => db.ExpenseTypes;
     public override DbSet<Account> Accounts => db.Accounts;
     public override DbSet<Member> Members => db.Members;

@@ -19,6 +19,7 @@ public abstract class JamaatDbContextFacade
     public abstract DbSet<FundSubCategory> FundSubCategories { get; }
     public abstract DbSet<FundTypeCustomField> FundTypeCustomFields { get; }
     public abstract DbSet<TransactionLabel> TransactionLabels { get; }
+    public abstract DbSet<PostDatedCheque> PostDatedCheques { get; }
     public abstract DbSet<ExpenseType> ExpenseTypes { get; }
     public abstract DbSet<Account> Accounts { get; }
     public abstract DbSet<Member> Members { get; }

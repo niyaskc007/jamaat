@@ -102,6 +102,7 @@ public static class DependencyInjection
         services.AddScoped<Application.FundCategories.IFundCategoryService, Application.FundCategories.FundCategoryService>();
         services.AddScoped<Application.FundTypes.IFundTypeCustomFieldService, Application.FundTypes.FundTypeCustomFieldService>();
         services.AddScoped<Application.TransactionLabels.ITransactionLabelService, Application.TransactionLabels.TransactionLabelService>();
+        services.AddScoped<Application.PostDatedCheques.IPostDatedChequeService, Application.PostDatedCheques.PostDatedChequeService>();
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<INumberingSeriesService, NumberingSeriesService>();
         services.AddScoped<IBankAccountService, BankAccountService>();

@@ -18,6 +18,7 @@ import {
   type Installment,
 } from './commitmentsApi';
 import { extractProblem } from '../../shared/api/client';
+import { PostDatedChequesPanel } from './PostDatedChequesPanel';
 
 const { Paragraph } = Typography;
 
@@ -161,6 +162,19 @@ export function CommitmentDetailPage() {
       >
         <Table<Installment> rowKey="id" size="small" pagination={false} columns={columns} dataSource={data.installments} />
       </Card>
+
+      {/* Batch-7 (post-dated cheques): manage cheques pledged against this commitment.
+          Each cheque sits in the table without affecting installment balances until cleared. */}
+      <div style={{ marginBlockStart: 16 }}>
+        <PostDatedChequesPanel
+          commitmentId={data.commitment.id}
+          currency={c.currency}
+          installments={data.installments.map((i) => ({
+            id: i.id, installmentNo: i.installmentNo, dueDate: i.dueDate,
+            scheduledAmount: i.scheduledAmount, paidAmount: i.paidAmount,
+          }))}
+        />
+      </div>
 
       <Modal
         title="Waive installment"
