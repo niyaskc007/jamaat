@@ -18,6 +18,7 @@ import {
 } from './memberProfileApi';
 import { sectorsApi, subSectorsApi } from '../../sectors/sectorsApi';
 import { organisationsApi, type MemberOrgMembership } from '../../organisations/organisationsApi';
+import { FamilyDetailDrawer } from '../../families/FamilyDetailDrawer';
 
 const { Text } = Typography;
 
@@ -173,6 +174,11 @@ function IdentityTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSa
 
 function FamilyTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSaved: (p: MemberProfile) => void; onErr: (e: unknown) => void }) {
   const [form] = Form.useForm();
+  const navigate = useNavigate();
+  // Drawer-open state: when set, the FamilyDetailDrawer below shows the family in-place
+  // so the member context is preserved. We import FamilyDetailDrawer dynamically to avoid
+  // a circular module load.
+  const [familyDrawerOpen, setFamilyDrawerOpen] = useState(false);
   const mut = useMutation({
     mutationFn: (v: Record<string, unknown>) => memberProfileApi.updateFamilyRefs(profile.id, v),
     onSuccess: onSaved, onError: onErr,
@@ -203,10 +209,22 @@ function FamilyTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSave
     <div style={{ padding: 24 }}>
       <Descriptions size="small" bordered column={2} style={{ marginBlockEnd: 16 }}
         items={[
-          { key: 'fam', label: 'Family', children: profile.familyName ? `${profile.familyName} (${profile.familyCode})` : '—' },
+          { key: 'fam', label: 'Family', children: profile.familyName
+            ? <Space>
+                <span>{profile.familyName} ({profile.familyCode})</span>
+                <Button size="small" type="link" onClick={() => setFamilyDrawerOpen(true)}>Open family</Button>
+              </Space>
+            : <Space>
+                <span style={{ color: 'var(--jm-gray-500)' }}>Not in a family</span>
+                <Button size="small" type="link" onClick={() => navigate('/families')}>Manage families</Button>
+              </Space>
+          },
           { key: 'role', label: 'Role', children: profile.familyRole ? String(profile.familyRole) : '—' },
         ]}
       />
+      {familyDrawerOpen && profile.familyId && (
+        <FamilyDetailDrawer familyId={profile.familyId} onClose={() => setFamilyDrawerOpen(false)} />
+      )}
       <Form layout="vertical" form={form} requiredMark={false}
         initialValues={{
           fatherItsNumber: profile.fatherItsNumber,

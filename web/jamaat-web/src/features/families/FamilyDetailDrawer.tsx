@@ -5,6 +5,7 @@ import { CrownOutlined, DeleteOutlined, PlusOutlined, SwapOutlined, TeamOutlined
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { familiesApi, type FamilyMember, type FamilyRole, FamilyRoleLabel } from './familiesApi';
 import { MemberPicker } from './FamilyFormDrawer';
+import { FamilyTree } from './FamilyTree';
 import { extractProblem } from '../../shared/api/client';
 import { formatDate } from '../../shared/format/format';
 
@@ -110,6 +111,11 @@ export function FamilyDetailDrawer({ familyId, onClose }: { familyId: string; on
               />
             )}
           </Card>
+
+          {/* Auto-built relationship tree from each member's Father/Mother/Spouse ITS refs.
+              Shows parents → self+spouse → children for the head; auditors can scan family
+              structure without clicking through every profile. */}
+          <FamilyTree familyId={familyId} headMemberId={data.family.headMemberId} members={data.members} />
         </Space>
       )}
 

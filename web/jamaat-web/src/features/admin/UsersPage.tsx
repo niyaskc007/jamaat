@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Card, Table, Tag, Button, Input, App as AntdApp, Drawer, Form, Select, Space, Switch } from 'antd';
+import { Card, Table, Tag, Button, Input, App as AntdApp, Drawer, Form, Select, Space, Switch, Tabs } from 'antd';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PlusOutlined, SearchOutlined, ReloadOutlined, UserSwitchOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, ReloadOutlined, UserSwitchOutlined, SafetyCertificateOutlined, KeyOutlined, TeamOutlined } from '@ant-design/icons';
 import { api, extractProblem } from '../../shared/api/client';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { formatDateTime } from '../../shared/format/format';
+import { RolesMatrixPanel } from './roles/RolesMatrixPanel';
+import { UserPermissionsPanel } from './roles/UserPermissionsPanel';
 
 type User = {
   id: string; userName: string; fullName: string; email?: string | null; itsNumber?: string | null;
@@ -14,6 +17,26 @@ type User = {
 type Role = { id: string; name: string; description?: string | null; permissions: string[] };
 
 export function UsersPage() {
+  const [params, setParams] = useSearchParams();
+  const active = params.get('tab') ?? 'users';
+
+  return (
+    <div>
+      <PageHeader title="Users, Roles & Permissions" subtitle="Local users, role assignments, role × permission matrix, and per-user cross-functional grants." />
+      <Tabs
+        activeKey={active}
+        onChange={(k) => setParams({ tab: k })}
+        items={[
+          { key: 'users', label: (<span><TeamOutlined /> Users</span>), children: <UsersTab /> },
+          { key: 'matrix', label: (<span><SafetyCertificateOutlined /> Roles &amp; Permissions</span>), children: <RolesMatrixPanel /> },
+          { key: 'cross-functional', label: (<span><KeyOutlined /> Cross-functional grants</span>), children: <UserPermissionsPanel /> },
+        ]}
+      />
+    </div>
+  );
+}
+
+function UsersTab() {
   const qc = useQueryClient();
   const { message } = AntdApp.useApp();
   const [page, setPage] = useState(1);
@@ -30,8 +53,9 @@ export function UsersPage() {
 
   return (
     <div>
-      <PageHeader title="Users & Roles" subtitle="Local users and their role assignments."
-        actions={<Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>Add user</Button>} />
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBlockEnd: 8 }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>Add user</Button>
+      </div>
       <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
         <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 8 }}>
           <Input placeholder="Search by email, name" prefix={<SearchOutlined style={{ color: 'var(--jm-gray-400)' }} />} allowClear value={search}
@@ -49,7 +73,7 @@ export function UsersPage() {
               </div>
             ) },
             { title: 'Roles', dataIndex: 'roles', key: 'r', render: (roles: string[]) => (
-              <Space size={4} wrap>{roles.map((r) => <Tag key={r} color="blue" style={{ margin: 0 }}>{r}</Tag>)}</Space>
+              <Space size={4} wrap>{roles.map((r) => <Tag key={r} color={r === 'Administrator' ? 'gold' : 'blue'} style={{ margin: 0 }}>{r}</Tag>)}</Space>
             ) },
             { title: 'Status', dataIndex: 'isActive', key: 's', width: 100,
               render: (v: boolean) => v

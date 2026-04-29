@@ -26,7 +26,7 @@ export function CommitmentDetailPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { message } = AntdApp.useApp();
+  const { message, modal } = AntdApp.useApp();
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['commitment', id],
@@ -97,8 +97,34 @@ export function CommitmentDetailPage() {
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/commitments')}>Back</Button>
             <Button icon={<FileTextOutlined />} onClick={() => setAgreementOpen(true)} disabled={!data.agreementText}>View agreement</Button>
             <Button icon={<ReloadOutlined />} onClick={() => refreshMut.mutate()} loading={refreshMut.isPending}>Refresh overdue</Button>
-            {isActive && <Button icon={<PauseCircleOutlined />} onClick={() => pauseMut.mutate()} loading={pauseMut.isPending}>Pause</Button>}
-            {isPaused && <Button icon={<PlayCircleOutlined />} onClick={() => resumeMut.mutate()} loading={resumeMut.isPending}>Resume</Button>}
+            {/* All status transitions go through an explicit modal — never a native confirm.
+                Each transition spells out the consequences so the operator knows what's about
+                to happen (especially for Cancel which is a final state). */}
+            {isActive && (
+              <Button icon={<PauseCircleOutlined />} loading={pauseMut.isPending} onClick={() => modal.confirm({
+                title: `Pause commitment "${c.code}"?`,
+                content: (
+                  <div style={{ marginBlockStart: 8 }}>
+                    <p style={{ margin: 0 }}>While paused, this commitment <strong>cannot accept payments</strong> on its instalments.</p>
+                    <ul style={{ marginBlockStart: 8, paddingInlineStart: 18, color: 'var(--jm-gray-600)', fontSize: 13 }}>
+                      <li>The schedule and outstanding balance stay as-is.</li>
+                      <li>You can resume it any time to reopen payments.</li>
+                      <li>Any post-dated cheques on file are not affected — clear them only after you resume.</li>
+                    </ul>
+                  </div>
+                ),
+                okText: 'Pause commitment', cancelText: 'Keep active',
+                onOk: () => pauseMut.mutateAsync(),
+              })}>Pause</Button>
+            )}
+            {isPaused && (
+              <Button icon={<PlayCircleOutlined />} loading={resumeMut.isPending} onClick={() => modal.confirm({
+                title: `Resume commitment "${c.code}"?`,
+                content: 'Reopens payments. The schedule and balance pick up exactly where they were paused.',
+                okText: 'Resume', cancelText: 'Keep paused',
+                onOk: () => resumeMut.mutateAsync(),
+              })}>Resume</Button>
+            )}
             {!isClosed && <Button danger icon={<StopOutlined />} onClick={() => setCancelling(true)}>Cancel commitment</Button>}
           </Space>
         }

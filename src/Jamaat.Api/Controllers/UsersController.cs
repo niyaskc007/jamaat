@@ -106,17 +106,4 @@ public sealed class UsersController(
         return NoContent();
     }
 
-    [HttpGet("/api/v1/roles")]
-    [Authorize(Policy = "admin.roles")]
-    public async Task<IActionResult> Roles(CancellationToken ct)
-    {
-        var roles = await roleMgr.Roles.AsNoTracking().ToListAsync(ct);
-        var result = new List<RoleDto>();
-        foreach (var r in roles)
-        {
-            var claims = await roleMgr.GetClaimsAsync(r);
-            result.Add(new RoleDto(r.Id, r.Name ?? "", r.Description, claims.Where(c => c.Type == "permission").Select(c => c.Value).ToList()));
-        }
-        return Ok(result);
-    }
 }

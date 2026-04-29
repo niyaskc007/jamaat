@@ -82,19 +82,44 @@ public static class DevDataSeeder
         db.Families.AddRange(families);
         await db.SaveChangesAsync(ct);
 
-        // Link the family members after both parents exist (FamilyId FK).
+        // Link the family members after both parents exist (FamilyId FK). Also wire
+        // parental ITS refs so the FamilyTree view in the UI has meaningful relationships
+        // to render: position 1 = head, position 2 = spouse (set spouse-ITS on both),
+        // position 3 = child (Father ITS = head's ITS).
         for (var i = 0; i < families.Count; i++)
         {
-            for (var j = 0; j < 3; j++)
+            var headIdx = i * 3;
+            var spouseIdx = i * 3 + 1;
+            var childIdx = i * 3 + 2;
+            var head = headIdx < members.Count ? members[headIdx] : null;
+            var spouse = spouseIdx < members.Count ? members[spouseIdx] : null;
+            var child = childIdx < members.Count ? members[childIdx] : null;
+
+            if (head is not null) { head.LinkFamily(families[i].Id); db.Members.Update(head); }
+            if (spouse is not null)
             {
-                var idx = i * 3 + j;
-                if (idx >= members.Count) break;
-                members[idx].LinkFamily(families[i].Id);
-                db.Members.Update(members[idx]);
+                spouse.LinkFamily(families[i].Id);
+                if (head is not null) spouse.UpdateFamilyRefs(spouse.FatherItsNumber, spouse.MotherItsNumber, head.ItsNumber.Value);
+                db.Members.Update(spouse);
+            }
+            if (child is not null)
+            {
+                child.LinkFamily(families[i].Id);
+                child.UpdateFamilyRefs(
+                    fatherIts: head?.ItsNumber.Value,
+                    motherIts: spouse?.ItsNumber.Value,
+                    spouseIts: null);
+                db.Members.Update(child);
+            }
+            // Set spouse ITS on the head too (mutual link).
+            if (head is not null && spouse is not null)
+            {
+                head.UpdateFamilyRefs(head.FatherItsNumber, head.MotherItsNumber, spouse.ItsNumber.Value);
+                db.Members.Update(head);
             }
         }
         await db.SaveChangesAsync(ct);
-        logger.LogInformation("DevDataSeeder: seeded {Count} families.", families.Count);
+        logger.LogInformation("DevDataSeeder: seeded {Count} families with relationship links.", families.Count);
 
         // --- Fund enrollments -------------------------------------------------
         // Mix of Draft + Active so the approvers have something to click.

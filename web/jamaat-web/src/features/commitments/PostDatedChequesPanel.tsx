@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Card, Button, Table, Tag, Space, Typography, Modal, Form, Input, InputNumber, DatePicker, Select, App as AntdApp } from 'antd';
-import { PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, StopOutlined, BankOutlined } from '@ant-design/icons';
+import { Card, Button, Table, Tag, Space, Typography, Modal, Form, Input, InputNumber, DatePicker, Select, App as AntdApp, Tabs, Alert } from 'antd';
+import { PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, StopOutlined, BankOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
 import { extractProblem } from '../../shared/api/client';
@@ -97,6 +97,26 @@ function AddChequeModal({ open, onClose, commitmentId, currency, installments }:
   open: boolean; onClose: () => void; commitmentId: string; currency: string;
   installments: { id: string; installmentNo: number; dueDate: string; scheduledAmount: number; paidAmount: number }[];
 }) {
+  // Two tabs: Single (one cheque) and Bulk (auto-fan one cheque per remaining instalment).
+  // Bulk is the common case — contributors typically hand over the whole stack at agreement
+  // time, so we drive it from the schedule and let the user only enter the starting cheque
+  // number + bank.
+  const [tab, setTab] = useState<'single' | 'bulk'>('single');
+  return (
+    <Modal title="Add post-dated cheques" open={open} onCancel={onClose} destroyOnHidden footer={null} width={680}>
+      <Tabs activeKey={tab} onChange={(k) => setTab(k as 'single' | 'bulk')} items={[
+        { key: 'single', label: <span><PlusOutlined /> Single cheque</span>, children: <SingleChequeForm commitmentId={commitmentId} currency={currency} installments={installments} onDone={onClose} /> },
+        { key: 'bulk', label: <span><ThunderboltOutlined /> Bulk — one per instalment</span>, children: <BulkChequeForm commitmentId={commitmentId} currency={currency} installments={installments} onDone={onClose} /> },
+      ]} />
+    </Modal>
+  );
+}
+
+function SingleChequeForm({ commitmentId, currency, installments, onDone }: {
+  commitmentId: string; currency: string;
+  installments: { id: string; installmentNo: number; dueDate: string; scheduledAmount: number; paidAmount: number }[];
+  onDone: () => void;
+}) {
   const qc = useQueryClient();
   const { message } = AntdApp.useApp();
   const [form] = Form.useForm();
@@ -116,49 +136,171 @@ function AddChequeModal({ open, onClose, commitmentId, currency, installments }:
     onSuccess: () => {
       message.success('Cheque recorded.');
       void qc.invalidateQueries({ queryKey: ['pdcs', commitmentId] });
-      onClose();
+      onDone();
       form.resetFields();
     },
     onError: (e) => message.error(extractProblem(e).detail ?? 'Failed.'),
   });
 
-  // Show only instalments that still owe something so the cashier doesn't accidentally
-  // attach a cheque to a fully-paid line.
   const openInstallments = installments.filter((i) => i.scheduledAmount > i.paidAmount);
 
   return (
-    <Modal title="Add post-dated cheque" open={open} onCancel={onClose} destroyOnHidden
-      onOk={() => form.submit()} okText="Save cheque" confirmLoading={mut.isPending}>
-      <Form form={form} layout="vertical" requiredMark={false}
-        initialValues={{ chequeDate: dayjs().add(7, 'day') }}
-        onFinish={(v) => mut.mutate(v)}>
-        <Form.Item name="commitmentInstallmentId" label="Apply to instalment" rules={[{ required: true }]}
-          tooltip="The instalment this cheque covers. The instalment's PaidAmount stays at zero until the cheque clears.">
-          <Select placeholder="Select instalment"
-            options={openInstallments.map((i) => ({
-              value: i.id,
-              label: `#${i.installmentNo} — due ${formatDate(i.dueDate)} · remaining ${(i.scheduledAmount - i.paidAmount).toFixed(2)} ${currency}`,
-            }))}
-          />
+    <Form form={form} layout="vertical" requiredMark={false}
+      initialValues={{ chequeDate: dayjs().add(7, 'day') }}
+      onFinish={(v) => mut.mutate(v)}>
+      <Form.Item name="commitmentInstallmentId" label="Apply to instalment" rules={[{ required: true }]}
+        tooltip="The instalment this cheque covers. The instalment's PaidAmount stays at zero until the cheque clears.">
+        <Select placeholder="Select instalment"
+          options={openInstallments.map((i) => ({
+            value: i.id,
+            label: `#${i.installmentNo} — due ${formatDate(i.dueDate)} · remaining ${(i.scheduledAmount - i.paidAmount).toFixed(2)} ${currency}`,
+          }))}
+        />
+      </Form.Item>
+      <Form.Item name="chequeNumber" label="Cheque number" rules={[{ required: true, max: 64 }]}>
+        <Input placeholder="e.g., 100123" />
+      </Form.Item>
+      <Form.Item name="chequeDate" label="Cheque date" rules={[{ required: true }]}
+        tooltip="The date printed on the cheque. The cheque cannot be deposited before this date.">
+        <DatePicker style={{ inlineSize: 220 }} format="DD MMM YYYY" />
+      </Form.Item>
+      <Form.Item name="drawnOnBank" label="Drawn on bank" rules={[{ required: true, max: 200 }]}>
+        <Input placeholder="e.g., Emirates NBD" />
+      </Form.Item>
+      <Form.Item name="amount" label="Amount" rules={[{ required: true, type: 'number', min: 0.01 }]}>
+        <InputNumber style={{ inlineSize: 220 }} addonAfter={currency} step={100} />
+      </Form.Item>
+      <Form.Item name="notes" label="Notes">
+        <Input.TextArea rows={2} maxLength={2000} />
+      </Form.Item>
+      <Space style={{ inlineSize: '100%', justifyContent: 'flex-end' }}>
+        <Button onClick={onDone}>Cancel</Button>
+        <Button type="primary" htmlType="submit" loading={mut.isPending}>Save cheque</Button>
+      </Space>
+    </Form>
+  );
+}
+
+/// Bulk flow — author one cheque per remaining instalment in a single submit. The cashier
+/// only enters the starting cheque number + bank + a date offset; the form pre-populates
+/// the per-row cheque date as (instalment due − offset days) and the amount as the
+/// instalment's remaining balance, both editable per row before submit.
+function BulkChequeForm({ commitmentId, currency, installments, onDone }: {
+  commitmentId: string; currency: string;
+  installments: { id: string; installmentNo: number; dueDate: string; scheduledAmount: number; paidAmount: number }[];
+  onDone: () => void;
+}) {
+  const qc = useQueryClient();
+  const { message } = AntdApp.useApp();
+  const openInstallments = installments.filter((i) => i.scheduledAmount > i.paidAmount);
+
+  // Form rows — one per open instalment. Amount + chequeDate are editable per row;
+  // chequeNumber auto-increments from the starting number.
+  const [startingNumber, setStartingNumber] = useState('');
+  const [drawnOnBank, setDrawnOnBank] = useState('');
+  const [daysBeforeDue, setDaysBeforeDue] = useState(7);
+  const [rows, setRows] = useState(() => openInstallments.map((i) => ({
+    installmentId: i.id,
+    installmentNo: i.installmentNo,
+    dueDate: i.dueDate,
+    chequeDate: dayjs(i.dueDate).subtract(7, 'day') as Dayjs,
+    amount: i.scheduledAmount - i.paidAmount,
+    selected: true,
+  })));
+
+  // Re-derive rows when the days-before-due slider moves, so cheque dates stay in sync.
+  function recomputeDates(days: number) {
+    setDaysBeforeDue(days);
+    setRows((prev) => prev.map((r) => ({ ...r, chequeDate: dayjs(r.dueDate).subtract(days, 'day') })));
+  }
+
+  const updateRow = (idx: number, patch: Partial<typeof rows[number]>) =>
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+
+  const submit = async () => {
+    const selected = rows.filter((r) => r.selected);
+    if (selected.length === 0) { message.error('Pick at least one instalment.'); return; }
+    if (!startingNumber.trim()) { message.error('Starting cheque number is required.'); return; }
+    if (!drawnOnBank.trim()) { message.error('Drawn-on bank is required.'); return; }
+
+    // Compute cheque numbers — split into prefix + numeric tail, auto-increment the tail.
+    const m = startingNumber.match(/^(.*?)(\d+)$/);
+    const prefix = m ? m[1] : '';
+    const startNum = m ? Number(m[2]) : 1;
+    const padding = m ? m[2].length : 0;
+
+    let ok = 0; let failed = 0;
+    for (let idx = 0; idx < selected.length; idx++) {
+      const r = selected[idx];
+      const num = (startNum + idx).toString().padStart(padding, '0');
+      const chequeNumber = `${prefix}${num}`;
+      try {
+        await postDatedChequesApi.add({
+          commitmentId,
+          commitmentInstallmentId: r.installmentId,
+          chequeNumber,
+          chequeDate: r.chequeDate.format('YYYY-MM-DD'),
+          drawnOnBank,
+          amount: r.amount,
+          currency,
+        });
+        ok += 1;
+      } catch (e) {
+        failed += 1;
+        const p = extractProblem(e);
+        message.error(`Cheque ${chequeNumber} (instalment #${r.installmentNo}): ${p.detail ?? 'failed'}`);
+      }
+    }
+    void qc.invalidateQueries({ queryKey: ['pdcs', commitmentId] });
+    if (ok > 0) message.success(`${ok} cheque(s) recorded${failed ? ` · ${failed} failed` : ''}.`);
+    if (failed === 0) onDone();
+  };
+
+  return (
+    <div>
+      <Alert type="info" showIcon style={{ marginBlockEnd: 12 }}
+        message="Bulk add: one cheque per remaining instalment."
+        description="Common-fields once; per-row amount + cheque date editable. Cheque numbers auto-increment from your starting number." />
+
+      <Space size={12} style={{ inlineSize: '100%', marginBlockEnd: 12 }} wrap>
+        <Form.Item label="Starting cheque #" required style={{ marginBlockEnd: 0 }}>
+          <Input value={startingNumber} onChange={(e) => setStartingNumber(e.target.value)} placeholder="e.g., 100123" style={{ inlineSize: 200 }} />
         </Form.Item>
-        <Form.Item name="chequeNumber" label="Cheque number" rules={[{ required: true, max: 64 }]}>
-          <Input placeholder="e.g., 100123" />
+        <Form.Item label="Drawn on bank" required style={{ marginBlockEnd: 0 }}>
+          <Input value={drawnOnBank} onChange={(e) => setDrawnOnBank(e.target.value)} placeholder="e.g., Emirates NBD" style={{ inlineSize: 220 }} />
         </Form.Item>
-        <Form.Item name="chequeDate" label="Cheque date" rules={[{ required: true }]}
-          tooltip="The date printed on the cheque. The cheque cannot be deposited before this date.">
-          <DatePicker style={{ inlineSize: 220 }} format="DD MMM YYYY" />
+        <Form.Item label="Cheque date offset" style={{ marginBlockEnd: 0 }}
+          tooltip="Each cheque date = (instalment due date - this many days). 7 days is typical so the cheque clears before the due date.">
+          <InputNumber min={0} max={60} value={daysBeforeDue} onChange={(v) => recomputeDates(Number(v ?? 0))} addonAfter="days before due" style={{ inlineSize: 200 }} />
         </Form.Item>
-        <Form.Item name="drawnOnBank" label="Drawn on bank" rules={[{ required: true, max: 200 }]}>
-          <Input placeholder="e.g., Emirates NBD" />
-        </Form.Item>
-        <Form.Item name="amount" label="Amount" rules={[{ required: true, type: 'number', min: 0.01 }]}>
-          <InputNumber style={{ inlineSize: 220 }} addonAfter={currency} step={100} />
-        </Form.Item>
-        <Form.Item name="notes" label="Notes">
-          <Input.TextArea rows={2} maxLength={2000} />
-        </Form.Item>
-      </Form>
-    </Modal>
+      </Space>
+
+      <Table size="small" pagination={false}
+        rowKey="installmentId"
+        rowSelection={{
+          selectedRowKeys: rows.filter((r) => r.selected).map((r) => r.installmentId),
+          onChange: (keys) => setRows((prev) => prev.map((r) => ({ ...r, selected: keys.includes(r.installmentId) }))),
+        }}
+        dataSource={rows}
+        columns={[
+          { title: '#', dataIndex: 'installmentNo', width: 60, render: (v: number) => <span className="jm-tnum">#{v}</span> },
+          { title: 'Due', dataIndex: 'dueDate', width: 120, render: (v: string) => formatDate(v) },
+          { title: 'Cheque date', dataIndex: 'chequeDate', width: 170, render: (v: Dayjs, _row, idx) => (
+            <DatePicker size="small" value={v} format="DD MMM YYYY" onChange={(d) => updateRow(idx, { chequeDate: d ?? v })} />
+          ) },
+          { title: 'Amount', dataIndex: 'amount', width: 160, render: (v: number, _row, idx) => (
+            <InputNumber size="small" value={v} min={0.01} step={100} addonAfter={currency} onChange={(n) => updateRow(idx, { amount: Number(n ?? 0) })} style={{ inlineSize: 150 }} />
+          ) },
+        ]}
+      />
+
+      <Space style={{ inlineSize: '100%', justifyContent: 'flex-end', marginBlockStart: 12 }}>
+        <Button onClick={onDone}>Cancel</Button>
+        <Button type="primary" icon={<ThunderboltOutlined />} onClick={submit}>
+          Save {rows.filter((r) => r.selected).length} cheque(s)
+        </Button>
+      </Space>
+    </div>
   );
 }
 
