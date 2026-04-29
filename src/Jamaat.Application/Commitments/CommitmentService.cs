@@ -197,6 +197,8 @@ public sealed class CommitmentService(
             allowPartialPayments: dto.AllowPartialPayments,
             allowAutoAdvance: dto.AllowAutoAdvance);
         if (!string.IsNullOrWhiteSpace(dto.Notes)) commitment.SetNotes(dto.Notes);
+        if (dto.Intention != Domain.Enums.ContributionIntention.Permanent)
+            commitment.SetIntention(dto.Intention);
 
         var installments = dto.CustomSchedule is { Count: > 0 }
             ? CommitmentScheduleBuilder.BuildFromOverrides(dto.CustomSchedule)
@@ -349,7 +351,8 @@ public sealed class CommitmentService(
             c.Status, c.Notes,
             c.AgreementAcceptedAtUtc.HasValue,
             c.AgreementAcceptedAtUtc, c.AgreementAcceptedByName,
-            c.CreatedAtUtc);
+            c.CreatedAtUtc,
+            c.Intention);
 }
 
 public sealed class CreateCommitmentValidator : AbstractValidator<CreateCommitmentDto>

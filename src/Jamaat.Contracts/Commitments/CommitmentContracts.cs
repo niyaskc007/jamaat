@@ -26,7 +26,8 @@ public sealed record CommitmentDto(
     bool HasAcceptedAgreement,
     DateTimeOffset? AgreementAcceptedAtUtc,
     string? AgreementAcceptedByName,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc,
+    ContributionIntention Intention = ContributionIntention.Permanent);
 
 public sealed record CommitmentInstallmentDto(
     Guid Id,
@@ -95,7 +96,8 @@ public sealed record CreateCommitmentDto(
     bool AllowPartialPayments = true,
     bool AllowAutoAdvance = true,
     string? Notes = null,
-    IReadOnlyList<CreateInstallmentOverrideDto>? CustomSchedule = null);
+    IReadOnlyList<CreateInstallmentOverrideDto>? CustomSchedule = null,
+    ContributionIntention Intention = ContributionIntention.Permanent);
 
 /// <summary>Optional per-installment override for non-uniform schedules.</summary>
 public sealed record CreateInstallmentOverrideDto(int InstallmentNo, DateOnly DueDate, decimal ScheduledAmount);

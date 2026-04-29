@@ -1,15 +1,21 @@
 using Jamaat.Application.Common;
 using Jamaat.Application.Receipts;
 using Jamaat.Contracts.Receipts;
+using Jamaat.Domain.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace Jamaat.Api.Controllers;
 
 [ApiController]
 [Authorize]
 [Route("api/v1/receipts")]
-public sealed class ReceiptsController(IReceiptService svc, IExcelExporter excel) : ControllerBase
+public sealed class ReceiptsController(
+    IReceiptService svc,
+    IExcelExporter excel,
+    IReceiptDocumentStorage docStorage,
+    IOptions<ReceiptDocumentStorageOptions> docOptions) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "receipt.view")]
@@ -134,6 +140,52 @@ public sealed class ReceiptsController(IReceiptService svc, IExcelExporter excel
         var hasOverride = User.HasClaim(c => c.Type == "permission" && c.Value == "receipt.return.early");
         var r = await svc.ReturnContributionAsync(id, dto, hasOverride, ct);
         return r.IsSuccess ? Ok(r.Value) : ControllerResults.Problem(this, r.Error);
+    }
+
+    // --- Agreement document (PDF/image) attached to a returnable receipt --------------------
+
+    /// <summary>Upload the contributor-signed agreement document. PDFs and images are accepted;
+    /// max size from config (default 10 MB). Returns the updated receipt with the new URL.</summary>
+    [HttpPost("{id:guid}/agreement-document")]
+    [Authorize(Policy = "receipt.create")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<IActionResult> UploadAgreementDocument(Guid id, [FromForm] IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return ControllerResults.Problem(this, Error.Validation("agreement.empty", "File is required."));
+        if (file.Length > docOptions.Value.MaxBytes)
+            return ControllerResults.Problem(this, Error.Validation("agreement.too_large",
+                $"Document exceeds the {docOptions.Value.MaxBytes / 1024 / 1024} MB limit."));
+        var ct2 = file.ContentType?.ToLowerInvariant() ?? "";
+        var allowed = ct2 == "application/pdf" || ct2.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+        if (!allowed)
+            return ControllerResults.Problem(this, Error.Validation("agreement.invalid_type",
+                "Only PDF or image uploads are accepted for agreement documents."));
+
+        await using var stream = file.OpenReadStream();
+        var url = await docStorage.StoreAsync(id, stream, file.ContentType!, ct);
+        var result = await svc.SetAgreementDocumentUrlAsync(id, url, ct);
+        return result.IsSuccess ? Ok(result.Value) : ControllerResults.Problem(this, result.Error);
+    }
+
+    /// <summary>Stream the stored agreement document. Returns 404 if none uploaded yet.</summary>
+    [HttpGet("{id:guid}/agreement-document")]
+    [Authorize(Policy = "receipt.view")]
+    public async Task<IActionResult> GetAgreementDocument(Guid id, CancellationToken ct)
+    {
+        var opened = await docStorage.OpenAsync(id, ct);
+        if (opened is null) return NotFound();
+        return File(opened.Value.Content, opened.Value.ContentType);
+    }
+
+    /// <summary>Remove the stored document and clear the receipt's URL pointer.</summary>
+    [HttpDelete("{id:guid}/agreement-document")]
+    [Authorize(Policy = "receipt.create")]
+    public async Task<IActionResult> DeleteAgreementDocument(Guid id, CancellationToken ct)
+    {
+        await docStorage.DeleteAsync(id, ct);
+        var result = await svc.SetAgreementDocumentUrlAsync(id, null, ct);
+        return result.IsSuccess ? Ok(result.Value) : ControllerResults.Problem(this, result.Error);
     }
 
     [HttpGet("{id:guid}/pdf")]

@@ -116,8 +116,18 @@ public sealed class ReportsController(IReportsService svc, IExcelExporter excel)
                 new ExcelColumn("Fund name"),
                 new ExcelColumn("Lines", ExcelColumnType.Number, "#,##0"),
                 new ExcelColumn("Amount", ExcelColumnType.Currency),
+                new ExcelColumn("Cash", ExcelColumnType.Currency),
+                new ExcelColumn("Cheque", ExcelColumnType.Currency),
+                new ExcelColumn("Bank xfer", ExcelColumnType.Currency),
+                new ExcelColumn("Card", ExcelColumnType.Currency),
+                new ExcelColumn("Online", ExcelColumnType.Currency),
+                new ExcelColumn("UPI", ExcelColumnType.Currency),
             },
-            rows.Select(r => (IReadOnlyList<object?>)new object?[] { r.FundTypeCode, r.FundTypeName, r.LineCount, r.AmountTotal }).ToList());
+            rows.Select(r => (IReadOnlyList<object?>)new object?[]
+            {
+                r.FundTypeCode, r.FundTypeName, r.LineCount, r.AmountTotal,
+                r.AmountCash, r.AmountCheque, r.AmountBankTransfer, r.AmountCard, r.AmountOnline, r.AmountUpi,
+            }).ToList());
         return Xlsx(excel.Build(new[] { sheet }), $"fund-wise_{from:yyyyMMdd}_{to:yyyyMMdd}.xlsx");
     }
 

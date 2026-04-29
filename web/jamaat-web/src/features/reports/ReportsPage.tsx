@@ -90,6 +90,13 @@ function DailyCollection() {
   );
 }
 
+/// Subdued cell renderer for the per-mode breakdown columns - dashes-out zeros so the eye
+/// jumps to the cells with actual money in them.
+function ModeAmount({ v, cur }: { v: number; cur: string }) {
+  if (!v) return <span style={{ color: 'var(--jm-gray-400)' }}>-</span>;
+  return <span className="jm-tnum">{money(v, cur)}</span>;
+}
+
 function FundWise() {
   const { range, setRange, from, to } = useRange();
   const baseCurrency = useBaseCurrency();
@@ -121,11 +128,18 @@ function FundWise() {
         {hasPermission('reports.export') && <ExportButton onClick={() => downloadXlsx('/api/v1/reports/fund-wise.xlsx', exportParams, `fund-wise_${from}_${to}.xlsx`)} />}
       </div>
       <Table rowKey="fundTypeId" size="middle" loading={isLoading} dataSource={data ?? []} pagination={false}
+        scroll={{ x: 1200 }}
         columns={[
-          { title: 'Code', dataIndex: 'fundTypeCode', key: 'c', width: 120, render: (v: string) => <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontWeight: 600 }}>{v}</span> },
-          { title: 'Fund', dataIndex: 'fundTypeName', key: 'n' },
-          { title: 'Lines', dataIndex: 'lineCount', key: 'lc', align: 'right', width: 100, render: (v: number) => <span className="jm-tnum">{v}</span> },
-          { title: 'Total', dataIndex: 'amountTotal', key: 'amt', align: 'right', render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, baseCurrency)}</span> },
+          { title: 'Code', dataIndex: 'fundTypeCode', key: 'c', width: 110, fixed: 'left', render: (v: string) => <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontWeight: 600 }}>{v}</span> },
+          { title: 'Fund', dataIndex: 'fundTypeName', key: 'n', width: 200, fixed: 'left' },
+          { title: 'Lines', dataIndex: 'lineCount', key: 'lc', align: 'right', width: 80, render: (v: number) => <span className="jm-tnum">{v}</span> },
+          { title: 'Total', dataIndex: 'amountTotal', key: 'amt', align: 'right', width: 130, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, baseCurrency)}</span> },
+          { title: 'Cash', dataIndex: 'amountCash', key: 'mc', align: 'right', width: 110, render: (v: number) => <ModeAmount v={v} cur={baseCurrency} /> },
+          { title: 'Cheque', dataIndex: 'amountCheque', key: 'mq', align: 'right', width: 110, render: (v: number) => <ModeAmount v={v} cur={baseCurrency} /> },
+          { title: 'Bank xfer', dataIndex: 'amountBankTransfer', key: 'mb', align: 'right', width: 110, render: (v: number) => <ModeAmount v={v} cur={baseCurrency} /> },
+          { title: 'Card', dataIndex: 'amountCard', key: 'mca', align: 'right', width: 100, render: (v: number) => <ModeAmount v={v} cur={baseCurrency} /> },
+          { title: 'Online', dataIndex: 'amountOnline', key: 'mo', align: 'right', width: 100, render: (v: number) => <ModeAmount v={v} cur={baseCurrency} /> },
+          { title: 'UPI', dataIndex: 'amountUpi', key: 'mu', align: 'right', width: 100, render: (v: number) => <ModeAmount v={v} cur={baseCurrency} /> },
         ]}
         locale={{ emptyText: <Empty description="No fund-wise receipts" /> }}
       />

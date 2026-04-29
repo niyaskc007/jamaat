@@ -70,6 +70,10 @@ public sealed class Commitment : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public bool AllowAutoAdvance { get; private set; }
     public CommitmentStatus Status { get; private set; }
     public string? Notes { get; private set; }
+    /// <summary>Default intention for receipts allocated to this commitment. Permanent means
+    /// the pledge is donated; Returnable means contributors expect the money back per the
+    /// configured maturity terms. Defaults to Permanent for backwards compatibility.</summary>
+    public ContributionIntention Intention { get; private set; } = ContributionIntention.Permanent;
 
     // Agreement snapshot - includes acceptance proof (IP, User-Agent, method) so the
     // commitment carries a self-contained audit record of who took the action and from
@@ -98,6 +102,16 @@ public sealed class Commitment : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public decimal ProgressPercent => TotalAmount == 0 ? 0 : Math.Round(PaidAmount / TotalAmount * 100m, 2);
 
     public void SetNotes(string? notes) => Notes = notes;
+
+    /// <summary>Override the default Permanent intention. Only allowed before the agreement is
+    /// accepted - after that the receipts allocated to this commitment have already been booked
+    /// against an income vs liability account, so changing intention would unbalance the GL.</summary>
+    public void SetIntention(ContributionIntention intention)
+    {
+        if (Status != CommitmentStatus.Draft)
+            throw new InvalidOperationException("Cannot change intention after agreement acceptance.");
+        Intention = intention;
+    }
 
     public void ReplaceSchedule(IEnumerable<CommitmentInstallment> installments)
     {

@@ -20,6 +20,7 @@ import { ReceiptsPage } from '../features/receipts/ReceiptsPage';
 import { NewReceiptPage } from '../features/receipts/NewReceiptPage';
 import { ReceiptDetailPage } from '../features/receipts/ReceiptDetailPage';
 import { VouchersPage } from '../features/vouchers/VouchersPage';
+import { PostDatedChequesPage } from '../features/post-dated-cheques/PostDatedChequesPage';
 import { NewVoucherPage } from '../features/vouchers/NewVoucherPage';
 import { VoucherDetailPage } from '../features/vouchers/VoucherDetailPage';
 import { ReportsPage } from '../features/reports/ReportsPage';
@@ -71,6 +72,7 @@ export function App() {
         <Route path="receipts" element={<Gate anyOf={['receipt.view']}><ReceiptsPage /></Gate>} />
         <Route path="receipts/new" element={<Gate anyOf={['receipt.create']}><NewReceiptPage /></Gate>} />
         <Route path="receipts/:id" element={<Gate anyOf={['receipt.view']}><ReceiptDetailPage /></Gate>} />
+        <Route path="cheques" element={<Gate anyOf={['commitment.view']}><PostDatedChequesPage /></Gate>} />
         <Route path="vouchers" element={<Gate anyOf={['voucher.view']}><VouchersPage /></Gate>} />
         <Route path="vouchers/new" element={<Gate anyOf={['voucher.create']}><NewVoucherPage /></Gate>} />
         <Route path="vouchers/:id" element={<Gate anyOf={['voucher.view']}><VoucherDetailPage /></Gate>} />

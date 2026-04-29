@@ -11,9 +11,13 @@ public sealed class VoucherPdfRenderer : IVoucherPdfRenderer
 {
     static VoucherPdfRenderer() { QuestPDF.Settings.License = LicenseType.Community; }
 
-    public byte[] Render(VoucherDto v)
+    public byte[] Render(VoucherDto v, string? documentTitle = null)
     {
         var fxApplied = v.Currency != v.BaseCurrency && v.FxRate != 1m;
+        // documentTitle (when provided) lets an admin override "Payment voucher" with the
+        // configured TransactionLabel, e.g. "QH Loan Issue" for a disbursement voucher or
+        // "Returnable Contribution Refund" for a return voucher.
+        var headerSubtitle = documentTitle ?? "Payment voucher";
 
         return Document.Create(doc =>
         {
@@ -30,7 +34,7 @@ public sealed class VoucherPdfRenderer : IVoucherPdfRenderer
                         row.RelativeItem().Column(c =>
                         {
                             c.Item().Text("JAMAAT").FontSize(22).Bold().FontColor("#0B6E63");
-                            c.Item().PaddingTop(2).Text("Payment voucher").FontSize(9).FontColor("#64748B");
+                            c.Item().PaddingTop(2).Text(headerSubtitle).FontSize(9).FontColor("#64748B");
                         });
                         row.ConstantItem(170).AlignRight().Column(c =>
                         {

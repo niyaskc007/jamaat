@@ -105,13 +105,24 @@ public sealed class ReportsService(Persistence.JamaatDbContextFacade db) : IRepo
                            where r.Status == ReceiptStatus.Confirmed && r.ReceiptDate >= q.From && r.ReceiptDate <= q.To
                            from l in r.Lines
                            where fundIds.Contains(l.FundTypeId)
-                           select new { l.FundTypeId, l.Amount }).ToListAsync(ct);
+                           select new { l.FundTypeId, l.Amount, r.PaymentMode }).ToListAsync(ct);
 
         return lines.GroupBy(x => x.FundTypeId)
             .Select(g =>
             {
                 var f = funds.First(x => x.Id == g.Key);
-                return new ReportFundWiseDto(g.Key, f.Code, f.NameEnglish, g.Count(), g.Sum(x => x.Amount));
+                // Per-mode subtotals so the report column can show how a fund's collections split
+                // across cash / cheque / digital. Helps reconciliation against bank statements.
+                decimal sumByMode(PaymentMode mode) => g.Where(x => x.PaymentMode == mode).Sum(x => x.Amount);
+                return new ReportFundWiseDto(
+                    g.Key, f.Code, f.NameEnglish,
+                    g.Count(), g.Sum(x => x.Amount),
+                    sumByMode(PaymentMode.Cash),
+                    sumByMode(PaymentMode.Cheque),
+                    sumByMode(PaymentMode.BankTransfer),
+                    sumByMode(PaymentMode.Card),
+                    sumByMode(PaymentMode.Online),
+                    sumByMode(PaymentMode.Upi));
             })
             .OrderByDescending(x => x.AmountTotal)
             .ToList();

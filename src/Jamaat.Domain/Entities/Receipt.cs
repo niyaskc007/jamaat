@@ -65,6 +65,9 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public DateOnly? MaturityDate { get; private set; }
     /// <summary>Reference / id to a stored agreement document.</summary>
     public string? AgreementReference { get; private set; }
+    /// <summary>URL to the uploaded agreement file (PDF or scanned image). Set by the
+    /// receipt-document upload flow; null if the contributor hasn't provided a copy yet.</summary>
+    public string? AgreementDocumentUrl { get; private set; }
     /// <summary>Running total of how much of this returnable receipt has been returned to the contributor.</summary>
     public decimal AmountReturned { get; private set; }
     /// <summary>JSON map of custom-field key → captured value. Populated when the chosen FundType has admin-defined custom fields.</summary>
@@ -118,6 +121,9 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
     /// <summary>Capture admin-defined custom field values. ReceiptService validates required fields up-front.</summary>
     public void SetCustomFields(string? customFieldsJson) => CustomFieldsJson = customFieldsJson;
 
+    /// <summary>Attach (or detach with null) a stored agreement document URL.</summary>
+    public void SetAgreementDocumentUrl(string? url) => AgreementDocumentUrl = url;
+
     /// <summary>Capture the contributor's intention + agreement details. ReceiptService validates
     /// the combination against the chosen FundType's IsReturnable / RequiresNiyyath / RequiresMaturityTracking
     /// / RequiresAgreement flags before this is invoked.</summary>
@@ -138,6 +144,17 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
         if (amount <= 0) throw new ArgumentException("Amount must be positive.", nameof(amount));
         if (amount > AmountReturnable) throw new InvalidOperationException("Return exceeds remaining returnable balance.");
         AmountReturned += amount;
+    }
+
+    /// <summary>Reverse a previously-recorded return. Used when the linked return-voucher is
+    /// cancelled or reversed - the running total drops back so the receipt accurately
+    /// reflects what's still owed to the contributor and a fresh return can be processed.</summary>
+    public void RollbackReturn(decimal amount)
+    {
+        if (amount <= 0) throw new ArgumentException("Amount must be positive.", nameof(amount));
+        if (amount > AmountReturned)
+            throw new InvalidOperationException($"Rollback amount {amount} exceeds AmountReturned {AmountReturned}.");
+        AmountReturned -= amount;
     }
 
     public void ReplaceLines(IEnumerable<ReceiptLine> lines)

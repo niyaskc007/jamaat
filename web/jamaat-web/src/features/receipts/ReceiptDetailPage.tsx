@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Descriptions, Tag, Table, Button, Space, Spin, Alert, App as AntdApp, Input, Modal, Form, InputNumber, DatePicker, Select } from 'antd';
@@ -113,6 +113,9 @@ export function ReceiptDetailPage() {
               </Descriptions.Item>
               {data.maturityDate && <Descriptions.Item label="Maturity">{dayjs(data.maturityDate).format('DD MMM YYYY')}</Descriptions.Item>}
               {data.agreementReference && <Descriptions.Item label="Agreement"><span className="jm-tnum">{data.agreementReference}</span></Descriptions.Item>}
+              <Descriptions.Item label="Agreement document" span={3}>
+                <AgreementDocumentControl receipt={data} />
+              </Descriptions.Item>
             </>
           )}
           {data.niyyathNote && <Descriptions.Item label="Niyyath" span={3}>{data.niyyathNote}</Descriptions.Item>}
@@ -450,6 +453,82 @@ function ReturnContributionModal({
 /// Modal-with-textarea reason prompt. Shared shape with the list page; we keep two
 /// copies because the list version is a closure over its own mutation. If a third
 /// caller appears, lift this into shared/ui.
+/// Upload / view / replace / delete the receipt's agreement document. Hides itself for
+/// permanent receipts (the parent doesn't render it in that case anyway). PDF + image
+/// uploads accepted. The "View" button opens the file in a new tab using the same
+/// authenticated-blob trick the receipt PDF link uses.
+function AgreementDocumentControl({ receipt }: { receipt: Receipt }) {
+  const qc = useQueryClient();
+  const { message, modal } = AntdApp.useApp();
+  const { hasPermission } = useAuth();
+  const canEdit = hasPermission('receipt.create');
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (file: File) => {
+    setBusy(true);
+    try {
+      await receiptsApi.uploadAgreementDocument(receipt.id, file);
+      message.success('Agreement document uploaded.');
+      void qc.invalidateQueries({ queryKey: ['receipt', receipt.id] });
+    } catch (e) {
+      message.error(extractProblem(e).detail ?? 'Upload failed.');
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  const handleDelete = () => {
+    modal.confirm({
+      title: 'Remove agreement document?',
+      content: 'The stored file will be deleted. The free-text Agreement reference (if any) stays on the receipt.',
+      okText: 'Remove', okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await receiptsApi.deleteAgreementDocument(receipt.id);
+          message.success('Agreement document removed.');
+          void qc.invalidateQueries({ queryKey: ['receipt', receipt.id] });
+        } catch (e) {
+          message.error(extractProblem(e).detail ?? 'Delete failed.');
+        }
+      },
+    });
+  };
+
+  return (
+    <Space wrap>
+      {receipt.agreementDocumentUrl ? (
+        <>
+          <Tag color="green" style={{ margin: 0 }}>Uploaded</Tag>
+          <Button size="small" onClick={() => void receiptsApi.openAgreementDocument(receipt.id)}>
+            View
+          </Button>
+          {canEdit && (
+            <>
+              <Button size="small" loading={busy} onClick={() => inputRef.current?.click()}>
+                Replace
+              </Button>
+              <Button size="small" danger onClick={handleDelete}>Remove</Button>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <span style={{ color: 'var(--jm-gray-500)', fontSize: 12 }}>No file attached.</span>
+          {canEdit && (
+            <Button size="small" type="primary" loading={busy} onClick={() => inputRef.current?.click()}>
+              Upload PDF / image
+            </Button>
+          )}
+        </>
+      )}
+      <input ref={inputRef} type="file" accept="application/pdf,image/*" style={{ display: 'none' }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleUpload(f); }} />
+    </Space>
+  );
+}
+
 function promptReason(
   modal: ReturnType<typeof AntdApp.useApp>['modal'],
   title: string,

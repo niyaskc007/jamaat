@@ -115,6 +115,11 @@ public sealed class VoucherService(
         if (string.IsNullOrWhiteSpace(dto.Reason)) return Error.Validation("reason_required", "A reason is required.");
         e.Cancel(dto.Reason, currentUser.UserId ?? Guid.Empty, clock.UtcNow);
         repo.Update(e);
+        // Cancelling a contribution-return voucher rolls back the source receipt's running
+        // AmountReturned so the contributor can be paid via a fresh return. Without this the
+        // receipt would stay "partially returned" forever even though no money actually went
+        // out (since cancelled draft vouchers never posted to the GL anyway).
+        await RollbackContributionReturnIfNeededAsync(e, ct);
         await uow.SaveChangesAsync(ct);
         var fresh = await repo.GetWithLinesAsync(e.Id, ct);
         return await MapAsync(fresh!, ct);
@@ -132,10 +137,29 @@ public sealed class VoucherService(
         await posting.PostReversalAsync(LedgerSourceType.Voucher, e.Id, dto.Reason, ct);
         e.MarkReversed(dto.Reason, clock.UtcNow);
         repo.Update(e);
+        // Reversing a contribution-return voucher: the GL is unwound by PostReversalAsync above,
+        // and the source receipt's AmountReturned must drop back so the receipt reflects the
+        // true outstanding balance. Otherwise reports show "fully returned" while the GL says
+        // the obligation is still live.
+        await RollbackContributionReturnIfNeededAsync(e, ct);
         await uow.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         var fresh = await repo.GetWithLinesAsync(e.Id, ct);
         return await MapAsync(fresh!, ct);
+    }
+
+    /// <summary>If the voucher being cancelled/reversed is a contribution-return, drop its
+    /// amount back from the source Receipt's AmountReturned and refresh maturity-state.
+    /// No-op for regular expense vouchers and QH-disbursement vouchers.</summary>
+    private async Task RollbackContributionReturnIfNeededAsync(Voucher voucher, CancellationToken ct)
+    {
+        if (voucher.SourceReceiptId is not Guid receiptId) return;
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        var receipt = await db.Receipts.FirstOrDefaultAsync(r => r.Id == receiptId, ct);
+        if (receipt is null) return;
+        receipt.RollbackReturn(voucher.AmountTotal);
+        receipt.RefreshMaturityState(clock.Today);
+        db.Receipts.Update(receipt);
     }
 
     public async Task<Result<byte[]>> RenderPdfAsync(Guid id, CancellationToken ct = default)
@@ -144,7 +168,40 @@ public sealed class VoucherService(
         if (e is null) return Error.NotFound("voucher.not_found", "Voucher not found.");
         var renderer = services.GetRequiredService<IVoucherPdfRenderer>();
         var dto = await MapAsync(e, ct);
-        return renderer.Render(dto.Value!);
+
+        // Pick the right TransactionLabelType for this voucher's kind. Source-receipt link =>
+        // contribution return; source-loan link => QH loan issue; otherwise it's a generic
+        // expense payment with no admin-configured label. Resolution order: per-fund (where
+        // a fund is implied by the source) -> system-wide -> fall back to renderer default.
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        Domain.Enums.TransactionLabelType? labelType =
+            e.SourceReceiptId.HasValue ? Domain.Enums.TransactionLabelType.ContributionReturn
+            : e.SourceQarzanHasanaLoanId.HasValue ? Domain.Enums.TransactionLabelType.LoanIssue
+            : null;
+        string? documentTitle = null;
+        if (labelType is Domain.Enums.TransactionLabelType lt)
+        {
+            // Resolve fund context for per-fund label override (only contribution-return has a
+            // fund - it inherits from the source receipt's first line).
+            Guid? scopedFundId = null;
+            if (e.SourceReceiptId is Guid rid)
+            {
+                scopedFundId = await db.Receipts.AsNoTracking()
+                    .Where(r => r.Id == rid)
+                    .SelectMany(r => r.Lines.OrderBy(l => l.LineNo).Take(1).Select(l => (Guid?)l.FundTypeId))
+                    .FirstOrDefaultAsync(ct);
+            }
+            var perFund = scopedFundId is Guid f
+                ? await db.TransactionLabels.AsNoTracking()
+                    .Where(t => t.FundTypeId == f && t.LabelType == lt && t.IsActive)
+                    .Select(t => t.Label).FirstOrDefaultAsync(ct)
+                : null;
+            documentTitle = perFund ?? await db.TransactionLabels.AsNoTracking()
+                .Where(t => t.FundTypeId == null && t.LabelType == lt && t.IsActive)
+                .Select(t => t.Label).FirstOrDefaultAsync(ct);
+        }
+
+        return renderer.Render(dto.Value!, documentTitle);
     }
 
     public async Task<ImportResult> ImportAsync(Stream xlsxStream, CancellationToken ct = default)

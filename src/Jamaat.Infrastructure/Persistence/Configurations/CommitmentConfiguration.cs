@@ -38,6 +38,7 @@ public sealed class CommitmentConfiguration : IEntityTypeConfiguration<Commitmen
         b.Property(x => x.Frequency).HasConversion<int>();
         b.Property(x => x.Status).HasConversion<int>();
         b.Property(x => x.Notes).HasMaxLength(2000);
+        b.Property(x => x.Intention).HasConversion<int>().HasDefaultValue(Domain.Enums.ContributionIntention.Permanent);
         b.Property(x => x.AgreementText).HasColumnType("nvarchar(max)");
         b.Property(x => x.AgreementAcceptedByName).HasMaxLength(200);
         b.Property(x => x.AgreementAcceptedIpAddress).HasMaxLength(64);

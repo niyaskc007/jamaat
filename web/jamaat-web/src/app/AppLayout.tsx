@@ -40,6 +40,10 @@ const { Sider, Content } = Layout;
 /// laptop screen has to collapse the sider every time they reload the app, and a user with
 /// a large screen has to expand it after an inadvertent collapse propagates everywhere.
 const COLLAPSED_KEY = 'jm:sider-collapsed';
+/// Persist which sections (Operations / Accounting / Administration / Support) are open
+/// so a user's expand/collapse choices survive a reload.
+const OPEN_SECTIONS_KEY = 'jm:sider-open-sections';
+const DEFAULT_OPEN_SECTIONS = ['operations', 'accounting', 'admin', 'support'];
 
 export function AppLayout() {
   const { t } = useTranslation('common');
@@ -54,6 +58,18 @@ export function AppLayout() {
     try { localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0'); } catch { /* ignore */ }
     return next;
   });
+  const [openSections, setOpenSections] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(OPEN_SECTIONS_KEY);
+      if (!raw) return DEFAULT_OPEN_SECTIONS;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((k): k is string => typeof k === 'string') : DEFAULT_OPEN_SECTIONS;
+    } catch { return DEFAULT_OPEN_SECTIONS; }
+  });
+  const handleOpenChange = (keys: string[]) => {
+    setOpenSections(keys);
+    try { localStorage.setItem(OPEN_SECTIONS_KEY, JSON.stringify(keys)); } catch { /* ignore */ }
+  };
 
   // Global cashier-friendly shortcuts. Alt+N jumps to New Receipt; "/" jumps to
   // the Members search page (global top-bar search isn't wired yet - when it is,
@@ -78,6 +94,7 @@ export function AppLayout() {
     if (any('enrollment.view')) ops.push({ key: '/fund-enrollments', icon: <GiftOutlined />, label: 'Enrollments' });
     if (any('qh.view')) ops.push({ key: '/qarzan-hasana', icon: <BankOutlined />, label: 'Qarzan Hasana' });
     if (any('receipt.view')) ops.push({ key: '/receipts', icon: <FileTextOutlined />, label: t('nav.receipts') });
+    if (any('commitment.view')) ops.push({ key: '/cheques', icon: <BankOutlined />, label: 'Cheques' });
     if (any('voucher.view')) ops.push({ key: '/vouchers', icon: <WalletOutlined />, label: t('nav.vouchers') });
 
     const acc: any[] = [];
@@ -97,36 +114,19 @@ export function AppLayout() {
 
     const help: any[] = [{ key: '/help', icon: <QuestionCircleOutlined />, label: 'Help & Docs' }];
 
+    // When the sider is collapsed, AntD Menu renders submenus as popovers - useful for icon
+    // mode. When expanded, submenus collapse/expand inline driven by openSections state. Each
+    // section header carries an icon-key prefix so it has a glyph when collapsed.
     const groups: any[] = [
-      {
-        key: 'operations',
-        type: 'group',
-        label: collapsed ? '' : <SectionLabel>{t('nav.sectionOperations')}</SectionLabel>,
-        children: ops,
-      },
+      { key: 'operations', icon: <DashboardOutlined />, label: t('nav.sectionOperations'), children: ops },
     ];
     if (acc.length)
-      groups.push({
-        key: 'accounting',
-        type: 'group',
-        label: collapsed ? '' : <SectionLabel>{t('nav.sectionAccounting')}</SectionLabel>,
-        children: acc,
-      });
+      groups.push({ key: 'accounting', icon: <BookOutlined />, label: t('nav.sectionAccounting'), children: acc });
     if (adm.length)
-      groups.push({
-        key: 'admin',
-        type: 'group',
-        label: collapsed ? '' : <SectionLabel>{t('nav.sectionAdmin')}</SectionLabel>,
-        children: adm,
-      });
-    groups.push({
-      key: 'support',
-      type: 'group',
-      label: collapsed ? '' : <SectionLabel>Support</SectionLabel>,
-      children: help,
-    });
+      groups.push({ key: 'admin', icon: <SafetyOutlined />, label: t('nav.sectionAdmin'), children: adm });
+    groups.push({ key: 'support', icon: <QuestionCircleOutlined />, label: 'Support', children: help });
     return groups;
-  }, [collapsed, t, hasPermission, user?.id]);
+  }, [t, hasPermission, user?.id]);
 
   const activeKey = resolveActiveKey(location.pathname);
   const breadcrumb = resolveBreadcrumb(location.pathname, t);
@@ -147,26 +147,28 @@ export function AppLayout() {
 
   return (
     <Layout style={{ minBlockSize: '100dvh' }}>
-      {/* Three-row flex layout: pinned logo header, scrollable menu, pinned collapse footer.
-          The middle row owns vertical overflow so long nav lists (especially when an admin
-          has every section visible) stay reachable without growing the page. */}
+      {/* AntD Sider wraps its children in `.ant-layout-sider-children`, which is the actual
+          flex container we need. Setting display:flex on the outer Sider's style prop puts
+          flex on the wrong element - the children div ignores it and the menu overflows the
+          viewport. The .jm-sider class + matching CSS rule in index.css makes the inner
+          children div the flex column instead. Each row (logo / scrollable menu / pinned
+          footer) sits inside .jm-sider-row-* with appropriate flex properties. */}
       <Sider
         width={240}
         collapsedWidth={72}
         collapsed={collapsed}
         trigger={null}
         theme="dark"
+        className="jm-sider"
         style={{
           background: 'var(--jm-sider-bg)',
           position: 'sticky',
           insetBlockStart: 0,
           blockSize: '100dvh',
           borderInlineEnd: '1px solid var(--jm-sider-border)',
-          display: 'flex',
-          flexDirection: 'column',
         }}
       >
-        <div
+        <div className="jm-sider-row-header"
           style={{
             blockSize: 56,
             flexShrink: 0,
@@ -180,17 +182,19 @@ export function AppLayout() {
           <Logo size={28} variant="light" withWord={!collapsed} />
         </div>
 
-        <div className="jm-sider-scroll" style={{
+        <div className="jm-sider-row-menu jm-sider-scroll" style={{
           flex: 1,
           minBlockSize: 0,
           overflowY: 'auto',
           overflowX: 'hidden',
-          padding: '12px 8px',
+          padding: '8px 0',
         }}>
           <Menu
             theme="dark"
             mode="inline"
             selectedKeys={[activeKey]}
+            openKeys={collapsed ? [] : openSections}
+            onOpenChange={handleOpenChange}
             items={navItems}
             onClick={(e) => navigate(e.key)}
             style={{ background: 'transparent', borderInlineEnd: 'none' }}
@@ -199,7 +203,7 @@ export function AppLayout() {
         </div>
 
         {/* Pinned footer with the collapse toggle. Always visible regardless of nav length. */}
-        <div
+        <div className="jm-sider-row-footer"
           style={{
             flexShrink: 0,
             blockSize: 44,
@@ -294,28 +298,11 @@ export function AppLayout() {
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        fontSize: 11,
-        fontWeight: 600,
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
-        color: 'var(--jm-sider-fg-muted)',
-        padding: '10px 16px 6px',
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
 function resolveActiveKey(path: string): string {
   // Match deepest known prefix
   const known = [
     '/dashboard', '/members', '/families', '/events', '/commitments', '/fund-enrollments', '/qarzan-hasana',
-    '/receipts', '/vouchers', '/ledger', '/reports', '/help',
+    '/receipts', '/cheques', '/vouchers', '/ledger', '/reports', '/help',
     '/admin/users', '/admin/master-data', '/admin/integrations', '/admin/audit', '/admin/error-logs',
   ];
   return known.find((k) => path === k || path.startsWith(k + '/')) ?? '/dashboard';

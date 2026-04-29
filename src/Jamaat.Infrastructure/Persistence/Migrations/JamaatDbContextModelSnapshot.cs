@@ -301,6 +301,11 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("FundTypeId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("Intention")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.Property<Guid?>("MemberId")
                         .HasColumnType("uniqueidentifier");
 
@@ -2554,6 +2559,10 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AgreementDocumentUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("AgreementReference")
                         .HasMaxLength(500)

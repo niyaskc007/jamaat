@@ -15,6 +15,9 @@ public interface IReceiptService
     /// linked voucher (with a dedicated number), debits the receipt's liability account, credits
     /// the chosen bank/cash account, and increments the receipt's running AmountReturned.</summary>
     Task<Result<ReceiptDto>> ReturnContributionAsync(Guid receiptId, ReturnContributionDto dto, bool maturityOverride, CancellationToken ct = default);
+    /// <summary>Persist a stored agreement-document URL on the receipt. The actual file bytes
+    /// are written by the controller via IReceiptDocumentStorage; this just records the pointer.</summary>
+    Task<Result<ReceiptDto>> SetAgreementDocumentUrlAsync(Guid receiptId, string? url, CancellationToken ct = default);
     Task<Result> LogReprintAsync(Guid id, ReprintReceiptDto dto, CancellationToken ct = default);
     Task<Result<byte[]>> RenderPdfAsync(Guid id, bool reprint, CancellationToken ct = default);
     /// <summary>Bulk-import historical receipts. Each row = one single-line confirmed receipt.</summary>

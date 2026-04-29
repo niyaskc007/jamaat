@@ -52,6 +52,7 @@ export type Receipt = {
   agreementReference?: string | null;
   amountReturned: number;
   maturityState: ReturnableMaturityState;
+  agreementDocumentUrl?: string | null;
 };
 
 export type ReceiptListItem = {
@@ -118,6 +119,19 @@ export const receiptsApi = {
   reverse: async (id: string, reason: string) => (await api.post<Receipt>(`/api/v1/receipts/${id}/reverse`, { reason })).data,
   returnContribution: async (id: string, input: ReturnContribution) =>
     (await api.post<Receipt>(`/api/v1/receipts/${id}/return-contribution`, input)).data,
+  uploadAgreementDocument: async (id: string, file: File): Promise<Receipt> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const { data } = await api.post<Receipt>(`/api/v1/receipts/${id}/agreement-document`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+  deleteAgreementDocument: async (id: string): Promise<Receipt> =>
+    (await api.delete<Receipt>(`/api/v1/receipts/${id}/agreement-document`)).data,
+  /** Opens the uploaded agreement doc in a new tab via the auth-aware blob trick. */
+  openAgreementDocument: (id: string) =>
+    openAuthenticatedPdf(`/api/v1/receipts/${id}/agreement-document`, `agreement-${id}.pdf`),
   /** Opens the PDF in a new tab using the blob+auth trick (native window.open would drop the Authorization header). */
   openPdf: (id: string, reprint = false) =>
     openAuthenticatedPdf(`/api/v1/receipts/${id}/pdf${reprint ? '?reprint=true' : ''}`, `receipt-${id}.pdf`),

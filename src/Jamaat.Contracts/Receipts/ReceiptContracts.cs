@@ -32,7 +32,8 @@ public sealed record ReceiptDto(
     DateOnly? MaturityDate = null,
     string? AgreementReference = null,
     decimal AmountReturned = 0m,
-    ReturnableMaturityState MaturityState = ReturnableMaturityState.NotApplicable);
+    ReturnableMaturityState MaturityState = ReturnableMaturityState.NotApplicable,
+    string? AgreementDocumentUrl = null);
 
 public sealed record ReceiptLineDto(
     Guid Id,

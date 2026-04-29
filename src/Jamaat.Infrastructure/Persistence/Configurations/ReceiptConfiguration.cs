@@ -34,6 +34,7 @@ public sealed class ReceiptConfiguration : IEntityTypeConfiguration<Receipt>
         b.Property(x => x.Intention).HasConversion<int>().HasDefaultValue(Domain.Enums.ContributionIntention.Permanent);
         b.Property(x => x.NiyyathNote).HasMaxLength(2000);
         b.Property(x => x.AgreementReference).HasMaxLength(500);
+        b.Property(x => x.AgreementDocumentUrl).HasMaxLength(500);
         b.Property(x => x.AmountReturned).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
         b.Property(x => x.MaturityState).HasConversion<int>().HasDefaultValue(Domain.Enums.ReturnableMaturityState.NotApplicable);
         b.HasIndex(x => new { x.TenantId, x.MaturityState });

@@ -55,6 +55,7 @@ export type Commitment = {
   agreementAcceptedAtUtc?: string | null;
   agreementAcceptedByName?: string | null;
   createdAtUtc: string;
+  intention: 1 | 2; // 1 Permanent, 2 Returnable
 };
 
 export type Installment = {
@@ -140,6 +141,7 @@ export type CreateCommitmentInput = {
   allowPartialPayments?: boolean;
   allowAutoAdvance?: boolean;
   notes?: string;
+  intention?: 1 | 2;
 };
 
 export type ScheduleLine = { installmentNo: number; dueDate: string; scheduledAmount: number };

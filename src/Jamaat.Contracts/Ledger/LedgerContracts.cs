@@ -40,7 +40,12 @@ public sealed record CreateFinancialPeriodDto(string Name, DateOnly StartDate, D
 public sealed record CloseFinancialPeriodDto();
 
 public sealed record ReportDailyCollectionDto(DateOnly Date, int ReceiptCount, decimal AmountTotal, string Currency);
-public sealed record ReportFundWiseDto(Guid FundTypeId, string FundTypeCode, string FundTypeName, int LineCount, decimal AmountTotal);
+public sealed record ReportFundWiseDto(
+    Guid FundTypeId, string FundTypeCode, string FundTypeName,
+    int LineCount, decimal AmountTotal,
+    // Per-mode breakdown so the report can answer "how much of this fund came as cheques vs cash".
+    decimal AmountCash, decimal AmountCheque, decimal AmountBankTransfer, decimal AmountCard,
+    decimal AmountOnline, decimal AmountUpi);
 public sealed record ReportFundWiseQuery(DateOnly From, DateOnly To, Guid? EventId = null, Guid? FundCategoryId = null);
 public sealed record ReportDailyPaymentDto(DateOnly Date, int VoucherCount, decimal AmountTotal, string Currency);
 public sealed record ReportCashBookRow(DateOnly Date, string Reference, string Narration, decimal Debit, decimal Credit, decimal Balance);

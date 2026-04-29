@@ -407,6 +407,20 @@ public sealed class ReceiptService(
         return await MapAsync(fresh!, ct);
     }
 
+    public async Task<Result<ReceiptDto>> SetAgreementDocumentUrlAsync(Guid receiptId, string? url, CancellationToken ct = default)
+    {
+        var e = await repo.GetByIdAsync(receiptId, ct);
+        if (e is null) return Error.NotFound("receipt.not_found", "Receipt not found.");
+        if (!e.IsReturnable && !string.IsNullOrEmpty(url))
+            return Error.Business("receipt.not_returnable",
+                "Agreement documents only attach to returnable receipts. Permanent contributions don't carry a return obligation.");
+        e.SetAgreementDocumentUrl(url);
+        repo.Update(e);
+        await uow.SaveChangesAsync(ct);
+        var fresh = await repo.GetWithLinesAsync(e.Id, ct);
+        return await MapAsync(fresh!, ct);
+    }
+
     public async Task<Result> LogReprintAsync(Guid id, ReprintReceiptDto dto, CancellationToken ct = default)
     {
         var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
@@ -612,7 +626,7 @@ public sealed class ReceiptService(
                     l.FundEnrollmentId, enrollCode,
                     l.QarzanHasanaLoanId, loanCode, l.QarzanHasanaInstallmentId, qhInstNo);
             }).ToList(),
-            e.Intention, e.NiyyathNote, e.MaturityDate, e.AgreementReference, e.AmountReturned, e.MaturityState);
+            e.Intention, e.NiyyathNote, e.MaturityDate, e.AgreementReference, e.AmountReturned, e.MaturityState, e.AgreementDocumentUrl);
     }
 }
 

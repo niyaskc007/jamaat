@@ -47,3 +47,14 @@ h1, h2, h3, h4 {
 .jm-sider-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 999px; border: none; }
 .jm-sider-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.22); }
 .jm-sider-scroll { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
+
+/* AntD wraps Sider children in `.ant-layout-sider-children`, which is the element that
+   actually needs to be a flex column for our pinned-header + scrollable-menu + pinned-footer
+   layout to work. Putting display:flex on the outer <Sider> style prop is a no-op for that
+   inner wrapper - hence this targeted rule. */
+.jm-sider > .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  block-size: 100%;
+  min-block-size: 0;
+}

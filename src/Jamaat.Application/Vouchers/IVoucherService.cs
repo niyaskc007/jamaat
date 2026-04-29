@@ -28,5 +28,8 @@ public interface IVoucherRepository
 
 public interface IVoucherPdfRenderer
 {
-    byte[] Render(VoucherDto voucher);
+    /// <param name="documentTitle">Optional admin-configured TransactionLabel for the voucher's
+    /// kind (LoanIssue / ContributionReturn / FundTransfer etc). Falls back to "Payment voucher"
+    /// when null.</param>
+    byte[] Render(VoucherDto voucher, string? documentTitle = null);
 }

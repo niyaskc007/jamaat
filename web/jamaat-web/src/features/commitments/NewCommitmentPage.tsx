@@ -33,6 +33,7 @@ type PledgeForm = {
   allowPartialPayments: boolean;
   allowAutoAdvance: boolean;
   notes?: string;
+  intention: 1 | 2;
 };
 
 export function NewCommitmentPage() {
@@ -49,6 +50,7 @@ export function NewCommitmentPage() {
     startDate: dayjs().startOf('month').add(1, 'month'),
     allowPartialPayments: true,
     allowAutoAdvance: true,
+    intention: 1,
   });
 
   const fundsQ = useQuery({
@@ -106,6 +108,7 @@ export function NewCommitmentPage() {
       allowPartialPayments: form.allowPartialPayments,
       allowAutoAdvance: form.allowAutoAdvance,
       notes: form.notes,
+      intention: form.intention,
     });
   };
 
@@ -200,6 +203,9 @@ export function NewCommitmentPage() {
             </Space>
 
             <Space wrap size="large" style={{ marginBlockEnd: 12 }}>
+              <Form.Item label="Returnable pledge" tooltip="When ON, contributions to this pledge are treated as returnable - a return obligation is created and the GL credits a liability account instead of income. Use for QH-style pledges where the contributor expects the money back.">
+                <Switch checked={form.intention === 2} onChange={(v) => setForm((f) => ({ ...f, intention: v ? 2 : 1 }))} />
+              </Form.Item>
               <Form.Item label="Allow partial payments" tooltip="When ON, a receipt smaller than the instalment amount is accepted and reduces the outstanding balance. When OFF, the receipt amount must exactly match.">
                 <Switch checked={form.allowPartialPayments} onChange={(v) => setForm((f) => ({ ...f, allowPartialPayments: v }))} />
               </Form.Item>
