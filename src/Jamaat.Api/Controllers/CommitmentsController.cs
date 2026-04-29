@@ -59,6 +59,14 @@ public sealed class CommitmentsController(ICommitmentService svc, IExcelExporter
         return r.IsSuccess ? Ok(r.Value) : Problem(r.Error);
     }
 
+    [HttpGet("{id:guid}/payments")]
+    [Authorize(Policy = "commitment.view")]
+    public async Task<IActionResult> Payments(Guid id, CancellationToken ct)
+    {
+        var r = await svc.ListPaymentsAsync(id, ct);
+        return r.IsSuccess ? Ok(r.Value) : Problem(r.Error);
+    }
+
     [HttpPost("preview-schedule")]
     [Authorize(Policy = "commitment.create")]
     public async Task<IActionResult> PreviewSchedule([FromBody] PreviewScheduleRequest req, CancellationToken ct)

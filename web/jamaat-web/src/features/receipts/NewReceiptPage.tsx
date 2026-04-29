@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Card, Form, Input, InputNumber, Select, Button, Space, DatePicker, Row, Col, Divider,
   AutoComplete, App as AntdApp, Alert, Tag, Tooltip,
@@ -210,7 +210,6 @@ export function NewReceiptPage() {
   // Auto-link a line to a member's existing pledge so the cashier doesn't have to dig through
   // the "Apply to" dropdown. Triggers when there's exactly one active commitment matching the
   // line's fund + currency. Multiple matches stay manual to avoid picking the wrong one.
-  // Pre-fills the amount from the next-due instalment when the line amount is still 0.
   useEffect(() => {
     if (!commitmentsQ.data || commitmentsQ.data.length === 0) return;
     setLines((prev) => prev.map((ln) => {
@@ -277,9 +276,21 @@ export function NewReceiptPage() {
   const onSubmit = () => {
     setSubmitError(null);
     if (!selectedMember) { setSubmitError('Please select a member.'); return; }
+    if (receiptDate.isAfter(dayjs(), 'day')) { setSubmitError('Receipt date cannot be in the future.'); return; }
     const cleanLines = lines.filter((l) => l.fundTypeId && l.amount > 0);
     if (cleanLines.length === 0) { setSubmitError('Add at least one line with a fund and amount.'); return; }
-    if (paymentMode === 2 && (!chequeNumber || !chequeDate)) { setSubmitError('Cheque number and date are required for cheque payments.'); return; }
+    // Per-mode required fields. Cheque needs cheque#+date+bank deposit account; digital
+    // modes (transfer/card/online/UPI) need a bank deposit account + an external reference.
+    if (paymentMode === 2) {
+      if (!chequeNumber.trim()) { setSubmitError('Cheque number is required for cheque payments.'); return; }
+      if (!chequeDate) { setSubmitError('Cheque date is required for cheque payments.'); return; }
+      if (!bankAccountId) { setSubmitError('Pick the bank account this cheque will be deposited into.'); return; }
+    }
+    const isDigitalMode = paymentMode === 4 || paymentMode === 8 || paymentMode === 16 || paymentMode === 32;
+    if (isDigitalMode) {
+      if (!bankAccountId) { setSubmitError('Pick the bank account that received the funds.'); return; }
+      if (!paymentReference.trim()) { setSubmitError(`Reference number is required for ${PaymentModeLabel[paymentMode]} payments.`); return; }
+    }
 
     const payload: CreateReceipt = {
       receiptDate: receiptDate.format('YYYY-MM-DD'),
@@ -366,8 +377,10 @@ export function NewReceiptPage() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={8}>
-                  <Form.Item label="Receipt date" required>
-                    <DatePicker value={receiptDate} onChange={(v) => v && setReceiptDate(v)} format="DD MMM YYYY" style={{ inlineSize: '100%' }} />
+                  <Form.Item label="Receipt date" required tooltip="The date this payment was received. Cannot be in the future.">
+                    <DatePicker value={receiptDate} onChange={(v) => v && setReceiptDate(v)} format="DD MMM YYYY"
+                      style={{ inlineSize: '100%' }}
+                      disabledDate={(d) => d.isAfter(dayjs(), 'day')} />
                   </Form.Item>
                 </Col>
               </Row>
@@ -468,8 +481,12 @@ export function NewReceiptPage() {
                             placeholder="e.g. Towards Ashara catering" />
                         </td>
                         <td style={{ padding: 8 }}>
-                          <Input value={ln.periodReference ?? ''} onChange={(e) => updateLine(ln._id, { periodReference: e.target.value })}
-                            placeholder={fund?.requiresPeriodReference ? 'Required, e.g. Jan 2026' : 'e.g. FY 2026-27'} />
+                          <PeriodInput
+                            value={ln.periodReference ?? ''}
+                            onChange={(v) => updateLine(ln._id, { periodReference: v })}
+                            requiresPeriod={!!fund?.requiresPeriodReference}
+                            receiptDate={receiptDate}
+                          />
                         </td>
                         <td style={{ padding: 8 }}>
                           <InputNumber value={ln.amount} onChange={(v) => updateLine(ln._id, { amount: Number(v) || 0 })}
@@ -513,8 +530,11 @@ export function NewReceiptPage() {
                                       value={ln.commitmentInstallmentId}
                                       currency={currency}
                                       onChange={(iid, suggestedAmount) => {
+                                        // Always sync the line amount with the picked instalment's
+                                        // remaining. Switching instalments without re-syncing left
+                                        // a stale amount that triggered "exceeds remaining" errors.
                                         const patch: Partial<Line> = { commitmentInstallmentId: iid };
-                                        if ((!ln.amount || ln.amount === 0) && suggestedAmount !== undefined) patch.amount = suggestedAmount;
+                                        if (suggestedAmount !== undefined) patch.amount = suggestedAmount;
                                         updateLine(ln._id, patch);
                                       }} />
                                   )}
@@ -546,7 +566,7 @@ export function NewReceiptPage() {
                                     <QhInstallmentPicker loanId={ln.qarzanHasanaLoanId} value={ln.qarzanHasanaInstallmentId} currency={currency}
                                       onChange={(iid, suggested) => {
                                         const patch: Partial<Line> = { qarzanHasanaInstallmentId: iid };
-                                        if ((!ln.amount || ln.amount === 0) && suggested !== undefined) patch.amount = suggested;
+                                        if (suggested !== undefined) patch.amount = suggested;
                                         updateLine(ln._id, patch);
                                       }} />
                                   )}
@@ -617,24 +637,38 @@ export function NewReceiptPage() {
                   options={Object.entries(PaymentModeLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
               </Form.Item>
               {paymentMode !== 1 && (
-                <Form.Item label="Deposit into bank account" tooltip="Which bank account the funds land in. The ledger will debit this account on Confirm.">
+                <Form.Item label="Deposit into bank account" required tooltip="Which bank account the funds land in. The ledger will debit this account on Confirm.">
                   <Select value={bankAccountId} onChange={setBankAccountId} allowClear placeholder="Select bank account"
+                    status={!bankAccountId ? 'error' : undefined}
                     options={banksQuery.data?.items.map((b) => ({ value: b.id, label: `${b.name} · ${b.accountNumber}` })) ?? []} />
                 </Form.Item>
               )}
               {paymentMode === 2 && (
                 <>
                   <Form.Item label="Cheque number" required tooltip="Cheque serial number as printed. Used for the bank deposit summary report.">
-                    <Input value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} className="jm-tnum" />
+                    <Input value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} className="jm-tnum"
+                      status={!chequeNumber.trim() ? 'error' : undefined} />
                   </Form.Item>
-                  <Form.Item label="Cheque date" required tooltip="The date printed on the cheque — may differ from the receipt date if the member issued a post-dated cheque.">
-                    <DatePicker value={chequeDate} onChange={setChequeDate} format="DD MMM YYYY" style={{ inlineSize: '100%' }} />
+                  <Form.Item label="Cheque date" required tooltip="The date printed on the cheque - may differ from the receipt date if the member issued a post-dated cheque.">
+                    <DatePicker value={chequeDate} onChange={setChequeDate} format="DD MMM YYYY" style={{ inlineSize: '100%' }}
+                      status={!chequeDate ? 'error' : undefined} />
                   </Form.Item>
                 </>
               )}
-              <Form.Item label="Reference" tooltip="Any external reference: UPI transaction id, bank transfer reference, online payment gateway id.">
-                <Input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="Transaction ref, UPI id, etc." />
-              </Form.Item>
+              {(() => {
+                const isDigital = paymentMode === 4 || paymentMode === 8 || paymentMode === 16 || paymentMode === 32;
+                const refRequired = isDigital;
+                return (
+                  <Form.Item label="Reference" required={refRequired}
+                    tooltip={refRequired
+                      ? `Required for ${PaymentModeLabel[paymentMode]}: bank transfer reference, card txn id, online payment id, or UPI ref.`
+                      : 'Optional external reference: bank transfer ref, UPI id, gateway id, etc.'}>
+                    <Input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)}
+                      placeholder={refRequired ? `${PaymentModeLabel[paymentMode]} reference (required)` : 'Transaction ref, UPI id, etc.'}
+                      status={refRequired && !paymentReference.trim() ? 'error' : undefined} />
+                  </Form.Item>
+                );
+              })()}
               <Form.Item label="Remarks" tooltip="Free-text note shown on the receipt PDF. Use sparingly — long remarks wrap awkwardly on pre-printed stationery.">
                 <Input.TextArea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} />
               </Form.Item>
@@ -718,6 +752,35 @@ export function NewReceiptPage() {
         </Col>
       </Row>
     </div>
+  );
+}
+
+/// Period column input with auto-default. When the fund requires a period reference and the
+/// cell is still blank, we seed it from the receipt date in `MMM YYYY` form (e.g. "Apr 2026").
+/// The cashier can edit freely afterwards. Uses a ref so we don't keep stomping the value if
+/// the cashier deliberately clears it.
+function PeriodInput({ value, onChange, requiresPeriod, receiptDate }: {
+  value: string;
+  onChange: (v: string) => void;
+  requiresPeriod: boolean;
+  receiptDate: Dayjs;
+}) {
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (requiresPeriod && !value && !seededRef.current) {
+      seededRef.current = true;
+      onChange(receiptDate.format('MMM YYYY'));
+    }
+    if (!requiresPeriod) seededRef.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requiresPeriod, receiptDate]);
+
+  const placeholder = requiresPeriod
+    ? `Required, e.g. ${receiptDate.format('MMM YYYY')}`
+    : `Optional, e.g. ${receiptDate.format('MMM YYYY')}`;
+  return (
+    <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+      status={requiresPeriod && !value ? 'error' : undefined} />
   );
 }
 

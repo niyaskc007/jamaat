@@ -79,6 +79,26 @@ export type CommitmentDetail = {
   agreementText?: string | null;
 };
 
+export type CommitmentPaymentRow = {
+  receiptId: string;
+  receiptNumber?: string | null;
+  receiptDate: string;
+  receiptStatus: 1 | 2 | 3 | 4; // Draft|Confirmed|Cancelled|Reversed
+  commitmentInstallmentId?: string | null;
+  installmentNo?: number | null;
+  amount: number;
+  currency: string;
+  paymentMode: 1 | 2 | 4 | 8 | 16 | 32;
+  chequeNumber?: string | null;
+  chequeDate?: string | null;
+  bankAccountId?: string | null;
+  bankAccountName?: string | null;
+  paymentReference?: string | null;
+  remarks?: string | null;
+  confirmedAtUtc?: string | null;
+  confirmedByUserName?: string | null;
+};
+
 export type CommitmentListQuery = {
   page?: number; pageSize?: number;
   search?: string;
@@ -114,6 +134,10 @@ export const commitmentsApi = {
   },
   get: async (id: string): Promise<CommitmentDetail> => {
     const { data } = await api.get(`/api/v1/commitments/${id}`);
+    return data;
+  },
+  payments: async (id: string): Promise<CommitmentPaymentRow[]> => {
+    const { data } = await api.get(`/api/v1/commitments/${id}/payments`);
     return data;
   },
   previewSchedule: async (body: { frequency: CommitmentFrequency; numberOfInstallments: number; startDate: string; totalAmount: number }): Promise<ScheduleLine[]> => {

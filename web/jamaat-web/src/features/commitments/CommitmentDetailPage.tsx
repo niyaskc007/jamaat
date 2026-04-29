@@ -5,8 +5,9 @@ import {
 import type { TableProps } from 'antd';
 import {
   ArrowLeftOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined,
-  FileDoneOutlined, FileTextOutlined, ReloadOutlined, DollarCircleOutlined,
+  FileDoneOutlined, FileTextOutlined, ReloadOutlined, DollarCircleOutlined, EyeOutlined,
 } from '@ant-design/icons';
+import { CommitmentPaymentsPanel } from './CommitmentPaymentsPanel';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -39,6 +40,9 @@ export function CommitmentDetailPage() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [agreementOpen, setAgreementOpen] = useState(false);
+  // Drill-down filter for the Payments panel: when set, only payments tied to this instalment
+  // are shown. Set by clicking the "View" button on a schedule row; cleared by the panel itself.
+  const [paymentsFilterInstNo, setPaymentsFilterInstNo] = useState<number | null>(null);
 
   const invalidate = () => { void refetch(); void qc.invalidateQueries({ queryKey: ['commitments'] }); };
 
@@ -76,21 +80,27 @@ export function CommitmentDetailPage() {
     { title: 'Last payment', dataIndex: 'lastPaymentDate', width: 140,
       render: (v: string | null | undefined) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
     {
-      key: 'actions', width: 200, align: 'end',
-      render: (_: unknown, row) => {
-        if (row.status === 3 || row.status === 5) return null;
-        return (
-          <Space size={4}>
-            {isActive && (
-              <Button size="small" type="primary" icon={<DollarCircleOutlined />}
-                onClick={() => goToCollectPayment(row.id)}>
-                Pay
-              </Button>
-            )}
+      key: 'actions', width: 260, align: 'end',
+      render: (_: unknown, row) => (
+        <Space size={4}>
+          {row.paidAmount > 0 && (
+            <Button size="small" type="text" icon={<EyeOutlined />}
+              onClick={() => setPaymentsFilterInstNo(row.installmentNo)}
+              title="Show payments against this instalment">
+              View
+            </Button>
+          )}
+          {row.status !== 3 && row.status !== 5 && isActive && (
+            <Button size="small" type="primary" icon={<DollarCircleOutlined />}
+              onClick={() => goToCollectPayment(row.id)}>
+              Pay
+            </Button>
+          )}
+          {row.status !== 3 && row.status !== 5 && (
             <Button size="small" type="text" icon={<FileDoneOutlined />} onClick={() => setWaiving(row)}>Waive</Button>
-          </Space>
-        );
-      },
+          )}
+        </Space>
+      ),
     },
   ];
 
@@ -218,6 +228,15 @@ export function CommitmentDetailPage() {
       >
         <Table<Installment> rowKey="id" size="small" pagination={false} columns={columns} dataSource={data.installments} />
       </Card>
+
+      <div style={{ marginBlockStart: 16 }}>
+        <CommitmentPaymentsPanel
+          commitmentId={c.id}
+          currency={c.currency}
+          installmentNoFilter={paymentsFilterInstNo}
+          onClearFilter={() => setPaymentsFilterInstNo(null)}
+        />
+      </div>
 
       {/* Batch-7 (post-dated cheques): manage cheques pledged against this commitment.
           Each cheque sits in the table without affecting installment balances until cleared. */}

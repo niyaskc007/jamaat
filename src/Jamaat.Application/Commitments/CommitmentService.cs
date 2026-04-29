@@ -14,6 +14,7 @@ public interface ICommitmentService
 {
     Task<PagedResult<CommitmentDto>> ListAsync(CommitmentListQuery q, CancellationToken ct = default);
     Task<Result<CommitmentDetailDto>> GetAsync(Guid id, CancellationToken ct = default);
+    Task<Result<IReadOnlyList<CommitmentPaymentRowDto>>> ListPaymentsAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<CommitmentScheduleLineDto>> PreviewScheduleAsync(PreviewScheduleRequest req, CancellationToken ct = default);
     Task<Result<CommitmentDto>> CreateDraftAsync(CreateCommitmentDto dto, CancellationToken ct = default);
     Task<Result<CommitmentDto>> AcceptAgreementAsync(Guid id, AcceptAgreementDto dto, CancellationToken ct = default);
@@ -85,6 +86,68 @@ public sealed class CommitmentService(
 
     public Task<IReadOnlyList<CommitmentScheduleLineDto>> PreviewScheduleAsync(PreviewScheduleRequest req, CancellationToken ct = default)
         => Task.FromResult(CommitmentScheduleBuilder.Preview(req.TotalAmount, req.NumberOfInstallments, req.Frequency, req.StartDate));
+
+    /// Walk every receipt that has at least one line tied to this commitment and return one row
+    /// per matching line. We deliberately keep cancelled/reversed receipts in the list so the
+    /// cashier can see why a balance moved (status tag tells the story). Sorted newest-first.
+    public async Task<Result<IReadOnlyList<CommitmentPaymentRowDto>>> ListPaymentsAsync(Guid id, CancellationToken ct = default)
+    {
+        var commitment = await db.Commitments.AsNoTracking()
+            .Include(c => c.Installments)
+            .FirstOrDefaultAsync(c => c.Id == id, ct);
+        if (commitment is null)
+            return Error.NotFound("commitment.not_found", "Commitment not found.");
+
+        var instNoById = commitment.Installments.ToDictionary(i => i.Id, i => i.InstallmentNo);
+
+        var rows = await db.Receipts.AsNoTracking()
+            .Where(r => r.Lines.Any(l => l.CommitmentId == id))
+            .Select(r => new
+            {
+                Receipt = r,
+                Lines = r.Lines.Where(l => l.CommitmentId == id).Select(l => new
+                {
+                    l.CommitmentInstallmentId,
+                    l.Amount,
+                }).ToList(),
+            })
+            .ToListAsync(ct);
+
+        var bankIds = rows.Select(x => x.Receipt.BankAccountId).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+        var banks = bankIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.BankAccounts.AsNoTracking()
+                .Where(b => bankIds.Contains(b.Id))
+                .ToDictionaryAsync(b => b.Id, b => b.Name, ct);
+
+        var result = new List<CommitmentPaymentRowDto>();
+        foreach (var x in rows)
+        {
+            foreach (var line in x.Lines)
+            {
+                int? instNo = line.CommitmentInstallmentId.HasValue
+                    && instNoById.TryGetValue(line.CommitmentInstallmentId.Value, out var n)
+                    ? n : null;
+                string? bankName = x.Receipt.BankAccountId.HasValue
+                    && banks.TryGetValue(x.Receipt.BankAccountId.Value, out var bn)
+                    ? bn : null;
+                result.Add(new CommitmentPaymentRowDto(
+                    x.Receipt.Id, x.Receipt.ReceiptNumber, x.Receipt.ReceiptDate,
+                    x.Receipt.Status,
+                    line.CommitmentInstallmentId, instNo,
+                    line.Amount, x.Receipt.Currency,
+                    x.Receipt.PaymentMode, x.Receipt.ChequeNumber, x.Receipt.ChequeDate,
+                    x.Receipt.BankAccountId, bankName,
+                    x.Receipt.PaymentReference, x.Receipt.Remarks,
+                    x.Receipt.ConfirmedAtUtc, x.Receipt.ConfirmedByUserName));
+            }
+        }
+        var ordered = (IReadOnlyList<CommitmentPaymentRowDto>)result
+            .OrderByDescending(r => r.ReceiptDate)
+            .ThenByDescending(r => r.ConfirmedAtUtc ?? DateTimeOffset.MinValue)
+            .ToList();
+        return Result.Success(ordered);
+    }
 
     public async Task<Result<CommitmentDto>> CreateDraftAsync(CreateCommitmentDto dto, CancellationToken ct = default)
     {

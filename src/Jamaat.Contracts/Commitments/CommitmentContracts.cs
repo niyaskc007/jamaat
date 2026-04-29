@@ -48,6 +48,28 @@ public sealed record CommitmentDetailDto(
     int? AgreementTemplateVersion,
     string? AgreementText);
 
+/// <summary>One row per receipt-line attributed to a commitment. Covers the entire commitment
+/// or, when filtered, a single instalment - exposes everything the cashier needs to audit a
+/// payment without leaving the commitment screen.</summary>
+public sealed record CommitmentPaymentRowDto(
+    Guid ReceiptId,
+    string? ReceiptNumber,
+    DateOnly ReceiptDate,
+    Jamaat.Domain.Enums.ReceiptStatus ReceiptStatus,
+    Guid? CommitmentInstallmentId,
+    int? InstallmentNo,
+    decimal Amount,
+    string Currency,
+    Jamaat.Domain.Enums.PaymentMode PaymentMode,
+    string? ChequeNumber,
+    DateOnly? ChequeDate,
+    Guid? BankAccountId,
+    string? BankAccountName,
+    string? PaymentReference,
+    string? Remarks,
+    DateTimeOffset? ConfirmedAtUtc,
+    string? ConfirmedByUserName);
+
 public sealed record CreateCommitmentDto(
     CommitmentPartyType PartyType,
     Guid? MemberId,

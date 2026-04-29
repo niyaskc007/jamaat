@@ -14,6 +14,9 @@ export type ReceiptLine = {
   amount: number; purpose?: string | null; periodReference?: string | null;
   commitmentId?: string | null; commitmentCode?: string | null;
   commitmentInstallmentId?: string | null; installmentNo?: number | null;
+  fundEnrollmentId?: string | null; fundEnrollmentCode?: string | null;
+  qarzanHasanaLoanId?: string | null; qarzanHasanaLoanCode?: string | null;
+  qarzanHasanaInstallmentId?: string | null; qarzanHasanaInstallmentNo?: number | null;
 };
 
 /// 1=Permanent (default), 2=Returnable. Drives whether the receipt creates a return obligation.

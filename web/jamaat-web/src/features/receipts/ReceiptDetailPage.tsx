@@ -78,7 +78,7 @@ export function ReceiptDetailPage() {
           </span>
         </div>
         <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 3 }}>
-          <Descriptions.Item label="Receipt #"><span className="jm-tnum" style={{ fontWeight: 600 }}>{data.receiptNumber ?? '—'}</span></Descriptions.Item>
+          <Descriptions.Item label="Receipt #"><span className="jm-tnum" style={{ fontWeight: 600 }}>{data.receiptNumber ?? '-'}</span></Descriptions.Item>
           <Descriptions.Item label="Date">{dayjs(data.receiptDate).format('DD MMM YYYY')}</Descriptions.Item>
           <Descriptions.Item label="Currency">
             {data.currency}
@@ -95,7 +95,7 @@ export function ReceiptDetailPage() {
           {data.bankAccountName && <Descriptions.Item label="Bank">{data.bankAccountName}</Descriptions.Item>}
           {data.paymentReference && <Descriptions.Item label="Reference">{data.paymentReference}</Descriptions.Item>}
           {data.remarks && <Descriptions.Item label="Remarks" span={3}>{data.remarks}</Descriptions.Item>}
-          {/* Returnable-contribution tracking — only visible when relevant. */}
+          {/* Returnable-contribution tracking - only visible when relevant. */}
           {data.intention === 2 && (
             <>
               <Descriptions.Item label="Intention">
@@ -127,12 +127,53 @@ export function ReceiptDetailPage() {
             ) },
             { title: 'Purpose', dataIndex: 'purpose', key: 'purpose' },
             { title: 'Period ref', dataIndex: 'periodReference', key: 'period', width: 120 },
+            {
+              title: 'Applied to', key: 'appliedTo', width: 240,
+              render: (_: unknown, row: import('./receiptsApi').ReceiptLine) => {
+                if (row.commitmentId) {
+                  return (
+                    <span style={{ fontSize: 12 }}>
+                      <Tag color="blue" style={{ margin: 0 }}>Commitment</Tag>{' '}
+                      <Button type="link" size="small" style={{ padding: 0 }}
+                        onClick={() => navigate(`/commitments/${row.commitmentId}`)}>
+                        {row.commitmentCode}
+                      </Button>
+                      {row.installmentNo != null && <span style={{ color: 'var(--jm-gray-500)' }}> · inst #{row.installmentNo}</span>}
+                    </span>
+                  );
+                }
+                if (row.fundEnrollmentId) {
+                  return (
+                    <span style={{ fontSize: 12 }}>
+                      <Tag color="cyan" style={{ margin: 0 }}>Enrollment</Tag>{' '}
+                      <Button type="link" size="small" style={{ padding: 0 }}
+                        onClick={() => navigate(`/fund-enrollments`)}>
+                        {row.fundEnrollmentCode}
+                      </Button>
+                    </span>
+                  );
+                }
+                if (row.qarzanHasanaLoanId) {
+                  return (
+                    <span style={{ fontSize: 12 }}>
+                      <Tag color="purple" style={{ margin: 0 }}>QH loan</Tag>{' '}
+                      <Button type="link" size="small" style={{ padding: 0 }}
+                        onClick={() => navigate(`/qarzan-hasana/${row.qarzanHasanaLoanId}`)}>
+                        {row.qarzanHasanaLoanCode}
+                      </Button>
+                      {row.qarzanHasanaInstallmentNo != null && <span style={{ color: 'var(--jm-gray-500)' }}> · inst #{row.qarzanHasanaInstallmentNo}</span>}
+                    </span>
+                  );
+                }
+                return <span style={{ color: 'var(--jm-gray-400)', fontSize: 12 }}>One-off</span>;
+              },
+            },
             { title: 'Amount', dataIndex: 'amount', key: 'amount', align: 'right', width: 160,
               render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 500 }}>{money(v, data.currency)}</span> },
           ]}
           summary={() => (
             <Table.Summary.Row>
-              <Table.Summary.Cell index={0} colSpan={4} align="right"><strong>Total</strong></Table.Summary.Cell>
+              <Table.Summary.Cell index={0} colSpan={5} align="right"><strong>Total</strong></Table.Summary.Cell>
               <Table.Summary.Cell index={1} align="right">
                 <span className="jm-tnum" style={{ fontWeight: 700, fontSize: 16 }}>{money(data.amountTotal, data.currency)}</span>
               </Table.Summary.Cell>
