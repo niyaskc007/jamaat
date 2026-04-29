@@ -25,7 +25,13 @@ public sealed record ReceiptDto(
     DateTimeOffset? ConfirmedAtUtc,
     string? ConfirmedByUserName,
     DateTimeOffset CreatedAtUtc,
-    IReadOnlyList<ReceiptLineDto> Lines);
+    IReadOnlyList<ReceiptLineDto> Lines,
+    // Batch-2 returnable-contribution fields
+    ContributionIntention Intention = ContributionIntention.Permanent,
+    string? NiyyathNote = null,
+    DateOnly? MaturityDate = null,
+    string? AgreementReference = null,
+    decimal AmountReturned = 0m);
 
 public sealed record ReceiptLineDto(
     Guid Id,
@@ -82,7 +88,25 @@ public sealed record CreateReceiptDto(
     IReadOnlyList<CreateReceiptLineDto> Lines,
     string? Currency = null,
     Guid? FamilyId = null,
-    IReadOnlyList<Guid>? OnBehalfOfMemberIds = null);
+    IReadOnlyList<Guid>? OnBehalfOfMemberIds = null,
+    // Batch-2 fund-management uplift: contributor intention + supporting fields.
+    // Service validates the combination against the FundType's behaviour flags.
+    ContributionIntention Intention = ContributionIntention.Permanent,
+    string? NiyyathNote = null,
+    DateOnly? MaturityDate = null,
+    string? AgreementReference = null);
+
+/// <summary>Process a return on a returnable receipt — issues a voucher to the contributor and
+/// records the amount against the original receipt's running total.</summary>
+public sealed record ReturnContributionDto(
+    Guid ReceiptId,
+    decimal Amount,
+    DateOnly ReturnDate,
+    PaymentMode PaymentMode,
+    Guid? BankAccountId,
+    string? ChequeNumber,
+    DateOnly? ChequeDate,
+    string? Reason);
 
 public sealed record ConfirmReceiptDto();
 

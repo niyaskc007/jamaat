@@ -16,6 +16,10 @@ export type ReceiptLine = {
   commitmentInstallmentId?: string | null; installmentNo?: number | null;
 };
 
+/// 1=Permanent (default), 2=Returnable. Drives whether the receipt creates a return obligation.
+export type ContributionIntention = 1 | 2;
+export const ContributionIntentionLabel: Record<ContributionIntention, string> = { 1: 'Permanent', 2: 'Returnable' };
+
 export type Receipt = {
   id: string; receiptNumber?: string | null; receiptDate: string;
   memberId: string; itsNumberSnapshot: string; memberNameSnapshot: string;
@@ -27,6 +31,12 @@ export type Receipt = {
   status: ReceiptStatus; confirmedAtUtc?: string | null; confirmedByUserName?: string | null;
   createdAtUtc: string;
   lines: ReceiptLine[];
+  // Batch-2 returnable-contribution fields
+  intention: ContributionIntention;
+  niyyathNote?: string | null;
+  maturityDate?: string | null;
+  agreementReference?: string | null;
+  amountReturned: number;
 };
 
 export type ReceiptListItem = {
@@ -65,6 +75,11 @@ export type CreateReceipt = {
   lines: CreateReceiptLine[];
   familyId?: string;
   onBehalfOfMemberIds?: string[];
+  // Batch-2 returnable-contribution fields
+  intention?: ContributionIntention;
+  niyyathNote?: string;
+  maturityDate?: string; // yyyy-MM-dd
+  agreementReference?: string;
 };
 
 import { openAuthenticatedPdf } from '../../shared/api/pdf';

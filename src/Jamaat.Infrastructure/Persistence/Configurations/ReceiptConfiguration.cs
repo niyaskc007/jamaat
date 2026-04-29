@@ -30,11 +30,20 @@ public sealed class ReceiptConfiguration : IEntityTypeConfiguration<Receipt>
         b.Property(x => x.CancellationReason).HasMaxLength(500);
         b.Property(x => x.ReversalReason).HasMaxLength(500);
 
+        // Returnable contribution fields (batch 2 of fund-management uplift)
+        b.Property(x => x.Intention).HasConversion<int>().HasDefaultValue(Domain.Enums.ContributionIntention.Permanent);
+        b.Property(x => x.NiyyathNote).HasMaxLength(2000);
+        b.Property(x => x.AgreementReference).HasMaxLength(500);
+        b.Property(x => x.AmountReturned).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
+        b.Ignore(x => x.IsReturnable);     // computed
+        b.Ignore(x => x.AmountReturnable); // computed
+
         b.HasIndex(x => new { x.TenantId, x.ReceiptNumber }).IsUnique().HasFilter("[ReceiptNumber] IS NOT NULL");
         b.HasIndex(x => new { x.TenantId, x.ReceiptDate });
         b.HasIndex(x => new { x.TenantId, x.MemberId, x.ReceiptDate });
         b.HasIndex(x => new { x.TenantId, x.Status });
         b.HasIndex(x => new { x.TenantId, x.FamilyId });
+        b.HasIndex(x => new { x.TenantId, x.Intention });
 
         b.HasOne<Member>().WithMany().HasForeignKey(x => x.MemberId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<BankAccount>().WithMany().HasForeignKey(x => x.BankAccountId).OnDelete(DeleteBehavior.Restrict);

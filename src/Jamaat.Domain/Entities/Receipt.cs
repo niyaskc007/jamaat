@@ -56,6 +56,22 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public Guid? FinancialPeriodId { get; private set; }
     public Guid? NumberingSeriesId { get; private set; }
 
+    // --- Returnable contribution tracking (batch 2 of fund-management uplift) ----
+    /// <summary>Default Permanent. Set to Returnable when the contributor expects the money back.</summary>
+    public ContributionIntention Intention { get; private set; } = ContributionIntention.Permanent;
+    /// <summary>Structured Niyyath note — required when the chosen FundType has RequiresNiyyath=true.</summary>
+    public string? NiyyathNote { get; private set; }
+    /// <summary>For returnable contributions: the date from which the contributor can request return.</summary>
+    public DateOnly? MaturityDate { get; private set; }
+    /// <summary>Reference / id to a stored agreement document.</summary>
+    public string? AgreementReference { get; private set; }
+    /// <summary>Running total of how much of this returnable receipt has been returned to the contributor.</summary>
+    public decimal AmountReturned { get; private set; }
+
+    public bool IsReturnable => Intention == ContributionIntention.Returnable;
+    public decimal AmountReturnable => IsReturnable ? Math.Max(0m, AmountTotal - AmountReturned) : 0m;
+    public bool IsMatured(DateOnly today) => MaturityDate is null || today >= MaturityDate.Value;
+
     public DateTimeOffset CreatedAtUtc { get; private set; } = DateTimeOffset.UtcNow;
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
@@ -79,6 +95,28 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
         FamilyId = familyId;
         FamilyNameSnapshot = familyName;
         OnBehalfOfMemberIdsJson = onBehalfOfMemberIdsJson;
+    }
+
+    /// <summary>Capture the contributor's intention + agreement details. ReceiptService validates
+    /// the combination against the chosen FundType's IsReturnable / RequiresNiyyath / RequiresMaturityTracking
+    /// / RequiresAgreement flags before this is invoked.</summary>
+    public void SetContributionIntention(ContributionIntention intention, string? niyyathNote, DateOnly? maturityDate, string? agreementReference)
+    {
+        if (Status != ReceiptStatus.Draft) throw new InvalidOperationException("Cannot change intention after confirmation.");
+        Intention = intention;
+        NiyyathNote = niyyathNote;
+        MaturityDate = intention == ContributionIntention.Returnable ? maturityDate : null;
+        AgreementReference = agreementReference;
+    }
+
+    /// <summary>Record a partial or full return to the contributor. The voucher that issues the cash
+    /// is created separately by the ReturnContribution flow; this only updates the running total.</summary>
+    public void RecordReturn(decimal amount)
+    {
+        if (!IsReturnable) throw new InvalidOperationException("Receipt is not returnable.");
+        if (amount <= 0) throw new ArgumentException("Amount must be positive.", nameof(amount));
+        if (amount > AmountReturnable) throw new InvalidOperationException("Return exceeds remaining returnable balance.");
+        AmountReturned += amount;
     }
 
     public void ReplaceLines(IEnumerable<ReceiptLine> lines)

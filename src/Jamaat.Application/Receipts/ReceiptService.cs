@@ -137,12 +137,44 @@ public sealed class ReceiptService(
                     $"Amount exceeds remaining installment balance ({remaining:0.00}) on loan {loan.Code}.");
         }
 
+        // --- Intention + Niyyath + maturity validation (batch 2 of fund-management uplift) ----
+        // Pull every distinct fund type referenced by the lines so we can check the behaviour flags.
+        // We do this before opening the transaction so validation failures don't burn a numbering slot.
+        var lineFundIds = dto.Lines.Select(l => l.FundTypeId).Distinct().ToList();
+        var lineFunds = await db.FundTypes.AsNoTracking()
+            .Where(f => lineFundIds.Contains(f.Id))
+            .Select(f => new { f.Id, f.Code, f.NameEnglish, f.IsReturnable, f.RequiresAgreement, f.RequiresMaturityTracking, f.RequiresNiyyath })
+            .ToListAsync(ct);
+
+        if (dto.Intention == ContributionIntention.Returnable)
+        {
+            var nonReturnable = lineFunds.Where(f => !f.IsReturnable).Select(f => f.Code).ToList();
+            if (nonReturnable.Count > 0)
+                return Error.Business("receipt.intention_invalid",
+                    $"Intention is Returnable but fund type(s) [{string.Join(", ", nonReturnable)}] don't accept returnable contributions.");
+        }
+
+        if (lineFunds.Any(f => f.RequiresNiyyath) && string.IsNullOrWhiteSpace(dto.NiyyathNote))
+            return Error.Validation("receipt.niyyath_required",
+                "The selected fund requires the contributor's Niyyath to be captured.");
+
+        if (dto.Intention == ContributionIntention.Returnable
+            && lineFunds.Any(f => f.RequiresMaturityTracking)
+            && dto.MaturityDate is null)
+            return Error.Validation("receipt.maturity_required",
+                "The selected fund requires a maturity date for returnable contributions.");
+
+        if (lineFunds.Any(f => f.RequiresAgreement) && string.IsNullOrWhiteSpace(dto.AgreementReference))
+            return Error.Validation("receipt.agreement_required",
+                "The selected fund requires an agreement reference.");
+
         // Begin an explicit transaction so numbering UPDLOCK, ledger posting, and receipt save commit atomically
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
         var receipt = new Receipt(Guid.NewGuid(), tenant.TenantId, dto.ReceiptDate, member.Id, member.ItsNumber.Value, member.FullName, txnCurrency);
         receipt.SetPayment(dto.PaymentMode, dto.BankAccountId, dto.ChequeNumber, dto.ChequeDate, dto.PaymentReference);
         receipt.SetRemarks(dto.Remarks);
+        receipt.SetContributionIntention(dto.Intention, dto.NiyyathNote, dto.MaturityDate, dto.AgreementReference);
 
         if (family is not null)
         {
@@ -444,7 +476,8 @@ public sealed class ReceiptService(
                     l.CommitmentId, cmCode, l.CommitmentInstallmentId, instNo,
                     l.FundEnrollmentId, enrollCode,
                     l.QarzanHasanaLoanId, loanCode, l.QarzanHasanaInstallmentId, qhInstNo);
-            }).ToList());
+            }).ToList(),
+            e.Intention, e.NiyyathNote, e.MaturityDate, e.AgreementReference, e.AmountReturned);
     }
 }
 

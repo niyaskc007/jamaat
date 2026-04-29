@@ -41,6 +41,12 @@ export function NewReceiptPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [familyId, setFamilyId] = useState<string | undefined>();
   const [onBehalfOf, setOnBehalfOf] = useState<string[]>([]);
+  // Batch-2 fund-management uplift: contributor intention + niyyath / agreement / maturity.
+  // Fields show conditionally based on the chosen fund type's behaviour flags.
+  const [intention, setIntention] = useState<1 | 2>(1);
+  const [niyyathNote, setNiyyathNote] = useState('');
+  const [maturityDate, setMaturityDate] = useState<Dayjs | null>(null);
+  const [agreementReference, setAgreementReference] = useState('');
   const baseCurrency = useBaseCurrency();
   const currenciesQuery = useCurrencies();
   const [currency, setCurrency] = useState<string>(baseCurrency);
@@ -198,9 +204,22 @@ export function NewReceiptPage() {
       lines: cleanLines.map(({ _id: _omit, ...rest }) => rest),
       familyId: familyId || undefined,
       onBehalfOfMemberIds: onBehalfOf.length > 0 ? onBehalfOf : undefined,
+      intention,
+      niyyathNote: niyyathNote || undefined,
+      maturityDate: maturityDate?.format('YYYY-MM-DD'),
+      agreementReference: agreementReference || undefined,
     };
     mutation.mutate(payload);
   };
+
+  // Aggregate the behaviour flags across the funds the user has selected.
+  // If any line's fund needs Niyyath/Agreement/Maturity, the form prompts for it.
+  const selectedFundIds = lines.map((l) => l.fundTypeId).filter(Boolean);
+  const selectedFunds = (fundsQuery.data?.items ?? []).filter((f) => selectedFundIds.includes(f.id));
+  const anyReturnable = selectedFunds.some((f) => f.isReturnable);
+  const anyNiyyath = selectedFunds.some((f) => f.requiresNiyyath);
+  const anyAgreement = selectedFunds.some((f) => f.requiresAgreement);
+  const anyMaturity = selectedFunds.some((f) => f.requiresMaturityTracking);
 
   return (
     <div>
@@ -492,6 +511,53 @@ export function NewReceiptPage() {
               </Form.Item>
             </Form>
           </Card>
+
+          {/*
+            Contribution intention card — only relevant when a returnable fund is selected.
+            Niyyath / Agreement / Maturity each surface only if at least one chosen fund demands them,
+            so simple cash donations stay exactly as they were before this batch.
+          */}
+          {(anyReturnable || anyNiyyath || anyAgreement) && (
+            <Card title="Contribution intention" style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)', marginBlockEnd: 16 }}>
+              <Form layout="vertical" requiredMark={false}>
+                {anyReturnable && (
+                  <Form.Item label="Intention (Niyyath)" tooltip="Permanent: gift to the fund, no return obligation. Returnable: contributor expects the money back per the agreed terms.">
+                    <Select
+                      value={intention}
+                      onChange={(v) => { setIntention(v); if (v === 1) { setMaturityDate(null); } }}
+                      options={[
+                        { value: 1, label: 'Permanent — non-returnable contribution' },
+                        { value: 2, label: 'Returnable — contributor expects this back' },
+                      ]}
+                    />
+                  </Form.Item>
+                )}
+                {anyNiyyath && (
+                  <Form.Item label="Niyyath note" required tooltip="Structured note describing the contributor's intention. The fund requires this captured explicitly, not as a free-text remark.">
+                    <Input.TextArea value={niyyathNote} onChange={(e) => setNiyyathNote(e.target.value)} rows={2} placeholder="e.g. For Mohammedi scheme towards children's education" />
+                  </Form.Item>
+                )}
+                {intention === 2 && anyMaturity && (
+                  <Form.Item label="Maturity date" required tooltip="Earliest date the contributor can request return. Returns before this date require special approval.">
+                    <DatePicker value={maturityDate} onChange={setMaturityDate} format="DD MMM YYYY" style={{ inlineSize: '100%' }} />
+                  </Form.Item>
+                )}
+                {anyAgreement && (
+                  <Form.Item label="Agreement reference" required tooltip="Reference id or URL pointing to the signed agreement document.">
+                    <Input value={agreementReference} onChange={(e) => setAgreementReference(e.target.value)} placeholder="e.g. AGR-2026-042" />
+                  </Form.Item>
+                )}
+                {intention === 2 && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message="This contribution will be tracked as a return obligation, not as fund income. Reports separate it from permanent contributions."
+                    style={{ marginBlockStart: 4 }}
+                  />
+                )}
+              </Form>
+            </Card>
+          )}
 
           {submitError && <Alert type="error" showIcon message={submitError} style={{ marginBlockEnd: 16 }} />}
 

@@ -95,6 +95,22 @@ export function ReceiptDetailPage() {
           {data.bankAccountName && <Descriptions.Item label="Bank">{data.bankAccountName}</Descriptions.Item>}
           {data.paymentReference && <Descriptions.Item label="Reference">{data.paymentReference}</Descriptions.Item>}
           {data.remarks && <Descriptions.Item label="Remarks" span={3}>{data.remarks}</Descriptions.Item>}
+          {/* Returnable-contribution tracking — only visible when relevant. */}
+          {data.intention === 2 && (
+            <>
+              <Descriptions.Item label="Intention">
+                <Tag color="gold" style={{ margin: 0 }}>Returnable</Tag>
+                {data.amountReturned > 0 && (
+                  <span style={{ marginInlineStart: 8, color: 'var(--jm-gray-600)', fontSize: 12 }}>
+                    {money(data.amountReturned, data.currency)} of {money(data.amountTotal, data.currency)} returned
+                  </span>
+                )}
+              </Descriptions.Item>
+              {data.maturityDate && <Descriptions.Item label="Maturity">{dayjs(data.maturityDate).format('DD MMM YYYY')}</Descriptions.Item>}
+              {data.agreementReference && <Descriptions.Item label="Agreement"><span className="jm-tnum">{data.agreementReference}</span></Descriptions.Item>}
+            </>
+          )}
+          {data.niyyathNote && <Descriptions.Item label="Niyyath" span={3}>{data.niyyathNote}</Descriptions.Item>}
         </Descriptions>
       </Card>
 
