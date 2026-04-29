@@ -3,13 +3,14 @@ import { Button, Card, Input, Select, Space, Table, Tag, Dropdown, Empty, App as
 import type { TableColumnsType, MenuProps } from 'antd';
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, EditOutlined,
-  DeleteOutlined, DatabaseOutlined,
+  DeleteOutlined, DatabaseOutlined, AppstoreOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { extractProblem } from '../../../../shared/api/client';
 import { paymentModeFlagsToLabels } from '../shared';
 import { fundTypesApi, FundCategoryLabel, FundCategoryColor, type FundType, type FundTypeQuery, type FundCategory } from './fundTypesApi';
 import { FundTypeFormDrawer } from './FundTypeFormDrawer';
+import { CustomFieldsDrawer } from './CustomFieldsDrawer';
 
 export function FundTypesPanel() {
   const qc = useQueryClient();
@@ -19,6 +20,7 @@ export function FundTypesPanel() {
   const [search, setSearch] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<FundType | null>(null);
+  const [customFieldsFor, setCustomFieldsFor] = useState<FundType | null>(null);
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['fundTypes', query],
@@ -99,6 +101,7 @@ export function FundTypesPanel() {
       render: (_: unknown, row: FundType) => {
         const items: MenuProps['items'] = [
           { key: 'edit', icon: <EditOutlined />, label: 'Edit', onClick: () => { setEditing(row); setDrawerOpen(true); } },
+          { key: 'fields', icon: <AppstoreOutlined />, label: 'Custom fields', onClick: () => setCustomFieldsFor(row) },
           { type: 'divider' },
           {
             key: 'delete', icon: <DeleteOutlined />, danger: true,
@@ -181,6 +184,8 @@ export function FundTypesPanel() {
       </Card>
 
       <FundTypeFormDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} fundType={editing} />
+      <CustomFieldsDrawer open={!!customFieldsFor} onClose={() => setCustomFieldsFor(null)}
+        fundTypeId={customFieldsFor?.id ?? null} fundTypeCode={customFieldsFor?.code} />
     </>
   );
 }

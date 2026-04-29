@@ -94,7 +94,10 @@ public sealed record CreateReceiptDto(
     ContributionIntention Intention = ContributionIntention.Permanent,
     string? NiyyathNote = null,
     DateOnly? MaturityDate = null,
-    string? AgreementReference = null);
+    string? AgreementReference = null,
+    // Batch-3: admin-defined custom fields per fund type. Map of FieldKey → string value;
+    // service validates required fields and serialises to Receipt.CustomFieldsJson.
+    IReadOnlyDictionary<string, string>? CustomFieldValues = null);
 
 /// <summary>Process a return on a returnable receipt — issues a voucher to the contributor and
 /// records the amount against the original receipt's running total.</summary>

@@ -168,6 +168,26 @@ public sealed class ReceiptService(
             return Error.Validation("receipt.agreement_required",
                 "The selected fund requires an agreement reference.");
 
+        // --- Custom field validation (batch 3) ----
+        // Pull the active fields for every fund touched by this receipt and ensure required ones
+        // are present in the supplied dictionary. We accept the union — the form already only
+        // shows fields the user can see, but the API has to defend against direct calls too.
+        var customFieldDefs = await db.FundTypeCustomFields.AsNoTracking()
+            .Where(f => lineFundIds.Contains(f.FundTypeId) && f.IsActive)
+            .Select(f => new { f.FundTypeId, f.FieldKey, f.Label, f.IsRequired })
+            .ToListAsync(ct);
+        var providedKeys = dto.CustomFieldValues?.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>();
+        var missingRequired = customFieldDefs
+            .Where(f => f.IsRequired)
+            .Where(f => !providedKeys.Contains(f.FieldKey)
+                || string.IsNullOrWhiteSpace(dto.CustomFieldValues![f.FieldKey]))
+            .Select(f => f.Label)
+            .Distinct()
+            .ToList();
+        if (missingRequired.Count > 0)
+            return Error.Validation("receipt.custom_field_required",
+                $"Missing required custom field(s): {string.Join(", ", missingRequired)}.");
+
         // Begin an explicit transaction so numbering UPDLOCK, ledger posting, and receipt save commit atomically
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
@@ -175,6 +195,10 @@ public sealed class ReceiptService(
         receipt.SetPayment(dto.PaymentMode, dto.BankAccountId, dto.ChequeNumber, dto.ChequeDate, dto.PaymentReference);
         receipt.SetRemarks(dto.Remarks);
         receipt.SetContributionIntention(dto.Intention, dto.NiyyathNote, dto.MaturityDate, dto.AgreementReference);
+        // Persist custom-field values (if any) as a JSON map on the receipt. The receipt PDF +
+        // detail page can read this map to render the captured values.
+        if (dto.CustomFieldValues is { Count: > 0 })
+            receipt.SetCustomFields(System.Text.Json.JsonSerializer.Serialize(dto.CustomFieldValues));
 
         if (family is not null)
         {

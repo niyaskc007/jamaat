@@ -67,6 +67,8 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public string? AgreementReference { get; private set; }
     /// <summary>Running total of how much of this returnable receipt has been returned to the contributor.</summary>
     public decimal AmountReturned { get; private set; }
+    /// <summary>JSON map of custom-field key → captured value. Populated when the chosen FundType has admin-defined custom fields.</summary>
+    public string? CustomFieldsJson { get; private set; }
 
     public bool IsReturnable => Intention == ContributionIntention.Returnable;
     public decimal AmountReturnable => IsReturnable ? Math.Max(0m, AmountTotal - AmountReturned) : 0m;
@@ -96,6 +98,9 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
         FamilyNameSnapshot = familyName;
         OnBehalfOfMemberIdsJson = onBehalfOfMemberIdsJson;
     }
+
+    /// <summary>Capture admin-defined custom field values. ReceiptService validates required fields up-front.</summary>
+    public void SetCustomFields(string? customFieldsJson) => CustomFieldsJson = customFieldsJson;
 
     /// <summary>Capture the contributor's intention + agreement details. ReceiptService validates
     /// the combination against the chosen FundType's IsReturnable / RequiresNiyyath / RequiresMaturityTracking

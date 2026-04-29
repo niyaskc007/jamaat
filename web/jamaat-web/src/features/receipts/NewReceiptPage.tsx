@@ -12,6 +12,7 @@ import { money } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
 import { receiptsApi, PaymentModeLabel, type CreateReceipt, type CreateReceiptLine, type PaymentMode } from './receiptsApi';
 import { fundTypesApi } from '../admin/master-data/fund-types/fundTypesApi';
+import { fundTypeCustomFieldsApi, type FundTypeCustomField } from '../admin/master-data/fund-types/customFieldsApi';
 import { bankAccountsApi } from '../admin/master-data/bank-accounts/bankAccountsApi';
 import { currenciesApi } from '../admin/master-data/currencies/currenciesApi';
 import { useBaseCurrency, useCurrencies } from '../../shared/hooks/useBaseCurrency';
@@ -47,12 +48,42 @@ export function NewReceiptPage() {
   const [niyyathNote, setNiyyathNote] = useState('');
   const [maturityDate, setMaturityDate] = useState<Dayjs | null>(null);
   const [agreementReference, setAgreementReference] = useState('');
+  // Batch-3: dynamic custom fields per fund type. Map of fieldKey → string value.
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const baseCurrency = useBaseCurrency();
   const currenciesQuery = useCurrencies();
   const [currency, setCurrency] = useState<string>(baseCurrency);
   useEffect(() => { setCurrency((c) => c || baseCurrency); }, [baseCurrency]);
 
   const fundsQuery = useQuery({ queryKey: ['fundTypes', 'all'], queryFn: () => fundTypesApi.list({ page: 1, pageSize: 200, active: true }) });
+  // Identify funds chosen across line items — drives intention/niyyath/maturity/agreement
+  // visibility (batch 2) AND custom-field rendering (batch 3).
+  const lineFundIdsForRender = lines.map((l) => l.fundTypeId).filter(Boolean) as string[];
+  // Custom fields for each selected fund — fetched lazily so we don't blast the API up front.
+  const customFieldsQueries = useQuery({
+    queryKey: ['fundType-custom-fields', lineFundIdsForRender.sort().join(',')],
+    queryFn: async () => {
+      if (lineFundIdsForRender.length === 0) return {} as Record<string, FundTypeCustomField[]>;
+      const result: Record<string, FundTypeCustomField[]> = {};
+      const ids = Array.from(new Set(lineFundIdsForRender));
+      await Promise.all(ids.map(async (id) => {
+        try { result[id] = await fundTypeCustomFieldsApi.listActive(id); } catch { result[id] = []; }
+      }));
+      return result;
+    },
+    enabled: lineFundIdsForRender.length > 0,
+  });
+  // Aggregate fields across the selected funds, deduped by fieldKey (first definition wins).
+  const aggregatedCustomFields: FundTypeCustomField[] = (() => {
+    const seen = new Set<string>();
+    const out: FundTypeCustomField[] = [];
+    for (const id of lineFundIdsForRender) {
+      for (const f of customFieldsQueries.data?.[id] ?? []) {
+        if (!seen.has(f.fieldKey)) { seen.add(f.fieldKey); out.push(f); }
+      }
+    }
+    return out.sort((a, b) => a.sortOrder - b.sortOrder);
+  })();
   const banksQuery = useQuery({ queryKey: ['bankAccounts', 'all'], queryFn: () => bankAccountsApi.list({ page: 1, pageSize: 100, active: true }) });
 
   const [memberOptions, setMemberOptions] = useState<{ value: string; label: React.ReactNode; id: string; name: string; its: string }[]>([]);
@@ -208,6 +239,7 @@ export function NewReceiptPage() {
       niyyathNote: niyyathNote || undefined,
       maturityDate: maturityDate?.format('YYYY-MM-DD'),
       agreementReference: agreementReference || undefined,
+      customFieldValues: Object.keys(customFieldValues).length > 0 ? customFieldValues : undefined,
     };
     mutation.mutate(payload);
   };
@@ -559,6 +591,23 @@ export function NewReceiptPage() {
             </Card>
           )}
 
+          {/* Batch-3: dynamic custom fields per fund type. Only renders if the chosen fund(s)
+              have admin-defined fields. */}
+          {aggregatedCustomFields.length > 0 && (
+            <Card title="Additional details" style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)', marginBlockEnd: 16 }}>
+              <Form layout="vertical" requiredMark={false}>
+                {aggregatedCustomFields.map((f) => (
+                  <CustomFieldInput
+                    key={f.fieldKey}
+                    field={f}
+                    value={customFieldValues[f.fieldKey] ?? f.defaultValue ?? ''}
+                    onChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [f.fieldKey]: v }))}
+                  />
+                ))}
+              </Form>
+            </Card>
+          )}
+
           {submitError && <Alert type="error" showIcon message={submitError} style={{ marginBlockEnd: 16 }} />}
 
           <Button size="large" block type="primary" icon={<PrinterOutlined />} loading={mutation.isPending} onClick={onSubmit}
@@ -634,4 +683,56 @@ function InstallmentPicker({ commitmentId, value, currency, onChange }: {
       options={options}
     />
   );
+}
+
+/// Render the right input for a custom field's type. Values are stored as strings on the
+/// receipt — number/date/boolean are converted on the way in/out so the JSON blob stays
+/// uniformly stringified and the API doesn't need to know the type.
+function CustomFieldInput({ field, value, onChange }: {
+  field: FundTypeCustomField;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const required = field.isRequired;
+  const help = field.helpText ?? undefined;
+  switch (field.fieldType) {
+    case 2: // LongText
+      return (
+        <Form.Item label={field.label} required={required} help={help}>
+          <Input.TextArea value={value} onChange={(e) => onChange(e.target.value)} rows={3} />
+        </Form.Item>
+      );
+    case 3: // Number
+      return (
+        <Form.Item label={field.label} required={required} help={help}>
+          <InputNumber value={value === '' ? null : Number(value)} onChange={(n) => onChange(n == null ? '' : String(n))} style={{ inlineSize: 200 }} />
+        </Form.Item>
+      );
+    case 4: // Date
+      return (
+        <Form.Item label={field.label} required={required} help={help}>
+          <DatePicker value={value ? dayjs(value) : null} onChange={(d) => onChange(d ? d.format('YYYY-MM-DD') : '')} format="DD MMM YYYY" style={{ inlineSize: 200 }} />
+        </Form.Item>
+      );
+    case 5: // Boolean
+      return (
+        <Form.Item label={field.label} help={help}>
+          <Select value={value || 'false'} onChange={(v) => onChange(v)} options={[{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]} style={{ inlineSize: 140 }} />
+        </Form.Item>
+      );
+    case 6: { // Dropdown
+      const opts = (field.optionsCsv ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      return (
+        <Form.Item label={field.label} required={required} help={help}>
+          <Select value={value || undefined} onChange={onChange} options={opts.map((o) => ({ value: o, label: o }))} allowClear />
+        </Form.Item>
+      );
+    }
+    default: // Text
+      return (
+        <Form.Item label={field.label} required={required} help={help}>
+          <Input value={value} onChange={(e) => onChange(e.target.value)} />
+        </Form.Item>
+      );
+  }
 }

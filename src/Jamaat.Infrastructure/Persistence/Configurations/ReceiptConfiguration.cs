@@ -37,6 +37,8 @@ public sealed class ReceiptConfiguration : IEntityTypeConfiguration<Receipt>
         b.Property(x => x.AmountReturned).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
         b.Ignore(x => x.IsReturnable);     // computed
         b.Ignore(x => x.AmountReturnable); // computed
+        // Custom fields blob (batch 3) — JSON map of admin-defined keys → values.
+        b.Property(x => x.CustomFieldsJson).HasColumnType("nvarchar(max)");
 
         b.HasIndex(x => new { x.TenantId, x.ReceiptNumber }).IsUnique().HasFilter("[ReceiptNumber] IS NOT NULL");
         b.HasIndex(x => new { x.TenantId, x.ReceiptDate });
