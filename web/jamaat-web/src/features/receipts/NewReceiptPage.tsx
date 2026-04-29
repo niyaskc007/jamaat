@@ -207,6 +207,21 @@ export function NewReceiptPage() {
     if (memberFamilyQ.data?.family && !familyId) setFamilyId(memberFamilyQ.data.family.id);
   }, [memberFamilyQ.data, familyId]);
 
+  // Auto-link a line to a member's existing pledge so the cashier doesn't have to dig through
+  // the "Apply to" dropdown. Triggers when there's exactly one active commitment matching the
+  // line's fund + currency. Multiple matches stay manual to avoid picking the wrong one.
+  // Pre-fills the amount from the next-due instalment when the line amount is still 0.
+  useEffect(() => {
+    if (!commitmentsQ.data || commitmentsQ.data.length === 0) return;
+    setLines((prev) => prev.map((ln) => {
+      if (!ln.fundTypeId || ln.commitmentId || ln.fundEnrollmentId || ln.qarzanHasanaLoanId) return ln;
+      const matches = commitmentsQ.data!.filter((c) =>
+        c.fundTypeId === ln.fundTypeId && c.currency === currency);
+      if (matches.length !== 1) return ln;
+      return { ...ln, commitmentId: matches[0].id };
+    }));
+  }, [commitmentsQ.data, currency, lines.map((l) => l.fundTypeId).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const total = useMemo(() => lines.reduce((s, l) => s + (Number(l.amount) || 0), 0), [lines]);
 
   // Live FX preview when currency != base
@@ -469,7 +484,18 @@ export function NewReceiptPage() {
                           <td colSpan={5} style={{ padding: '6px 12px', fontSize: 12 }}>
                             <Space wrap size={8}>
                               <LinkOutlined style={{ color: 'var(--jm-gray-500)' }} />
-                              <span style={{ color: 'var(--jm-gray-600)' }}>Apply to:</span>
+                              <Tooltip title={(
+                                <div style={{ fontSize: 12 }}>
+                                  <div><strong>Commitment (pledge):</strong> a specific promise like "AED 1,200 over 12 monthly instalments". Pick this if the member made a pledge they're paying down.</div>
+                                  <div style={{ marginBlockStart: 6 }}><strong>Fund enrollment:</strong> an open-ended subscription to a recurring fund (e.g. monthly Sabeel contributions) - no fixed total, just tracks ongoing payments.</div>
+                                  <div style={{ marginBlockStart: 6 }}><strong>QH loan repayment:</strong> applies the payment against an outstanding Qarzan Hasana loan.</div>
+                                  <div style={{ marginBlockStart: 6 }}>Leave all blank for a one-off donation.</div>
+                                </div>
+                              )}>
+                                <span style={{ color: 'var(--jm-gray-600)', cursor: 'help', borderBlockEnd: '1px dotted var(--jm-gray-400)' }}>
+                                  Apply to <QuestionCircleOutlined style={{ fontSize: 11 }} />:
+                                </span>
+                              </Tooltip>
                               {eligibleCommitments.length > 0 && (
                                 <>
                                   <Select
@@ -535,11 +561,14 @@ export function NewReceiptPage() {
                           <td colSpan={5} style={{ padding: '8px 12px', fontSize: 12 }}>
                             <Space wrap size={8}>
                               <span style={{ color: '#92400E' }}>
-                                ⓘ <strong>{selectedMember.name}</strong> has no active <strong>{fund.nameEnglish}</strong> enrollment — the receipt will still post. Consider creating one to track recurring contributions.
+                                <Tooltip title="An enrollment is an ongoing subscription to a fund (e.g. monthly Sabeel) - it has no fixed total, it just keeps a tally as the member contributes over time. It's optional: receipts post fine without one. Skip this if the member has a Commitment (a pledge with a fixed total) or if this is a one-off donation.">
+                                  <span style={{ borderBlockEnd: '1px dotted #92400E', cursor: 'help' }}>What's an enrollment?</span>
+                                </Tooltip>
+                                {' '}<strong>{selectedMember.name}</strong> isn't subscribed to <strong>{fund.nameEnglish}</strong>. The receipt still posts; subscribe only if you want recurring contributions tracked separately from this one-off receipt.
                               </span>
                               <Button size="small" type="primary" ghost
                                 onClick={() => createEnrollmentOnTheFly(selectedMember.id, fund.id, fund.nameEnglish)}>
-                                Create enrollment now
+                                Subscribe now
                               </Button>
                             </Space>
                           </td>
