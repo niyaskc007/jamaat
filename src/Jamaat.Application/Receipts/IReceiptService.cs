@@ -11,6 +11,10 @@ public interface IReceiptService
     Task<Result<ReceiptDto>> CreateAndConfirmAsync(CreateReceiptDto dto, CancellationToken ct = default);
     Task<Result<ReceiptDto>> CancelAsync(Guid id, CancelReceiptDto dto, CancellationToken ct = default);
     Task<Result<ReceiptDto>> ReverseAsync(Guid id, ReverseReceiptDto dto, CancellationToken ct = default);
+    /// <summary>Approve a Draft receipt that was waiting for sign-off (because at least one
+    /// of its funds had RequiresApproval set). Re-validates current state, applies
+    /// commitment/QH allocations, allocates a number, posts the GL, and marks Confirmed.</summary>
+    Task<Result<ReceiptDto>> ApproveAsync(Guid id, CancellationToken ct = default);
     /// <summary>Process a return-to-contributor against a confirmed Returnable receipt. Issues a
     /// linked voucher (with a dedicated number), debits the receipt's liability account, credits
     /// the chosen bank/cash account, and increments the receipt's running AmountReturned.</summary>

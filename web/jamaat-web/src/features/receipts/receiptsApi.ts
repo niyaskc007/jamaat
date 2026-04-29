@@ -117,6 +117,7 @@ export const receiptsApi = {
   create: async (input: CreateReceipt) => (await api.post<Receipt>('/api/v1/receipts', input)).data,
   cancel: async (id: string, reason: string) => (await api.post<Receipt>(`/api/v1/receipts/${id}/cancel`, { reason })).data,
   reverse: async (id: string, reason: string) => (await api.post<Receipt>(`/api/v1/receipts/${id}/reverse`, { reason })).data,
+  approve: async (id: string) => (await api.post<Receipt>(`/api/v1/receipts/${id}/approve`)).data,
   returnContribution: async (id: string, input: ReturnContribution) =>
     (await api.post<Receipt>(`/api/v1/receipts/${id}/return-contribution`, input)).data,
   uploadAgreementDocument: async (id: string, file: File): Promise<Receipt> => {

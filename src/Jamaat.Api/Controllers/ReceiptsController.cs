@@ -130,6 +130,16 @@ public sealed class ReceiptsController(
         return r.IsSuccess ? Ok(r.Value) : ControllerResults.Problem(this, r.Error);
     }
 
+    /// <summary>Approve a Draft receipt waiting for sign-off. Allocates number + posts GL +
+    /// applies commitment / QH allocations. Returns the now-Confirmed receipt.</summary>
+    [HttpPost("{id:guid}/approve")]
+    [Authorize(Policy = "receipt.approve")]
+    public async Task<IActionResult> Approve(Guid id, CancellationToken ct)
+    {
+        var r = await svc.ApproveAsync(id, ct);
+        return r.IsSuccess ? Ok(r.Value) : ControllerResults.Problem(this, r.Error);
+    }
+
     /// <summary>Process a return-to-contributor against a confirmed Returnable receipt. The
     /// caller's permissions decide whether maturity-before-return is permitted (early-return
     /// requires receipt.return.early in addition to receipt.return).</summary>

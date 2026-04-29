@@ -28,6 +28,8 @@ public sealed record FundTypeDto(
     Guid? EventId, string? EventName,
     // Batch-7: per-fund liability account for routing returnable contributions in the GL.
     Guid? LiabilityAccountId, string? LiabilityAccountName,
+    // Batch-8: when set, receipts on this fund land in Draft and need explicit approval.
+    bool RequiresApproval,
     DateTimeOffset CreatedAtUtc);
 
 public sealed record CreateFundTypeDto(
@@ -51,7 +53,8 @@ public sealed record CreateFundTypeDto(
     bool RequiresMaturityTracking = false,
     bool RequiresNiyyath = false,
     Guid? EventId = null,
-    Guid? LiabilityAccountId = null);
+    Guid? LiabilityAccountId = null,
+    bool RequiresApproval = false);
 
 public sealed record UpdateFundTypeDto(
     string NameEnglish,
@@ -73,7 +76,8 @@ public sealed record UpdateFundTypeDto(
     bool RequiresMaturityTracking = false,
     bool RequiresNiyyath = false,
     Guid? EventId = null,
-    Guid? LiabilityAccountId = null);
+    Guid? LiabilityAccountId = null,
+    bool RequiresApproval = false);
 
 public sealed record FundTypeListQuery(
     int Page = 1, int PageSize = 25, string? SortBy = null, string? SortDir = null,

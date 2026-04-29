@@ -53,7 +53,7 @@ public sealed class FundTypeService(
         e.SetRules(dto.RequiresItsNumber, dto.RequiresPeriodReference, dto.AllowedPaymentModes, dto.RulesJson, dto.Category);
         e.ConfigureAccounting(dto.CreditAccountId, null, dto.LiabilityAccountId);
         await ApplyClassificationAsync(e, dto.FundCategoryId, dto.FundSubCategoryId,
-            dto.IsReturnable, dto.RequiresAgreement, dto.RequiresMaturityTracking, dto.RequiresNiyyath, ct);
+            dto.IsReturnable, dto.RequiresAgreement, dto.RequiresMaturityTracking, dto.RequiresNiyyath, dto.RequiresApproval, ct);
         e.LinkEvent(dto.EventId);
 
         await repo.AddAsync(e, ct);
@@ -72,7 +72,7 @@ public sealed class FundTypeService(
         e.ConfigureAccounting(dto.CreditAccountId, null, dto.LiabilityAccountId);
         if (dto.IsActive) e.Activate(); else e.Deactivate();
         await ApplyClassificationAsync(e, dto.FundCategoryId, dto.FundSubCategoryId,
-            dto.IsReturnable, dto.RequiresAgreement, dto.RequiresMaturityTracking, dto.RequiresNiyyath, ct);
+            dto.IsReturnable, dto.RequiresAgreement, dto.RequiresMaturityTracking, dto.RequiresNiyyath, dto.RequiresApproval, ct);
         e.LinkEvent(dto.EventId);
         repo.Update(e);
         await uow.SaveChangesAsync(ct);
@@ -94,7 +94,8 @@ public sealed class FundTypeService(
     /// null (legacy callers), skips the write - the legacy <see cref="FundCategory"/> enum stays
     /// authoritative until the caller is migrated.
     private async Task ApplyClassificationAsync(FundType e, Guid? fundCategoryId, Guid? fundSubCategoryId,
-        bool isReturnable, bool requiresAgreement, bool requiresMaturity, bool requiresNiyyath, CancellationToken ct)
+        bool isReturnable, bool requiresAgreement, bool requiresMaturity, bool requiresNiyyath, bool requiresApproval,
+        CancellationToken ct)
     {
         if (fundCategoryId is null) return;
         var category = await db.FundCategories.AsNoTracking().FirstOrDefaultAsync(c => c.Id == fundCategoryId.Value, ct)
@@ -106,7 +107,7 @@ public sealed class FundTypeService(
                 throw new InvalidOperationException("Sub-category does not belong to the chosen category.");
         }
         e.SetClassification(category.Id, fundSubCategoryId, category.Kind,
-            isReturnable, requiresAgreement, requiresMaturity, requiresNiyyath);
+            isReturnable, requiresAgreement, requiresMaturity, requiresNiyyath, requiresApproval);
     }
 
     private async Task<FundTypeDto> MapWithCategoryAsync(FundType e, CancellationToken ct)
@@ -132,6 +133,7 @@ public sealed class FundTypeService(
         e.IsReturnable, e.RequiresAgreement, e.RequiresMaturityTracking, e.RequiresNiyyath,
         e.EventId, eventName,
         e.LiabilityAccountId, null,
+        e.RequiresApproval,
         e.CreatedAtUtc);
 }
 

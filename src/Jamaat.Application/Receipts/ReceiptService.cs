@@ -143,7 +143,7 @@ public sealed class ReceiptService(
         var lineFundIds = dto.Lines.Select(l => l.FundTypeId).Distinct().ToList();
         var lineFunds = await db.FundTypes.AsNoTracking()
             .Where(f => lineFundIds.Contains(f.Id))
-            .Select(f => new { f.Id, f.Code, f.NameEnglish, f.IsActive, f.AllowedPaymentModes, f.IsReturnable, f.RequiresAgreement, f.RequiresMaturityTracking, f.RequiresNiyyath })
+            .Select(f => new { f.Id, f.Code, f.NameEnglish, f.IsActive, f.AllowedPaymentModes, f.IsReturnable, f.RequiresAgreement, f.RequiresMaturityTracking, f.RequiresNiyyath, f.RequiresApproval })
             .ToListAsync(ct);
 
         // Block inactive fund types up-front. Inactive funds may be temporarily disabled
@@ -236,6 +236,27 @@ public sealed class ReceiptService(
             l.QarzanHasanaLoanId, l.QarzanHasanaInstallmentId)).ToList();
         receipt.ReplaceLines(lines);
 
+        // FX conversion freezes at receipt date so the saved values reflect the moment money
+        // changed hands, not the moment approval lands. Applied even for drafts so any approval
+        // lookahead/reports show the right base-currency amounts.
+        var conversion = await fx.ConvertToBaseAsync(receipt.AmountTotal, txnCurrency, dto.ReceiptDate, ct);
+        receipt.ApplyFxConversion(conversion.BaseCurrency, conversion.Rate, conversion.BaseAmount);
+
+        // Approval gate: if any selected fund has RequiresApproval, the receipt sits in Draft
+        // pending an explicit Approve action (which then runs the deferred work below). This
+        // means: NO numbering, NO GL post, NO commitment/QH allocation until approved -
+        // otherwise drafts would silently consume installment balances and create reports
+        // that disagree with the GL.
+        var requiresApproval = lineFunds.Any(f => f.RequiresApproval);
+        if (requiresApproval)
+        {
+            await repo.AddAsync(receipt, ct);
+            await uow.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            var draft = await repo.GetWithLinesAsync(receipt.Id, ct);
+            return await MapAsync(draft!, ct);
+        }
+
         // Apply the payments onto their installments (aggregate tracks PaidAmount + status)
         foreach (var line in dto.Lines.Where(l => l.CommitmentId.HasValue && l.CommitmentInstallmentId.HasValue))
         {
@@ -252,10 +273,6 @@ public sealed class ReceiptService(
             db.QarzanHasanaLoans.Update(loan);
         }
 
-        // FX conversion to base (no-op when txn currency == base)
-        var conversion = await fx.ConvertToBaseAsync(receipt.AmountTotal, txnCurrency, dto.ReceiptDate, ct);
-        receipt.ApplyFxConversion(conversion.BaseCurrency, conversion.Rate, conversion.BaseAmount);
-
         var (seriesId, number) = await numbering.NextAsync(NumberingScope.Receipt, null, dto.ReceiptDate.Year, ct);
         receipt.Confirm(number, period.Id, seriesId, currentUser.UserId ?? Guid.Empty, currentUser.UserName ?? "system", clock.UtcNow);
 
@@ -266,6 +283,98 @@ public sealed class ReceiptService(
         await tx.CommitAsync(ct);
 
         var fresh = await repo.GetWithLinesAsync(receipt.Id, ct);
+        return await MapAsync(fresh!, ct);
+    }
+
+    public async Task<Result<ReceiptDto>> ApproveAsync(Guid id, CancellationToken ct = default)
+    {
+        var e = await repo.GetWithLinesAsync(id, ct);
+        if (e is null) return Error.NotFound("receipt.not_found", "Receipt not found.");
+        if (e.Status != ReceiptStatus.Draft)
+            return Error.Business("receipt.not_draft", "Only draft receipts can be approved.");
+        if (e.Lines.Count == 0)
+            return Error.Validation("receipt.no_lines", "Receipt has no lines.");
+
+        // Re-resolve the period at approval time (the receipt date hasn't moved, but the
+        // period may have closed since the draft was created - in which case approval has
+        // to wait for someone with period.open permission).
+        var period = await ResolvePeriodAsync(e.ReceiptDate, ct);
+        if (period is null)
+            return Error.Business("period.not_open", "No open financial period covers the receipt's date. Re-open the period first.");
+
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        // Re-validate against CURRENT installment / loan state. The world may have moved on
+        // since the draft was saved (other receipts may have been confirmed against the same
+        // installment, fund types may be inactive, commitments paused). We re-load and
+        // re-check rather than trusting the saved values.
+        var commitmentLines = e.Lines.Where(l => l.CommitmentId.HasValue && l.CommitmentInstallmentId.HasValue).ToList();
+        var commitmentIds = commitmentLines.Select(l => l.CommitmentId!.Value).Distinct().ToList();
+        var commitments = commitmentIds.Count == 0
+            ? new Dictionary<Guid, Commitment>()
+            : (await db.Commitments.Include(c => c.Installments)
+                .Where(c => commitmentIds.Contains(c.Id))
+                .ToListAsync(ct))
+                .ToDictionary(c => c.Id);
+        foreach (var line in commitmentLines)
+        {
+            if (!commitments.TryGetValue(line.CommitmentId!.Value, out var cm))
+                return Error.NotFound("commitment.not_found", $"Commitment for line {line.LineNo} not found.");
+            if (cm.Status is CommitmentStatus.Cancelled or CommitmentStatus.Completed)
+                return Error.Business("commitment.closed", $"Commitment {cm.Code} is {cm.Status}; cannot apply payment.");
+            var inst = cm.Installments.FirstOrDefault(i => i.Id == line.CommitmentInstallmentId);
+            if (inst is null)
+                return Error.NotFound("commitment.installment_not_found", $"Installment for line {line.LineNo} not found.");
+            var remaining = inst.ScheduledAmount - inst.PaidAmount;
+            if (line.Amount > remaining)
+                return Error.Business("commitment.overpayment",
+                    $"Line {line.LineNo} amount {line.Amount:0.00} exceeds remaining instalment balance {remaining:0.00} on {cm.Code} #{inst.InstallmentNo}.");
+        }
+
+        var qhLines = e.Lines.Where(l => l.QarzanHasanaLoanId.HasValue && l.QarzanHasanaInstallmentId.HasValue).ToList();
+        var qhIds = qhLines.Select(l => l.QarzanHasanaLoanId!.Value).Distinct().ToList();
+        var loans = qhIds.Count == 0
+            ? new Dictionary<Guid, QarzanHasanaLoan>()
+            : (await db.QarzanHasanaLoans.Include(l => l.Installments)
+                .Where(l => qhIds.Contains(l.Id))
+                .ToListAsync(ct))
+                .ToDictionary(l => l.Id);
+        foreach (var line in qhLines)
+        {
+            if (!loans.TryGetValue(line.QarzanHasanaLoanId!.Value, out var loan))
+                return Error.NotFound("qh.not_found", $"Loan for line {line.LineNo} not found.");
+            var inst = loan.Installments.FirstOrDefault(i => i.Id == line.QarzanHasanaInstallmentId);
+            if (inst is null)
+                return Error.NotFound("qh.installment_not_found", $"Installment for line {line.LineNo} not found.");
+            var remaining = inst.ScheduledAmount - inst.PaidAmount;
+            if (line.Amount > remaining)
+                return Error.Business("qh.overpayment",
+                    $"Line {line.LineNo} amount {line.Amount:0.00} exceeds remaining instalment balance {remaining:0.00} on {loan.Code} #{inst.InstallmentNo}.");
+        }
+
+        // Apply commitment + QH allocations now that we've re-validated.
+        foreach (var line in commitmentLines)
+        {
+            var cm = commitments[line.CommitmentId!.Value];
+            _ = cm.RecordPaymentOnInstallment(line.CommitmentInstallmentId!.Value, line.Amount, e.ReceiptDate);
+            db.Commitments.Update(cm);
+        }
+        foreach (var line in qhLines)
+        {
+            var loan = loans[line.QarzanHasanaLoanId!.Value];
+            _ = loan.RecordRepayment(line.QarzanHasanaInstallmentId!.Value, line.Amount, e.ReceiptDate);
+            db.QarzanHasanaLoans.Update(loan);
+        }
+
+        var (seriesId, number) = await numbering.NextAsync(NumberingScope.Receipt, null, e.ReceiptDate.Year, ct);
+        e.Confirm(number, period.Id, seriesId, currentUser.UserId ?? Guid.Empty, currentUser.UserName ?? "system", clock.UtcNow);
+        repo.Update(e);
+        await posting.PostReceiptAsync(e, ct);
+        await uow.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        var fresh = await repo.GetWithLinesAsync(e.Id, ct);
         return await MapAsync(fresh!, ct);
     }
 

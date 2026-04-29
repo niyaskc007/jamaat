@@ -189,6 +189,7 @@ public static class DatabaseSeeder
                 "member.view", "family.view", "commitment.view",
                 "enrollment.view",
                 "receipt.view", "receipt.create", "receipt.confirm", "receipt.reprint", "receipt.cancel", "receipt.reverse",
+                "receipt.approve",
                 "receipt.return", "receipt.return.early",
                 "voucher.view", "voucher.create", "voucher.approve", "voucher.cancel", "voucher.reverse",
                 "accounting.view", "accounting.journal", "period.open", "period.close",
@@ -640,6 +641,10 @@ Accepted on {{today}}.
         "event.view", "event.manage", "event.scan",
         // Receipts
         "receipt.view", "receipt.create", "receipt.confirm", "receipt.reprint", "receipt.cancel", "receipt.reverse",
+        // Approve a Draft receipt (created against a fund flagged RequiresApproval) so it
+        // gets numbered + posted to the GL. Distinct from receipt.confirm (which is the
+        // legacy auto-confirm flag - not actually checked anywhere today).
+        "receipt.approve",
         // Process return-to-contributor on a returnable receipt; .early permits before maturity.
         "receipt.return", "receipt.return.early",
         // Vouchers

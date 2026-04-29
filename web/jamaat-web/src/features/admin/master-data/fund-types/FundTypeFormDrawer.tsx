@@ -34,6 +34,8 @@ const schema = z.object({
   // Batch-7: per-fund liability account so returnable contributions can be split across
   // QH-returnable, scheme-temporary, and other-returnable buckets in the GL.
   liabilityAccountId: z.string().optional(),
+  // Batch-8: receipts on this fund park in Draft pending explicit approval.
+  requiresApproval: z.boolean().optional(),
   isActive: z.boolean().optional(),
 });
 type Form = z.infer<typeof schema>;
@@ -77,6 +79,7 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         requiresNiyyath: fundType.requiresNiyyath ?? false,
         eventId: fundType.eventId ?? undefined,
         liabilityAccountId: fundType.liabilityAccountId ?? undefined,
+        requiresApproval: fundType.requiresApproval ?? false,
         isActive: fundType.isActive,
       });
     } else {
@@ -104,6 +107,7 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         requiresNiyyath: data.requiresNiyyath,
         eventId: data.eventId || undefined,
         liabilityAccountId: data.liabilityAccountId || null,
+        requiresApproval: data.requiresApproval ?? false,
       };
       if (isEdit && fundType) {
         return fundTypesApi.update(fundType.id, { ...payload, isActive: data.isActive ?? true });
@@ -219,6 +223,9 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         </Form.Item>
         <Form.Item label="Requires Niyyath capture" tooltip="When ON, the contribution form must capture the contributor's Niyyath (intention) - not as a free-text remark, but as a structured field.">
           <Controller name="requiresNiyyath" control={control} render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />} />
+        </Form.Item>
+        <Form.Item label="Requires approval" tooltip="When ON, receipts on this fund land in Draft state. An approver must explicitly approve them before they get a number, are posted to the GL, and trigger commitment / QH allocations. Use for high-value or audit-sensitive funds.">
+          <Controller name="requiresApproval" control={control} render={({ field }) => <Switch checked={field.value ?? false} onChange={field.onChange} />} />
         </Form.Item>
 
         <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginBlockEnd: 12 }}>

@@ -20,6 +20,7 @@ export function ReceiptDetailPage() {
   const canReprint = hasPermission('receipt.reprint');
   const canCancel = hasPermission('receipt.cancel');
   const canReverse = hasPermission('receipt.reverse');
+  const canApprove = hasPermission('receipt.approve');
   const canReturn = hasPermission('receipt.return');
   const canReturnEarly = hasPermission('receipt.return.early');
   const [returnOpen, setReturnOpen] = useState(false);
@@ -46,6 +47,15 @@ export function ReceiptDetailPage() {
     },
     onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to reverse'),
   });
+  const approveMut = useMutation({
+    mutationFn: () => receiptsApi.approve(id!),
+    onSuccess: (r) => {
+      message.success(`Approved. Receipt ${r.receiptNumber} now confirmed and posted to the GL.`);
+      void qc.invalidateQueries({ queryKey: ['receipt', id] });
+      void qc.invalidateQueries({ queryKey: ['receipts'] });
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to approve'),
+  });
 
   if (isLoading) return <div style={{ padding: 24 }}><Spin /></div>;
   if (isError || !data) return <Alert type="error" message="Receipt not found" style={{ margin: 24 }} />;
@@ -71,6 +81,30 @@ export function ReceiptDetailPage() {
           </Space>
         }
       />
+
+      {/* Approval banner: Draft receipts (parked because at least one fund had RequiresApproval)
+          surface a yellow card at the top with the Approve action front-and-centre. Cashiers
+          who can't approve still see the banner so they know why the receipt has no number. */}
+      {data.status === 1 && (
+        <Card size="small" style={{ marginBlockEnd: 16, borderColor: '#FCD34D', background: '#FFFBEB' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <ClockCircleOutlined style={{ color: '#B45309', fontSize: 18 }} />
+            <div style={{ flex: 1, minInlineSize: 280 }}>
+              <strong style={{ color: '#92400E' }}>Pending approval</strong>
+              <div style={{ color: '#92400E', fontSize: 12, marginBlockStart: 2 }}>
+                One or more funds on this receipt require approval. The receipt is in Draft - no number, no GL post,
+                no commitment / QH allocation - until an approver signs off.
+              </div>
+            </div>
+            {canApprove && (
+              <Button type="primary" icon={<CheckCircleOutlined />}
+                loading={approveMut.isPending} onClick={() => approveMut.mutate()}>
+                Approve & post
+              </Button>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)', marginBlockEnd: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBlockEnd: 16 }}>

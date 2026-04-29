@@ -52,6 +52,8 @@ export type FundType = {
   // Batch-6: Function-based funds may bind to a specific Event.
   eventId?: string | null;
   eventName?: string | null;
+  // Batch-8: receipts on this fund land Draft + need explicit approval before posting.
+  requiresApproval?: boolean;
   createdAtUtc: string;
 };
 
@@ -81,6 +83,7 @@ export type CreateFundType = {
   requiresMaturityTracking?: boolean;
   requiresNiyyath?: boolean;
   eventId?: string;
+  requiresApproval?: boolean;
 };
 
 export type UpdateFundType = Omit<CreateFundType, 'code'> & { isActive: boolean };

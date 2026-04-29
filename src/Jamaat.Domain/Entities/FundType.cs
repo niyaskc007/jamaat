@@ -49,6 +49,11 @@ public sealed class FundType : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public bool RequiresMaturityTracking { get; private set; }
     /// <summary>When true, the contribution form must capture the contributor's Niyyath (intention) explicitly.</summary>
     public bool RequiresNiyyath { get; private set; }
+    /// <summary>When true, receipts on this fund land in Draft state and require explicit
+    /// approval before they're numbered + posted to the GL. Use for funds where a finance lead
+    /// must double-check entries before they hit the books (e.g. large-value temporary funds,
+    /// audit-sensitive scheme contributions). Default false keeps the auto-confirm flow.</summary>
+    public bool RequiresApproval { get; private set; }
 
     public PaymentMode AllowedPaymentModes { get; private set; }
     public Guid? DefaultTemplateId { get; private set; }
@@ -106,7 +111,8 @@ public sealed class FundType : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public void SetClassification(
         Guid fundCategoryId, Guid? fundSubCategoryId,
         FundCategoryKind kind,
-        bool isReturnable, bool requiresAgreement, bool requiresMaturityTracking, bool requiresNiyyath)
+        bool isReturnable, bool requiresAgreement, bool requiresMaturityTracking, bool requiresNiyyath,
+        bool requiresApproval = false)
     {
         if (fundCategoryId == Guid.Empty) throw new ArgumentException("FundCategoryId required.", nameof(fundCategoryId));
         FundCategoryId = fundCategoryId;
@@ -115,6 +121,7 @@ public sealed class FundType : AggregateRoot<Guid>, ITenantScoped, IAuditable
         RequiresAgreement = requiresAgreement;
         RequiresMaturityTracking = requiresMaturityTracking;
         RequiresNiyyath = requiresNiyyath;
+        RequiresApproval = requiresApproval;
 
         // Keep the legacy enum coherent for callers that haven't migrated yet.
         Category = kind switch
