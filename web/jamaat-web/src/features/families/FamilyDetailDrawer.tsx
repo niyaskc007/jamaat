@@ -44,7 +44,7 @@ export function FamilyDetailDrawer({ familyId, onClose }: { familyId: string; on
       dataIndex: 'familyRole',
       width: 160,
       render: (r: FamilyRole | null | undefined) =>
-        r ? <span>{FamilyRoleLabel[r]}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>—</span>,
+        r ? <span>{FamilyRoleLabel[r]}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span>,
     },
     {
       key: 'actions',
@@ -78,12 +78,12 @@ export function FamilyDetailDrawer({ familyId, onClose }: { familyId: string; on
         <Space direction="vertical" size={16} style={{ inlineSize: '100%' }}>
           <Descriptions size="small" column={2} bordered
             items={[
-              { key: 'h', label: 'Head', children: data.family.headName ?? '—' },
+              { key: 'h', label: 'Head', children: data.family.headName ?? '-' },
               { key: 'm', label: 'Members', children: data.family.memberCount },
-              { key: 'p', label: 'Phone', children: data.family.contactPhone ?? '—' },
-              { key: 'e', label: 'Email', children: data.family.contactEmail ?? '—' },
-              { key: 'a', label: 'Address', children: data.family.address ?? '—', span: 2 },
-              { key: 'n', label: 'Notes', children: data.family.notes ?? '—', span: 2 },
+              { key: 'p', label: 'Phone', children: data.family.contactPhone ?? '-' },
+              { key: 'e', label: 'Email', children: data.family.contactEmail ?? '-' },
+              { key: 'a', label: 'Address', children: data.family.address ?? '-', span: 2 },
+              { key: 'n', label: 'Notes', children: data.family.notes ?? '-', span: 2 },
               { key: 'c', label: 'Created', children: formatDate(data.family.createdAtUtc) },
               { key: 's', label: 'Status', children: data.family.isActive ? <Tag color="green">Active</Tag> : <Tag>Inactive</Tag> },
             ]}
@@ -195,7 +195,7 @@ function TransferHeadModal({ familyId, members, onClose, onDone }: {
       <Space direction="vertical" size={12} style={{ inlineSize: '100%' }}>
         <Alert type="warning" showIcon message="The current head will become a regular member." />
         <Select value={newHead || undefined} onChange={setNewHead} placeholder="Pick the new head" style={{ inlineSize: '100%' }}
-          options={candidates.map((m) => ({ value: m.id, label: `${m.itsNumber} — ${m.fullName}` }))}
+          options={candidates.map((m) => ({ value: m.id, label: `${m.itsNumber} - ${m.fullName}` }))}
         />
       </Space>
     </Modal>

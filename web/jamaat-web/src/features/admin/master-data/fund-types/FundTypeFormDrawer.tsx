@@ -41,7 +41,7 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
 
   const categoriesQ = useQuery({ queryKey: ['fund-categories'], queryFn: () => fundCategoriesApi.list(true), enabled: open });
   const subsQ = useQuery({ queryKey: ['fund-sub-categories'], queryFn: () => fundCategoriesApi.listSubs(undefined, true), enabled: open });
-  // Function-based funds need to pick an event — pull a small list when the form opens.
+  // Function-based funds need to pick an event - pull a small list when the form opens.
   const eventsQ = useQuery({ queryKey: ['events', 'for-fund-type'], queryFn: () => eventsApi.list({ pageSize: 200 }), enabled: open });
 
   const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<Form>({
@@ -134,14 +134,14 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
 
         <Divider orientation="left" style={{ marginBlock: 8, fontSize: 13 }}>Classification</Divider>
 
-        <Form.Item label="Fund category" required tooltip="Admin-managed master classification — drives whether contributions post to income, create a return obligation, or sit in a loan fund.">
+        <Form.Item label="Fund category" required tooltip="Admin-managed master classification - drives whether contributions post to income, create a return obligation, or sit in a loan fund.">
           <Controller name="fundCategoryId" control={control} render={({ field }) => (
             <Select {...field} placeholder="Select category"
               loading={categoriesQ.isLoading}
               showSearch optionFilterProp="label"
               options={(categoriesQ.data ?? []).map((c) => ({
                 value: c.id,
-                label: `${c.name} — ${FundCategoryKindLabel[c.kind]}`,
+                label: `${c.name} - ${FundCategoryKindLabel[c.kind]}`,
               }))}
               onChange={(v) => { field.onChange(v); setValue('fundSubCategoryId', undefined, { shouldDirty: true }); }}
               allowClear
@@ -165,8 +165,8 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
             showIcon
             style={{ marginBlockEnd: 12 }}
             message={isLoanFund
-              ? 'This is a Loan Fund — it can both receive returnable contributions and issue loans. Enable the relevant behaviour flags below.'
-              : 'This is a Temporary Income category — receipts under this fund will be tracked as a return obligation, not as income.'}
+              ? 'This is a Loan Fund - it can both receive returnable contributions and issue loans. Enable the relevant behaviour flags below.'
+              : 'This is a Temporary Income category - receipts under this fund will be tracked as a return obligation, not as income.'}
           />
         )}
 
@@ -188,10 +188,10 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
         <Form.Item label="Requires agreement" tooltip="When ON, contributions/loans on this fund must reference an attached agreement document.">
           <Controller name="requiresAgreement" control={control} render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />} />
         </Form.Item>
-        <Form.Item label="Requires maturity tracking" tooltip="When ON, returnable contributions track a maturity date — returns before maturity require special approval.">
+        <Form.Item label="Requires maturity tracking" tooltip="When ON, returnable contributions track a maturity date - returns before maturity require special approval.">
           <Controller name="requiresMaturityTracking" control={control} render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />} />
         </Form.Item>
-        <Form.Item label="Requires Niyyath capture" tooltip="When ON, the contribution form must capture the contributor's Niyyath (intention) — not as a free-text remark, but as a structured field.">
+        <Form.Item label="Requires Niyyath capture" tooltip="When ON, the contribution form must capture the contributor's Niyyath (intention) - not as a free-text remark, but as a structured field.">
           <Controller name="requiresNiyyath" control={control} render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />} />
         </Form.Item>
 
@@ -236,7 +236,7 @@ export function FundTypeFormDrawer({ open, onClose, fundType }: { open: boolean;
   );
 }
 
-/// Form default values — kept as a function so each open of a "create" drawer starts fresh.
+/// Form default values - kept as a function so each open of a "create" drawer starts fresh.
 function defaults(): Form {
   return {
     code: '', nameEnglish: '', nameArabic: '', nameHindi: '', nameUrdu: '', description: '',

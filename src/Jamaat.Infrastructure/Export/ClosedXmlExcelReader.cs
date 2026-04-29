@@ -25,7 +25,7 @@ public sealed class ClosedXmlExcelReader : IExcelReader
         foreach (var cell in headerRow.Cells())
         {
             var h = (cell.GetString() ?? string.Empty).Trim();
-            if (h.Length == 0) break; // stop at first blank header — operator likely has a sentinel column
+            if (h.Length == 0) break; // stop at first blank header - operator likely has a sentinel column
             headers.Add(h);
         }
         if (headers.Count == 0) return Array.Empty<ExcelImportRow>();
@@ -53,7 +53,7 @@ public sealed class ClosedXmlExcelReader : IExcelReader
 
     private static string? ReadCell(IXLCell cell)
     {
-        // Preserve typed values where possible — saves callers from re-parsing locale-specific text.
+        // Preserve typed values where possible - saves callers from re-parsing locale-specific text.
         if (cell.IsEmpty()) return null;
         var v = cell.Value;
         if (v.IsBlank) return null;

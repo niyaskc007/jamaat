@@ -71,7 +71,7 @@ public sealed record ReportFundBalanceDto(
     decimal NetFundStrength,
     int ReceiptCount);
 
-/// One row per returnable receipt — used by the returnable-inflows / maturity report.
+/// One row per returnable receipt - used by the returnable-inflows / maturity report.
 public sealed record ReportReturnableContributionRow(
     Guid ReceiptId, string? ReceiptNumber, DateOnly ReceiptDate,
     string ItsNumber, string MemberName,

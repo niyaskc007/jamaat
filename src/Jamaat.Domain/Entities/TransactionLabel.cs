@@ -6,7 +6,7 @@ namespace Jamaat.Domain.Entities;
 /// <summary>
 /// Admin-managed label override per (FundType, TransactionLabelType). Lets the Jamaat
 /// rebrand approval prompts, audit-log entries, notification subjects, and PDFs without
-/// code changes — e.g. show "His Contribution" for one scheme and "Niyaz Pledge" for another.
+/// code changes - e.g. show "His Contribution" for one scheme and "Niyaz Pledge" for another.
 /// </summary>
 /// <remarks>
 /// FundTypeId may be null to represent a system-wide default for the given

@@ -35,7 +35,7 @@ public sealed class VoucherPdfRenderer : IVoucherPdfRenderer
                         row.ConstantItem(170).AlignRight().Column(c =>
                         {
                             c.Item().AlignRight().Text("PAYMENT VOUCHER").FontSize(11).Bold().FontColor("#64748B");
-                            c.Item().AlignRight().PaddingTop(2).Text(v.VoucherNumber ?? "—")
+                            c.Item().AlignRight().PaddingTop(2).Text(v.VoucherNumber ?? "-")
                                 .FontSize(14).Bold().FontFamily("Consolas").FontColor("#0B6E63");
                             c.Item().AlignRight().Text(v.VoucherDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture))
                                 .FontSize(10).FontColor("#475569");

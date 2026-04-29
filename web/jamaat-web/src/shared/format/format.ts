@@ -2,7 +2,7 @@ import dayjs from 'dayjs';
 
 /** Format amount with tabular figures + currency. Default AED. */
 export function money(amount: number | null | undefined, currency = 'AED', locale?: string): string {
-  if (amount === null || amount === undefined) return '—';
+  if (amount === null || amount === undefined) return '-';
   const loc = locale ?? (currency === 'INR' ? 'en-IN' : currency === 'AED' ? 'en-AE' : 'en');
   const decimals = currency === 'KWD' || currency === 'BHD' || currency === 'OMR' ? 3 : 2;
   try {
@@ -19,7 +19,7 @@ export function money(amount: number | null | undefined, currency = 'AED', local
 
 /** Compact money for dense tiles (AED 12.4k, AED 1.2M) */
 export function compactMoney(amount: number | null | undefined, currency = 'AED', locale?: string): string {
-  if (amount === null || amount === undefined) return '—';
+  if (amount === null || amount === undefined) return '-';
   const loc = locale ?? (currency === 'INR' ? 'en-IN' : 'en-AE');
   try {
     return new Intl.NumberFormat(loc, {
@@ -34,17 +34,17 @@ export function compactMoney(amount: number | null | undefined, currency = 'AED'
 }
 
 export function formatDate(d: string | Date | null | undefined, pattern = 'DD MMM YYYY'): string {
-  if (!d) return '—';
+  if (!d) return '-';
   return dayjs(d).format(pattern);
 }
 
 export function formatDateTime(d: string | Date | null | undefined, pattern = 'DD MMM YYYY, HH:mm'): string {
-  if (!d) return '—';
+  if (!d) return '-';
   return dayjs(d).format(pattern);
 }
 
 export function relativeTime(d: string | Date | null | undefined): string {
-  if (!d) return '—';
+  if (!d) return '-';
   const diff = dayjs(d).diff(dayjs(), 'minute');
   const abs = Math.abs(diff);
   const suffix = diff < 0 ? 'ago' : 'from now';

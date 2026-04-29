@@ -34,7 +34,7 @@ public sealed class MemberRepository(JamaatDbContext db) : IMemberRepository
 
         var total = await q.CountAsync(ct);
 
-        // Sort — whitelist to avoid EF surprises with the ItsNumber value-object conversion
+        // Sort - whitelist to avoid EF surprises with the ItsNumber value-object conversion
         q = (query.SortBy?.ToLowerInvariant(), query.SortDir) switch
         {
             ("fullname", SortDirection.Desc) => q.OrderByDescending(m => m.FullName),

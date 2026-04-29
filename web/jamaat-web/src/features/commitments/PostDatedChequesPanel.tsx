@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Button, Table, Tag, Space, Typography, Modal, Form, Input, InputNumber, DatePicker, Select, App as AntdApp, Tabs, Alert } from 'antd';
+import { Card, Button, Table, Tag, Space, Typography, Modal, Form, Input, InputNumber, DatePicker, Select, App as AntdApp, Tabs, Alert, Tooltip } from 'antd';
 import { PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, StopOutlined, BankOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -59,20 +59,32 @@ export function PostDatedChequesPanel({ commitmentId, currency, installments }: 
               {s === 4 && row.bounceReason && <span style={{ fontSize: 10, color: 'var(--jm-danger, #DC2626)' }} title={row.bounceReason}>{row.bounceReason.length > 24 ? row.bounceReason.slice(0, 24) + '…' : row.bounceReason}</span>}
             </Space>
           ) },
-          { title: '', key: 'a', width: 220, render: (_, row) => (
-            <Space size={4}>
-              {/* Pledged → Deposited */}
-              {row.status === 1 && canEdit && <DepositButton id={row.id} commitmentId={commitmentId} />}
-              {/* Pledged or Deposited → Cleared */}
-              {(row.status === 1 || row.status === 2) && canClear && (
-                <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => setClearTarget(row)}>Clear</Button>
-              )}
-              {/* Pledged or Deposited → Bounced */}
-              {(row.status === 1 || row.status === 2) && canEdit && <BounceButton id={row.id} commitmentId={commitmentId} />}
-              {/* Pledged → Cancelled (admins can cancel before deposit) */}
-              {row.status === 1 && canEdit && <CancelButton id={row.id} commitmentId={commitmentId} />}
-            </Space>
-          ) },
+          { title: '', key: 'a', width: 220, render: (_, row) => {
+            // Cheques can only be acted on at the bank from their printed date onwards.
+            // Disable Deposit/Clear/Bounce until then so the cashier can't accidentally
+            // change the status for a cheque that's still post-dated. Cancel stays
+            // available because returning a still-post-dated cheque to the contributor
+            // is a legit reason.
+            const todayIso = dayjs().format('YYYY-MM-DD');
+            const notYetDue = row.chequeDate > todayIso;
+            const dueLabel = notYetDue ? `Cheque is dated ${formatDate(row.chequeDate)} - cannot be acted on until then.` : undefined;
+            return (
+              <Space size={4}>
+                {/* Pledged → Deposited */}
+                {row.status === 1 && canEdit && <DepositButton id={row.id} commitmentId={commitmentId} disabled={notYetDue} disabledReason={dueLabel} />}
+                {/* Pledged or Deposited → Cleared */}
+                {(row.status === 1 || row.status === 2) && canClear && (
+                  <Tooltip title={dueLabel}>
+                    <Button size="small" type="primary" icon={<CheckCircleOutlined />} disabled={notYetDue} onClick={() => setClearTarget(row)}>Clear</Button>
+                  </Tooltip>
+                )}
+                {/* Pledged or Deposited → Bounced */}
+                {(row.status === 1 || row.status === 2) && canEdit && <BounceButton id={row.id} commitmentId={commitmentId} disabled={notYetDue} disabledReason={dueLabel} />}
+                {/* Pledged → Cancelled (admins can cancel before deposit, even if pre-dated) */}
+                {row.status === 1 && canEdit && <CancelButton id={row.id} commitmentId={commitmentId} />}
+              </Space>
+            );
+          } },
         ]}
         locale={{ emptyText: <div style={{ padding: 24, textAlign: 'center', color: 'var(--jm-gray-500)' }}>No post-dated cheques on file</div> }}
       />
@@ -416,7 +428,7 @@ function BulkChequeForm({ commitmentId, currency, installments, onDone }: {
   );
 }
 
-function DepositButton({ id, commitmentId }: { id: string; commitmentId: string }) {
+function DepositButton({ id, commitmentId, disabled, disabledReason }: { id: string; commitmentId: string; disabled?: boolean; disabledReason?: string }) {
   const qc = useQueryClient();
   const { message, modal } = AntdApp.useApp();
   const mut = useMutation({
@@ -425,12 +437,14 @@ function DepositButton({ id, commitmentId }: { id: string; commitmentId: string 
     onError: (e) => message.error(extractProblem(e).detail ?? 'Failed.'),
   });
   return (
-    <Button size="small" onClick={() => modal.confirm({
-      title: 'Mark cheque deposited?',
-      content: 'Records that the cheque has been submitted to the bank. It still hasn\'t affected the ledger - clear it after the bank confirms funds.',
-      okText: 'Yes, deposited',
-      onOk: () => mut.mutateAsync(dayjs().format('YYYY-MM-DD')),
-    })}>Deposit</Button>
+    <Tooltip title={disabled ? disabledReason : undefined}>
+      <Button size="small" disabled={disabled} onClick={() => modal.confirm({
+        title: 'Mark cheque deposited?',
+        content: 'Records that the cheque has been submitted to the bank. It still hasn\'t affected the ledger - clear it after the bank confirms funds.',
+        okText: 'Yes, deposited',
+        onOk: () => mut.mutateAsync(dayjs().format('YYYY-MM-DD')),
+      })}>Deposit</Button>
+    </Tooltip>
   );
 }
 
@@ -475,7 +489,7 @@ function ClearChequeModal({ cheque, onClose, onCleared }: { cheque: PostDatedChe
   );
 }
 
-function BounceButton({ id, commitmentId }: { id: string; commitmentId: string }) {
+function BounceButton({ id, commitmentId, disabled, disabledReason }: { id: string; commitmentId: string; disabled?: boolean; disabledReason?: string }) {
   const qc = useQueryClient();
   const { message, modal } = AntdApp.useApp();
   const mut = useMutation({
@@ -484,20 +498,22 @@ function BounceButton({ id, commitmentId }: { id: string; commitmentId: string }
     onError: (e) => message.error(extractProblem(e).detail ?? 'Failed.'),
   });
   return (
-    <Button size="small" danger icon={<CloseCircleOutlined />} onClick={() => {
-      let reason = '';
-      modal.confirm({
-        title: 'Mark cheque bounced?',
-        content: (
-          <div>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>Reason (visible in audit log):</Typography.Text>
-            <Input.TextArea rows={3} autoFocus onChange={(e) => { reason = e.target.value; }} />
-          </div>
-        ),
-        okText: 'Mark bounced', okButtonProps: { danger: true },
-        onOk: () => { if (!reason.trim()) throw new Error('Reason required'); return mut.mutateAsync(reason); },
-      });
-    }}>Bounce</Button>
+    <Tooltip title={disabled ? disabledReason : undefined}>
+      <Button size="small" danger icon={<CloseCircleOutlined />} disabled={disabled} onClick={() => {
+        let reason = '';
+        modal.confirm({
+          title: 'Mark cheque bounced?',
+          content: (
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>Reason (visible in audit log):</Typography.Text>
+              <Input.TextArea rows={3} autoFocus onChange={(e) => { reason = e.target.value; }} />
+            </div>
+          ),
+          okText: 'Mark bounced', okButtonProps: { danger: true },
+          onOk: () => { if (!reason.trim()) throw new Error('Reason required'); return mut.mutateAsync(reason); },
+        });
+      }}>Bounce</Button>
+    </Tooltip>
   );
 }
 

@@ -122,7 +122,7 @@ public sealed class EventRegistrationService(
             remaining = cap - seatsTaken;
         }
 
-        // Duplicate check — one registration per member per event
+        // Duplicate check - one registration per member per event
         if (memberId is Guid mid)
         {
             var dup = await db.EventRegistrations.AsNoTracking()
@@ -196,7 +196,7 @@ public sealed class EventRegistrationService(
         foreach (var g in r.Guests) db.MarkAdded(g);
         // Also persist the attendee-contact changes
         var ev = await db.Events.AsNoTracking().Where(e => e.Id == r.EventId).Select(e => new { e.Name, e.Slug }).FirstOrDefaultAsync(ct);
-        // attendeeName / email / phone are updated via reflection-free helper on entity — add if we need mutability. For now, keep immutable; clients send the registration with final values on register.
+        // attendeeName / email / phone are updated via reflection-free helper on entity - add if we need mutability. For now, keep immutable; clients send the registration with final values on register.
         _ = dto.AttendeeName; _ = dto.AttendeeEmail; _ = dto.AttendeePhone;
         await uow.SaveChangesAsync(ct);
         return Map(r, ev?.Name ?? "", ev?.Slug ?? "");

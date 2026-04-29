@@ -93,7 +93,7 @@
   * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
 }
 
-/* Utility: tabular figures — CRITICAL for money columns */
+/* Utility: tabular figures - CRITICAL for money columns */
 .jm-tnum { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
 
 /* Utility: RTL-ready helpers (use logical props everywhere) */

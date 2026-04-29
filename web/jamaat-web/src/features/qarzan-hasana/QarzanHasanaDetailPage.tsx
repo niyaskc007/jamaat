@@ -95,7 +95,7 @@ export function QarzanHasanaDetailPage() {
     { title: 'Remaining', dataIndex: 'remainingAmount', width: 140, align: 'end',
       render: (v: number) => <span className="jm-tnum">{money(v, loan.currency)}</span> },
     { title: 'Status', dataIndex: 'status', width: 120, render: (s: QhInstallment['status']) => <Tag>{QhInstallmentStatusLabel[s]}</Tag> },
-    { title: 'Last payment', dataIndex: 'lastPaymentDate', width: 130, render: (v: string | null) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+    { title: 'Last payment', dataIndex: 'lastPaymentDate', width: 130, render: (v: string | null) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
     {
       key: 'actions', width: 100, align: 'end',
       render: (_: unknown, row) => row.status === 3 || row.status === 5 ? null :
@@ -141,8 +141,8 @@ export function QarzanHasanaDetailPage() {
                 { key: 'out', label: 'Outstanding', children: <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(loan.amountOutstanding, loan.currency)}</span> },
                 { key: 'inst', label: 'Installments', children: `${loan.instalmentsApproved || loan.instalmentsRequested}` },
                 { key: 'start', label: 'Start', children: formatDate(loan.startDate) },
-                { key: 'end', label: 'End', children: loan.endDate ? formatDate(loan.endDate) : '—' },
-                { key: 'gold', label: 'Gold amount', children: loan.goldAmount ? <span className="jm-tnum">{money(loan.goldAmount, loan.currency)}</span> : '—' },
+                { key: 'end', label: 'End', children: loan.endDate ? formatDate(loan.endDate) : '-' },
+                { key: 'gold', label: 'Gold amount', children: loan.goldAmount ? <span className="jm-tnum">{money(loan.goldAmount, loan.currency)}</span> : '-' },
                 { key: 'status', label: 'Status', children: <Tag color={QhStatusColor[loan.status]}>{QhStatusLabel[loan.status]}</Tag> },
                 { key: 'g1', label: 'Guarantor 1', children: loan.guarantor1Name },
                 { key: 'g2', label: 'Guarantor 2', children: loan.guarantor2Name },
@@ -207,7 +207,7 @@ export function QarzanHasanaDetailPage() {
 
       <Modal title="Waive installment" open={!!waiving} onCancel={() => setWaiving(null)} onOk={() => waiveMut.mutate()} confirmLoading={waiveMut.isPending}
         okButtonProps={{ danger: true, disabled: !waiveReason.trim() }}>
-        {waiving && <div style={{ marginBlockEnd: 8 }}>Waiving installment #{waiving.installmentNo} — {money(waiving.scheduledAmount, loan.currency)} due {formatDate(waiving.dueDate)}</div>}
+        {waiving && <div style={{ marginBlockEnd: 8 }}>Waiving installment #{waiving.installmentNo} - {money(waiving.scheduledAmount, loan.currency)} due {formatDate(waiving.dueDate)}</div>}
         <Input.TextArea rows={3} value={waiveReason} onChange={(e) => setWaiveReason(e.target.value)} placeholder="Reason (required)" />
       </Modal>
     </div>

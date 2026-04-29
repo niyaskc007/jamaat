@@ -29,7 +29,7 @@ public sealed record CreatePostDatedChequeDto(
 
 public sealed record DepositPostDatedChequeDto(DateOnly DepositedOn);
 
-/// <summary>Mark a deposited cheque as cleared. The service issues a Receipt — caller supplies
+/// <summary>Mark a deposited cheque as cleared. The service issues a Receipt - caller supplies
 /// the bank account funds landed in. ClearedOn defaults to today on the controller side.</summary>
 public sealed record ClearPostDatedChequeDto(DateOnly ClearedOn, Guid BankAccountId);
 

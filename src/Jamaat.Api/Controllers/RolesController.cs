@@ -94,7 +94,7 @@ public sealed class RolesController(
             if (!result.Succeeded) return BadRequest(new { error = "remove_failed" });
         }
 
-        // Strip the user-claim copy on every member of this role — but only if no *other* role
+        // Strip the user-claim copy on every member of this role - but only if no *other* role
         // they're in still grants the same permission. Direct grants (added via UserPermissions)
         // are indistinguishable from copies, so we err on the side of removing copies; admins can
         // re-add a direct grant via the Users tab if needed.
@@ -123,7 +123,7 @@ public sealed class RolesController(
 }
 
 /// <summary>User-scoped permission management. Lets an admin grant "cross-functional" permissions
-/// to a single user without changing their role — e.g. give a Counter user voucher.approve once.</summary>
+/// to a single user without changing their role - e.g. give a Counter user voucher.approve once.</summary>
 [ApiController]
 [Authorize]
 [Route("api/v1/users")]

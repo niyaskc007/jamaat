@@ -45,7 +45,7 @@ export function AgreementTemplatesPanel() {
     {
       title: 'Fund', dataIndex: 'fundTypeCode', width: 160,
       render: (c: string | null | undefined, row) =>
-        c ? <span>{c}{row.fundTypeName ? ` — ${row.fundTypeName}` : ''}</span>
+        c ? <span>{c}{row.fundTypeName ? ` - ${row.fundTypeName}` : ''}</span>
           : <span style={{ color: 'var(--jm-gray-400)' }}>Any fund</span>,
     },
     {
@@ -196,7 +196,7 @@ function TemplateFormDrawer({ open, onClose, template, placeholders }: {
     >
       <Form layout="vertical" requiredMark={false}>
         {!isEdit && (
-          <Form.Item label="Code" required help="Unique identifier — cannot be changed later.">
+          <Form.Item label="Code" required help="Unique identifier - cannot be changed later.">
             <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g., MADRASA_PLEDGE" />
           </Form.Item>
         )}
@@ -220,7 +220,7 @@ function TemplateFormDrawer({ open, onClose, template, placeholders }: {
               onChange={setFundTypeId}
               placeholder="Any fund"
               showSearch optionFilterProp="label"
-              options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} — ${f.nameEnglish}` }))}
+              options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} - ${f.nameEnglish}` }))}
             />
           </Form.Item>
           <Form.Item label="Default">
@@ -236,7 +236,7 @@ function TemplateFormDrawer({ open, onClose, template, placeholders }: {
         <Alert
           type="info" showIcon
           style={{ marginBlockEnd: 12 }}
-          message="Placeholders — click to insert at the end"
+          message="Placeholders - click to insert at the end"
           description={
             <Space wrap size={4} style={{ marginBlockStart: 8 }}>
               {placeholders.map((p) => (

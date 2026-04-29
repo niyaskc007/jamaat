@@ -37,7 +37,7 @@ public sealed class ReceiptPdfRenderer : IReceiptPdfRenderer
                             if (reprint)
                                 c.Item().AlignRight().Text("DUPLICATE").FontSize(10).Bold().FontColor("#DC2626").Underline();
                             c.Item().AlignRight().Text("RECEIPT").FontSize(12).Bold().FontColor("#64748B");
-                            c.Item().AlignRight().PaddingTop(2).Text(r.ReceiptNumber ?? "—")
+                            c.Item().AlignRight().PaddingTop(2).Text(r.ReceiptNumber ?? "-")
                                 .FontSize(14).Bold().FontFamily("Consolas").FontColor("#0B6E63");
                             c.Item().AlignRight().Text(r.ReceiptDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture))
                                 .FontSize(10).FontColor("#475569");

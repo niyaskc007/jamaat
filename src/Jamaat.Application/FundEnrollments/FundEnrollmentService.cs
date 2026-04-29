@@ -137,7 +137,7 @@ public sealed class FundEnrollmentService(
         return $"FE-{(count + 1):D5}";
     }
 
-    /// <summary>Projection helper — called from EF queries (so it must be statically resolvable).</summary>
+    /// <summary>Projection helper - called from EF queries (so it must be statically resolvable).</summary>
     private static FundEnrollmentDto Project(JamaatDbContextFacade db, FundEnrollment x) =>
         new(x.Id, x.Code,
             x.MemberId,

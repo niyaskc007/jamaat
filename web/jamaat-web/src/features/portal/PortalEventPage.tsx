@@ -98,7 +98,7 @@ export function PortalEventPage() {
                 {data.agenda.map((a) => (
                   <div key={a.id} style={{ display: 'flex', gap: 16, padding: '10px 0', borderBlockStart: '1px solid #F1F5F9' }}>
                     <div style={{ minInlineSize: 100, fontWeight: 600, color: 'var(--portal-primary)' }} className="jm-tnum">
-                      {a.startTime ?? '—'}{a.endTime ? ` – ${a.endTime}` : ''}
+                      {a.startTime ?? '-'}{a.endTime ? ` – ${a.endTime}` : ''}
                     </div>
                     <div>
                       <div style={{ fontWeight: 600 }}>{a.title}</div>
@@ -177,7 +177,7 @@ function RegistrationCard({ event, onRegistered }: { event: Awaited<ReturnType<t
         </div>
         <Alert
           type="info" showIcon style={{ marginBlockStart: 12 }}
-          message={<>Status: <Tag>{registration.status === 2 ? 'Confirmed' : registration.status === 1 ? 'Pending approval' : registration.status === 3 ? 'Waitlisted' : '—'}</Tag></>}
+          message={<>Status: <Tag>{registration.status === 2 ? 'Confirmed' : registration.status === 1 ? 'Pending approval' : registration.status === 3 ? 'Waitlisted' : '-'}</Tag></>}
           description="Show this code at the entrance, or give your ITS number at the door." />
         <Button block type="link" style={{ marginBlockStart: 12 }} onClick={() => { setRegistration(null); setName(''); setEmail(''); setPhone(''); setIts(''); setNotes(''); setGuests([]); }}>
           Register someone else

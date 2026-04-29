@@ -71,12 +71,29 @@ export type Installment = {
   waivedByUserName?: string | null;
 };
 
+/// 1=Admin (staff accepted on behalf of party), 2=Self (party accepted via portal).
+export type AgreementAcceptanceMethod = 1 | 2;
+export const AgreementAcceptanceMethodLabel: Record<AgreementAcceptanceMethod, string> = {
+  1: 'Accepted by admin (on behalf)',
+  2: 'Accepted by party (self)',
+};
+
+export type AgreementAcceptanceProof = {
+  acceptedAtUtc: string;
+  acceptedByUserId?: string | null;
+  acceptedByName?: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  method?: AgreementAcceptanceMethod | null;
+};
+
 export type CommitmentDetail = {
   commitment: Commitment;
   installments: Installment[];
   agreementTemplateId?: string | null;
   agreementTemplateVersion?: number | null;
   agreementText?: string | null;
+  agreementAcceptanceProof?: AgreementAcceptanceProof | null;
 };
 
 export type CommitmentPaymentRow = {
@@ -148,7 +165,7 @@ export const commitmentsApi = {
     const { data } = await api.post('/api/v1/commitments', input);
     return data;
   },
-  acceptAgreement: async (id: string, body: { templateId?: string; renderedText: string }): Promise<Commitment> => {
+  acceptAgreement: async (id: string, body: { templateId?: string; renderedText: string; acceptedByAdmin?: boolean }): Promise<Commitment> => {
     const { data } = await api.post(`/api/v1/commitments/${id}/accept-agreement`, body);
     return data;
   },

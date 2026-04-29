@@ -46,7 +46,19 @@ public sealed record CommitmentDetailDto(
     IReadOnlyList<CommitmentInstallmentDto> Installments,
     Guid? AgreementTemplateId,
     int? AgreementTemplateVersion,
-    string? AgreementText);
+    string? AgreementText,
+    AgreementAcceptanceProofDto? AgreementAcceptanceProof);
+
+/// <summary>Auditable proof of who accepted the agreement, when, from where, and how.
+/// Surfaced on the commitment detail so the agreement modal can render an "acceptance
+/// proof" block alongside the rendered text - independent of any external audit log.</summary>
+public sealed record AgreementAcceptanceProofDto(
+    DateTimeOffset AcceptedAtUtc,
+    Guid? AcceptedByUserId,
+    string? AcceptedByName,
+    string? IpAddress,
+    string? UserAgent,
+    AgreementAcceptanceMethod? Method);
 
 /// <summary>One row per receipt-line attributed to a commitment. Covers the entire commitment
 /// or, when filtered, a single instalment - exposes everything the cashier needs to audit a
@@ -95,7 +107,8 @@ public sealed record PreviewScheduleRequest(
 
 public sealed record AcceptAgreementDto(
     Guid? TemplateId,
-    string RenderedText);
+    string RenderedText,
+    bool AcceptedByAdmin = true);
 
 public sealed record WaiveInstallmentDto(Guid InstallmentId, string Reason);
 

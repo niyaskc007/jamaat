@@ -82,7 +82,7 @@ export function FamiliesPage() {
       render: (_: unknown, row) =>
         row.contactPhone || row.contactEmail
           ? <span style={{ color: 'var(--jm-gray-700)' }}>{row.contactPhone ?? row.contactEmail}</span>
-          : <span style={{ color: 'var(--jm-gray-400)' }}>—</span>,
+          : <span style={{ color: 'var(--jm-gray-400)' }}>-</span>,
     },
     {
       title: 'Status',
@@ -192,7 +192,7 @@ export function FamiliesPage() {
                   <div style={{ paddingBlock: 16 }}>
                     <div style={{ fontWeight: 500, color: 'var(--jm-gray-700)', marginBlockEnd: 4 }}>No families yet</div>
                     <div style={{ fontSize: 13, color: 'var(--jm-gray-500)', marginBlockEnd: 16 }}>
-                      Create a family by picking a head member — other members can then be assigned.
+                      Create a family by picking a head member - other members can then be assigned.
                     </div>
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
                       Add your first family
@@ -217,7 +217,7 @@ export function FamiliesPage() {
         templateEndpoint="/api/v1/families/import-template.xlsx"
         templateFilename="families-import-template.xlsx"
         invalidateKeys={[['families']]}
-        hint={<>Upserts by Code. The Head ITS must already exist as a member — import members first.</>}
+        hint={<>Upserts by Code. The Head ITS must already exist as a member - import members first.</>}
       />
 
       {isError && (

@@ -54,10 +54,10 @@ function EntriesPanel() {
         <span style={{ fontWeight: 500 }}>{row.accountName}</span>
       </div>
     ) },
-    { title: 'Fund', dataIndex: 'fundTypeName', key: 'fund', width: 140, render: (v?: string) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+    { title: 'Fund', dataIndex: 'fundTypeName', key: 'fund', width: 140, render: (v?: string) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
     { title: 'Narration', dataIndex: 'narration', key: 'narr' },
-    { title: 'Debit', dataIndex: 'debit', key: 'd', align: 'right', width: 140, render: (v: number, row: LedgerEntry) => v ? <span className="jm-tnum">{money(v, row.currency)}</span> : <span style={{ color: 'var(--jm-gray-300)' }}>—</span> },
-    { title: 'Credit', dataIndex: 'credit', key: 'c', align: 'right', width: 140, render: (v: number, row: LedgerEntry) => v ? <span className="jm-tnum">{money(v, row.currency)}</span> : <span style={{ color: 'var(--jm-gray-300)' }}>—</span> },
+    { title: 'Debit', dataIndex: 'debit', key: 'd', align: 'right', width: 140, render: (v: number, row: LedgerEntry) => v ? <span className="jm-tnum">{money(v, row.currency)}</span> : <span style={{ color: 'var(--jm-gray-300)' }}>-</span> },
+    { title: 'Credit', dataIndex: 'credit', key: 'c', align: 'right', width: 140, render: (v: number, row: LedgerEntry) => v ? <span className="jm-tnum">{money(v, row.currency)}</span> : <span style={{ color: 'var(--jm-gray-300)' }}>-</span> },
   ];
 
   return (
@@ -116,8 +116,8 @@ function BalancesPanel() {
           { title: 'Code', dataIndex: 'accountCode', key: 'code', width: 100,
             render: (v: string) => <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontWeight: 600 }}>{v}</span> },
           { title: 'Account', dataIndex: 'accountName', key: 'name' },
-          { title: 'Debit', dataIndex: 'debit', key: 'd', align: 'right', width: 140, render: (v: number) => v ? <span className="jm-tnum">{money(v, baseCurrency)}</span> : <span style={{ color: 'var(--jm-gray-300)' }}>—</span> },
-          { title: 'Credit', dataIndex: 'credit', key: 'c', align: 'right', width: 140, render: (v: number) => v ? <span className="jm-tnum">{money(v, baseCurrency)}</span> : <span style={{ color: 'var(--jm-gray-300)' }}>—</span> },
+          { title: 'Debit', dataIndex: 'debit', key: 'd', align: 'right', width: 140, render: (v: number) => v ? <span className="jm-tnum">{money(v, baseCurrency)}</span> : <span style={{ color: 'var(--jm-gray-300)' }}>-</span> },
+          { title: 'Credit', dataIndex: 'credit', key: 'c', align: 'right', width: 140, render: (v: number) => v ? <span className="jm-tnum">{money(v, baseCurrency)}</span> : <span style={{ color: 'var(--jm-gray-300)' }}>-</span> },
           { title: 'Balance', dataIndex: 'balance', key: 'b', align: 'right', width: 160,
             render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600, color: v >= 0 ? 'var(--jm-gray-900)' : 'var(--jm-danger)' }}>{money(Math.abs(v), baseCurrency)}{v < 0 ? ' Cr' : ''}</span> },
         ]}

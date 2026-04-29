@@ -19,7 +19,7 @@ public interface IFamilyService
     Task<Result> AssignMemberAsync(Guid familyId, AssignMemberToFamilyDto dto, CancellationToken ct = default);
     Task<Result> RemoveMemberAsync(Guid familyId, Guid memberId, CancellationToken ct = default);
     Task<Result> TransferHeadshipAsync(Guid familyId, TransferHeadshipDto dto, CancellationToken ct = default);
-    /// <summary>Bulk-import families from XLSX. Each row references a head ITS — that member must already exist.</summary>
+    /// <summary>Bulk-import families from XLSX. Each row references a head ITS - that member must already exist.</summary>
     Task<ImportResult> ImportAsync(Stream xlsxStream, CancellationToken ct = default);
 }
 
@@ -176,7 +176,7 @@ public sealed class FamilyService(
                 var headIts = row.Get("Head ITS", "HeadITS", "Head ITS Number");
                 if (string.IsNullOrWhiteSpace(headIts)) { errors.Add(new(row.RowNumber, "Head ITS is required.", "Head ITS")); continue; }
 
-                // Resolve head member by ITS — the importer requires the member to exist.
+                // Resolve head member by ITS - the importer requires the member to exist.
                 var head = await db.Members.FirstOrDefaultAsync(m => ((string)(object)m.ItsNumber) == headIts && !m.IsDeleted, ct);
                 if (head is null) { errors.Add(new(row.RowNumber, $"No member found with ITS '{headIts}'. Import members first.", "Head ITS")); continue; }
 

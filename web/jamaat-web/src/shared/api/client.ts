@@ -36,7 +36,7 @@ api.interceptors.response.use(
     const status = err.response?.status;
 
     if (status === 401) {
-      // Distinguish "session expired" (we had a token, server rejected it — usually TTL or
+      // Distinguish "session expired" (we had a token, server rejected it - usually TTL or
       // server restart with a new JWT key) from "never logged in". The first case deserves
       // a user-visible cue so people don't stare at a silent failure.
       const hadSession = !!authStore.getAccessToken();

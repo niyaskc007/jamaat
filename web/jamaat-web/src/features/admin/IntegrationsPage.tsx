@@ -5,7 +5,7 @@ import { EmptyHero } from '../../shared/ui/EmptyHero';
 export function IntegrationsPage() {
   return (
     <div>
-      <PageHeader title="Integrations" subtitle="External systems — ITS, banking, reporting, notifications." />
+      <PageHeader title="Integrations" subtitle="External systems - ITS, banking, reporting, notifications." />
       <EmptyHero
         milestone="M1 – M4"
         icon={<ApiOutlined />}

@@ -26,7 +26,7 @@ export function LanguageSwitcher({ variant = 'light' }: Props) {
         {active.startsWith(l.code) && <CheckOutlined style={{ color: 'var(--jm-primary-500)' }} />}
       </div>
     ),
-    disabled: l.code !== 'en', // Phase 1 — en only; others populate in Phase 2
+    disabled: l.code !== 'en', // Phase 1 - en only; others populate in Phase 2
   }));
 
   const color = variant === 'dark' ? '#CBD3DD' : 'var(--jm-gray-700)';

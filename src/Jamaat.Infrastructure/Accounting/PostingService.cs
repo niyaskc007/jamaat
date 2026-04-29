@@ -33,7 +33,7 @@ public sealed class PostingService(
             .ToListAsync(ct);
 
         var defaultIncomeAccountId = await ResolveAccountByCodeAsync("4000", ct); // Donations Income
-        // Returnable contributions are NOT income — they're a return obligation (liability).
+        // Returnable contributions are NOT income - they're a return obligation (liability).
         // 3500 'Qarzan Hasana' already exists in seeded chart-of-accounts and is the natural
         // home for QH returnable money; non-QH returnable funds also land here for now (admin
         // can split into more granular liability accounts later if needed).
@@ -88,7 +88,7 @@ public sealed class PostingService(
             //   1. If the receipt is Returnable → credit to the returnable-liability account.
             //   2. Else if the fund type has its own CreditAccountId → use it.
             //   3. Else fall back to the default Donations Income account.
-            // This is the difference between income and a return obligation — without it the
+            // This is the difference between income and a return obligation - without it the
             // financial reports treat returnable money as donations and overstate income.
             var creditAccountId = receipt.IsReturnable
                 ? returnableLiabilityAccountId!.Value
@@ -216,7 +216,7 @@ public sealed class PostingService(
                 debit: o.Credit,   // swapped
                 credit: o.Debit,
                 currency: o.Currency,
-                narration: $"Reversal of {o.SourceReference} — {reason}",
+                narration: $"Reversal of {o.SourceReference} - {reason}",
                 reversalOfEntryId: o.Id,
                 at: clock.UtcNow,
                 userId: currentUser.UserId));

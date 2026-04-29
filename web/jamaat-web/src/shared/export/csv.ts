@@ -2,7 +2,7 @@
 ///
 /// Why client-side: our list endpoints already paginate + filter, so pulling the filtered
 /// result set and flattening to CSV is simpler than building parallel export endpoints for
-/// every module. Cap at 5000 rows so operators don't accidentally DDoS the API — larger
+/// every module. Cap at 5000 rows so operators don't accidentally DDoS the API - larger
 /// exports should go through the Reports screen where the server renders asynchronously.
 
 const ROW_CAP = 5000;
@@ -33,7 +33,7 @@ export async function fetchAllPages<TItem, TQuery>(list: Pager<TItem, TQuery>, q
 function csvCell(v: unknown): string {
   if (v === null || v === undefined) return '';
   const s = typeof v === 'string' ? v : String(v);
-  // Always quote — handles commas, quotes, newlines, and leading = (Excel formula-injection guard).
+  // Always quote - handles commas, quotes, newlines, and leading = (Excel formula-injection guard).
   const escaped = s.replace(/"/g, '""');
   const needsPrefixGuard = /^[=+\-@]/.test(s);
   return `"${needsPrefixGuard ? "'" : ''}${escaped}"`;

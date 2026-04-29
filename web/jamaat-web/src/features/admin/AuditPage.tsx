@@ -110,7 +110,7 @@ function ActionTag({ action }: { action: string }) {
 }
 
 /// Map audit entityName → SPA route. Unknown entities render the raw id only.
-/// Keep this list conservative — only entities with a real detail route should
+/// Keep this list conservative - only entities with a real detail route should
 /// become links, otherwise we'd send reviewers to 404s.
 const ENTITY_ROUTE: Record<string, (id: string) => string> = {
   Receipt: (id) => `/receipts/${id}`,
@@ -134,7 +134,7 @@ function EntityLink({ entityName, entityId }: { entityName: string; entityId: st
 }
 
 /// Expanded row body: toggles between a field-by-field diff (default) and raw JSON.
-/// Diff mode is faster to scan for "what actually changed" — JSON mode stays for the
+/// Diff mode is faster to scan for "what actually changed" - JSON mode stays for the
 /// rare case where a reviewer needs the exact original payload.
 function AuditRowDetail({ row }: { row: AuditLog }) {
   const [mode, setMode] = useState<'diff' | 'json'>('diff');
@@ -172,7 +172,7 @@ function JsonBlock({ title, value }: { title: string; value?: string | null }) {
           {tryFormat(value)}
         </pre>
       ) : (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>— none —</Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>- none -</Typography.Text>
       )}
     </div>
   );
@@ -185,7 +185,7 @@ function FieldDiff({ before, after }: { before?: string | null; after?: string |
   const b = parseOrNull(before);
   const a = parseOrNull(after);
 
-  // Creates & deletes have only one side — fall back to showing the single object's fields.
+  // Creates & deletes have only one side - fall back to showing the single object's fields.
   if (!b && !a) return <Typography.Text type="secondary" style={{ fontSize: 12 }}>No payload captured.</Typography.Text>;
   if (!b) return <SideOnly kind="New" obj={a ?? {}} />;
   if (!a) return <SideOnly kind="Deleted" obj={b} />;

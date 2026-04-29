@@ -92,7 +92,7 @@ export function AccountFormDrawer({ open, onClose, account }: { open: boolean; o
           <Controller name="parentId" control={control} render={({ field }) => (
             <TreeSelect
               {...field} allowClear showSearch treeNodeFilterProp="title" treeDefaultExpandAll
-              placeholder="(None — top level)" value={field.value ?? undefined}
+              placeholder="(None - top level)" value={field.value ?? undefined}
               onChange={(v) => field.onChange(v ?? null)} treeData={treeData}
             />
           )} />

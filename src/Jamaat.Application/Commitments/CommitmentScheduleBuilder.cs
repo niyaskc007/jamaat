@@ -5,7 +5,7 @@ using Jamaat.Domain.Enums;
 namespace Jamaat.Application.Commitments;
 
 /// <summary>
-/// Builds an installment schedule from (total, installments, frequency, start) —
+/// Builds an installment schedule from (total, installments, frequency, start) -
 /// last installment absorbs rounding so the sum matches the total exactly.
 /// </summary>
 public static class CommitmentScheduleBuilder

@@ -27,7 +27,7 @@ public static class DevDataSeeder
         var existingMemberCount = await db.Members.CountAsync(ct);
         if (existingMemberCount >= 10)
         {
-            logger.LogDebug("DevDataSeeder skipped — {Count} members already exist.", existingMemberCount);
+            logger.LogDebug("DevDataSeeder skipped - {Count} members already exist.", existingMemberCount);
             return;
         }
 
@@ -175,7 +175,7 @@ public static class DevDataSeeder
         {
             ev.UpdateCore(
                 ev.Name, nameArabic: null,
-                tagline: "Seeded sample event — safe to delete.",
+                tagline: "Seeded sample event - safe to delete.",
                 description: null,
                 ev.Category, ev.EventDate, hijri: null,
                 startsAtUtc: null, endsAtUtc: null,
@@ -195,16 +195,16 @@ public static class DevDataSeeder
     /// dashboard charts and accounting reports depend on the ledger entries those produce.
     public static async Task SeedReceiptsAsync(IServiceProvider sp, Guid tenantId, ILogger logger, CancellationToken ct)
     {
-        // Need a service scope of our own — DI scopes per request, but the seeder is a one-shot.
+        // Need a service scope of our own - DI scopes per request, but the seeder is a one-shot.
         using var scope = sp.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<JamaatDbContext>();
 
-        // CRITICAL: set the TenantContext *before* any query — the EF global query filter
+        // CRITICAL: set the TenantContext *before* any query - the EF global query filter
         // strips rows when no tenant is bound, which would falsely look like an empty DB.
         var tenantCtx = scope.ServiceProvider.GetRequiredService<TenantContext>();
         tenantCtx.SetTenant(tenantId);
 
-        // Skip if already seeded — any Confirmed receipt above the noise threshold means the
+        // Skip if already seeded - any Confirmed receipt above the noise threshold means the
         // dashboard will look populated; bulk-adding more would just duplicate the noise.
         var existing = await db.Receipts.CountAsync(r => r.Status == Domain.Enums.ReceiptStatus.Confirmed, ct);
         if (existing >= 20)
@@ -223,7 +223,7 @@ public static class DevDataSeeder
             .ToListAsync(ct);
         if (members.Count == 0 || fundIds.Count == 0)
         {
-            logger.LogWarning("DevDataSeeder: cannot seed receipts — need members and non-loan funds.");
+            logger.LogWarning("DevDataSeeder: cannot seed receipts - need members and non-loan funds.");
             return;
         }
 
@@ -266,7 +266,7 @@ public static class DevDataSeeder
         logger.LogInformation("DevDataSeeder: seeded {Seeded} confirmed receipts ({Failed} failed).", seeded, failed);
     }
 
-    /// Name pool — Bohra/Arabic-leaning first names + common family surnames seen in the community.
+    /// Name pool - Bohra/Arabic-leaning first names + common family surnames seen in the community.
     /// Kept compact but varied enough to populate AntD Table search realistically.
     private static readonly (string First, string Last, string Arabic, string? Phone, string? Email)[] SampleIdentities =
     [

@@ -13,12 +13,12 @@ export async function openAuthenticatedPdf(path: string, filename?: string): Pro
   const blob = new Blob([response.data], { type: 'application/pdf' });
   const objectUrl = URL.createObjectURL(blob);
 
-  // Opening the blob URL in a new tab is what most browsers do best — they render
+  // Opening the blob URL in a new tab is what most browsers do best - they render
   // the PDF with their native viewer which has Print / Download buttons.
   const win = window.open(objectUrl, '_blank', 'noopener,noreferrer');
 
   if (!win) {
-    // Popup blocked — fall back to a download.
+    // Popup blocked - fall back to a download.
     const a = document.createElement('a');
     a.href = objectUrl;
     a.download = filename ?? 'document.pdf';

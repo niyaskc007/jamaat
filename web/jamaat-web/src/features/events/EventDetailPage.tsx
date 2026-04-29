@@ -138,14 +138,14 @@ function OverviewTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => 
           endsAtUtc: event.endsAtUtc ? dayjs(event.endsAtUtc) : null,
         }}>
         <Row gutter={16}>
-          <Col span={16}><Form.Item label="Slug" help={`Public URL path. Read-only — computed from the name.`}><Input value={event.slug} disabled /></Form.Item></Col>
+          <Col span={16}><Form.Item label="Slug" help={`Public URL path. Read-only - computed from the name.`}><Input value={event.slug} disabled /></Form.Item></Col>
           <Col span={8}><Form.Item label="Category" name="category">
             <Select options={Object.entries(EventCategoryLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
           </Form.Item></Col>
           <Col span={12}><Form.Item label="Name" name="name" rules={[{ required: true }]}><Input /></Form.Item></Col>
           <Col span={12}><Form.Item label="Name (Arabic)" name="nameArabic"><Input dir="rtl" /></Form.Item></Col>
           <Col span={24}><Form.Item label="Tagline" name="tagline"><Input placeholder="Short subtitle shown on the event card." /></Form.Item></Col>
-          <Col span={24}><Form.Item label="Description" name="description" help="Markdown supported — shown on the public event page.">
+          <Col span={24}><Form.Item label="Description" name="description" help="Markdown supported - shown on the public event page.">
             <Input.TextArea rows={6} />
           </Form.Item></Col>
           <Col span={8}><Form.Item label="Event date" name="eventDate" rules={[{ required: true }]}><DatePicker style={{ inlineSize: '100%' }} /></Form.Item></Col>
@@ -378,7 +378,7 @@ function RegistrationsTab({ event }: { event: Event }) {
     {
       title: 'Guests', dataIndex: 'guests', width: 160,
       render: (g: EventRegistration['guests']) => g.length === 0
-        ? <span style={{ color: 'var(--jm-gray-400)' }}>—</span>
+        ? <span style={{ color: 'var(--jm-gray-400)' }}>-</span>
         : <span>{g.length} ({g.map((x) => AgeBandLabel[x.ageBand]).join(', ')})</span>,
     },
     { title: 'Status', dataIndex: 'status', width: 130, render: (s: RegistrationStatus) => <Tag color={RegistrationStatusColor[s]}>{RegistrationStatusLabel[s]}</Tag> },

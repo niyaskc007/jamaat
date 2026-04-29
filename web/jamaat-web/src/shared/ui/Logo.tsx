@@ -1,7 +1,7 @@
 type Props = { size?: number; variant?: 'light' | 'dark'; withWord?: boolean };
 
 /**
- * Jamaat mark — an 8-point star (traditional Islamic geometry, tastefully stylised)
+ * Jamaat mark - an 8-point star (traditional Islamic geometry, tastefully stylised)
  * with an inner dome curve. Pure SVG, no image dependency.
  */
 export function Logo({ size = 32, variant = 'light', withWord = true }: Props) {

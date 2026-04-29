@@ -1,6 +1,6 @@
 @import './app/tokens.css';
 
-/* Fonts — Inter & Inter Tight (variable) via Google Fonts.
+/* Fonts - Inter & Inter Tight (variable) via Google Fonts.
    Harmless in dev without CDN; font-display:swap falls back cleanly. */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap');
 
@@ -30,7 +30,7 @@ h1, h2, h3, h4 {
   margin: 0;
 }
 
-/* Focus ring — accessible + branded */
+/* Focus ring - accessible + branded */
 :focus-visible { outline: 2px solid var(--jm-primary-500); outline-offset: 2px; }
 
 /* Selection colour */

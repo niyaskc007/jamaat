@@ -1,6 +1,6 @@
 /**
  * Subtle 8-fold Islamic geometric tile as an SVG pattern. Used as decorative
- * background on the login split. Very low opacity — tasteful, not gimmicky.
+ * background on the login split. Very low opacity - tasteful, not gimmicky.
  */
 type Props = { opacity?: number; colour?: string };
 

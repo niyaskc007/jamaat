@@ -3,10 +3,11 @@ import {
   Card, Form, Input, InputNumber, Select, Button, Space, DatePicker, Row, Col, Divider,
   AutoComplete, App as AntdApp, Alert, Tag, Tooltip,
 } from 'antd';
-import { DeleteOutlined, PlusOutlined, SaveOutlined, PrinterOutlined, SearchOutlined, LinkOutlined, DisconnectOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, SaveOutlined, PrinterOutlined, SearchOutlined, LinkOutlined, DisconnectOutlined, QuestionCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import dayjs, { type Dayjs } from 'dayjs';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { postDatedChequesApi, PdcStatusLabel, type PostDatedCheque } from '../commitments/postDatedChequesApi';
 import { membersApi } from '../members/membersApi';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { money } from '../../shared/format/format';
@@ -28,7 +29,8 @@ type Line = CreateReceiptLine & { _id: string };
 
 export function NewReceiptPage() {
   const navigate = useNavigate();
-  const { message } = AntdApp.useApp();
+  const { message, modal } = AntdApp.useApp();
+  const qc = useQueryClient();
   // Pre-fill from query params (e.g. when launched from a commitment's "Collect payment" button).
   // Supported: memberId, familyId, commitmentId, commitmentInstallmentId, fundTypeId, currency.
   const [searchParams] = useSearchParams();
@@ -100,10 +102,10 @@ export function NewReceiptPage() {
   }, []);
 
   const fundsQuery = useQuery({ queryKey: ['fundTypes', 'all'], queryFn: () => fundTypesApi.list({ page: 1, pageSize: 200, active: true }) });
-  // Identify funds chosen across line items — drives intention/niyyath/maturity/agreement
+  // Identify funds chosen across line items - drives intention/niyyath/maturity/agreement
   // visibility (batch 2) AND custom-field rendering (batch 3).
   const lineFundIdsForRender = lines.map((l) => l.fundTypeId).filter(Boolean) as string[];
-  // Custom fields for each selected fund — fetched lazily so we don't blast the API up front.
+  // Custom fields for each selected fund - fetched lazily so we don't blast the API up front.
   const customFieldsQueries = useQuery({
     queryKey: ['fundType-custom-fields', lineFundIdsForRender.sort().join(',')],
     queryFn: async () => {
@@ -138,7 +140,7 @@ export function NewReceiptPage() {
       lookupMembers(memberSearch).then((members) => {
         if (cancelled) return;
         setMemberOptions(members.map((m) => ({
-          value: `${m.itsNumber} — ${m.fullName}`,
+          value: `${m.itsNumber} - ${m.fullName}`,
           id: m.id, name: m.fullName, its: m.itsNumber,
           label: (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -267,7 +269,7 @@ export function NewReceiptPage() {
     },
   });
 
-  // Ctrl+Enter anywhere on the page (even inside an input) confirms the receipt —
+  // Ctrl+Enter anywhere on the page (even inside an input) confirms the receipt -
   // cashiers often have their last focus inside the Remarks textarea.
   useHotkey({ key: 'Enter', modifiers: ['ctrl'], ignoreInInputs: false }, () => {
     if (!mutation.isPending) onSubmit();
@@ -279,6 +281,55 @@ export function NewReceiptPage() {
     if (receiptDate.isAfter(dayjs(), 'day')) { setSubmitError('Receipt date cannot be in the future.'); return; }
     const cleanLines = lines.filter((l) => l.fundTypeId && l.amount > 0);
     if (cleanLines.length === 0) { setSubmitError('Add at least one line with a fund and amount.'); return; }
+
+    // Last-chance guard: if any line targets a commitment instalment that already has an
+    // outstanding cheque (Pledged/Deposited), force the cashier to acknowledge before saving.
+    // The inline yellow row warned them already; this is the "are you sure" before they
+    // strand a cheque silently.
+    const conflicts: { line: Line; pdcs: PostDatedCheque[] }[] = [];
+    for (const ln of cleanLines.filter((l) => l.commitmentId)) {
+      const cached = qc.getQueryData<PostDatedCheque[]>(['pdcs', ln.commitmentId!]);
+      if (!cached) continue;
+      const open = cached.filter((p) => p.status === 1 || p.status === 2);
+      const matching = ln.commitmentInstallmentId
+        ? open.filter((p) => p.commitmentInstallmentId === ln.commitmentInstallmentId)
+        : [];
+      if (matching.length > 0) conflicts.push({ line: ln, pdcs: matching });
+    }
+    if (conflicts.length > 0) {
+      modal.confirm({
+        title: 'Outstanding cheques on the targeted instalment(s)',
+        width: 560,
+        content: (
+          <div style={{ fontSize: 13 }}>
+            <p style={{ marginBlockStart: 0 }}>
+              You're recording a manual receipt against an instalment that already has a cheque pledged. Saving will not touch the cheque - you'll need to cancel it separately, or you'll be left with both.
+            </p>
+            <ul style={{ marginBlockStart: 8, paddingInlineStart: 18 }}>
+              {conflicts.flatMap((c) => c.pdcs.map((p) => (
+                <li key={p.id}>
+                  Cheque <strong style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{p.chequeNumber}</strong>
+                  {' '}({money(p.amount, p.currency)}, {PdcStatusLabel[p.status]})
+                  {p.installmentNo && <> on instalment #{p.installmentNo}</>}
+                </li>
+              )))}
+            </ul>
+            <p style={{ marginBlockEnd: 0, color: 'var(--jm-gray-600)' }}>
+              Tip: cancel each cheque from the warning row above before saving.
+            </p>
+          </div>
+        ),
+        okText: 'Save anyway',
+        okButtonProps: { danger: true },
+        cancelText: 'Go back',
+        onOk: () => doSubmit(cleanLines),
+      });
+      return;
+    }
+    doSubmit(cleanLines);
+  };
+
+  const doSubmit = (cleanLines: Line[]) => {
     // Per-mode required fields. Cheque needs cheque#+date+bank deposit account; digital
     // modes (transfer/card/online/UPI) need a bank deposit account + an external reference.
     if (paymentMode === 2) {
@@ -386,7 +437,7 @@ export function NewReceiptPage() {
               </Row>
             </Form>
 
-            {/* Family beneficiary — only shown after the member is picked */}
+            {/* Family beneficiary - only shown after the member is picked */}
             {selectedMember && (memberFamilyQ.data?.family || familyId) && (
               <Alert
                 type="info"
@@ -396,7 +447,7 @@ export function NewReceiptPage() {
                   <span>
                     <strong>{memberFamilyQ.data?.family?.familyName ?? 'Family'}</strong>
                     {memberFamilyQ.data?.family?.code ? ` · ${memberFamilyQ.data.family.code}` : ''}
-                    {' — this receipt is attributed to the family.'}
+                    {' - this receipt is attributed to the family.'}
                   </span>
                 }
                 description={
@@ -413,7 +464,7 @@ export function NewReceiptPage() {
                         style={{ inlineSize: '100%' }}
                         options={memberFamilyQ.data.members.map((m) => ({
                           value: m.id,
-                          label: `${m.itsNumber} — ${m.fullName}`,
+                          label: `${m.itsNumber} - ${m.fullName}`,
                         }))}
                       />
                     </div>
@@ -576,6 +627,12 @@ export function NewReceiptPage() {
                           </td>
                         </tr>
                       )}
+                      {ln.commitmentId && (
+                        <PdcWarningRow
+                          commitmentId={ln.commitmentId}
+                          installmentId={ln.commitmentInstallmentId}
+                        />
+                      )}
                       {showNoEnrollmentCue && fund && selectedMember && (
                         <tr style={{ background: '#FEF3C7' /* warm cream */ }}>
                           <td colSpan={5} style={{ padding: '8px 12px', fontSize: 12 }}>
@@ -630,7 +687,7 @@ export function NewReceiptPage() {
             <Form layout="vertical" requiredMark={false}>
               <Form.Item label="Currency" help={currency !== baseCurrency ? `Will be converted to ${baseCurrency} for the ledger.` : undefined}>
                 <Select value={currency} onChange={setCurrency} showSearch optionFilterProp="label"
-                  options={(currenciesQuery.data ?? []).map((c) => ({ value: c.code, label: `${c.code} — ${c.name}${c.isBase ? ' (base)' : ''}` }))} />
+                  options={(currenciesQuery.data ?? []).map((c) => ({ value: c.code, label: `${c.code} - ${c.name}${c.isBase ? ' (base)' : ''}` }))} />
               </Form.Item>
               <Form.Item label="Mode" tooltip="How the money arrived. Cash posts to the cash account; Cheque/Transfer/UPI posts to the selected bank account.">
                 <Select value={paymentMode} onChange={(v) => setPaymentMode(v)}
@@ -669,14 +726,14 @@ export function NewReceiptPage() {
                   </Form.Item>
                 );
               })()}
-              <Form.Item label="Remarks" tooltip="Free-text note shown on the receipt PDF. Use sparingly — long remarks wrap awkwardly on pre-printed stationery.">
+              <Form.Item label="Remarks" tooltip="Free-text note shown on the receipt PDF. Use sparingly - long remarks wrap awkwardly on pre-printed stationery.">
                 <Input.TextArea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} />
               </Form.Item>
             </Form>
           </Card>
 
           {/*
-            Contribution intention card — only relevant when a returnable fund is selected.
+            Contribution intention card - only relevant when a returnable fund is selected.
             Niyyath / Agreement / Maturity each surface only if at least one chosen fund demands them,
             so simple cash donations stay exactly as they were before this batch.
           */}
@@ -689,8 +746,8 @@ export function NewReceiptPage() {
                       value={intention}
                       onChange={(v) => { setIntention(v); if (v === 1) { setMaturityDate(null); } }}
                       options={[
-                        { value: 1, label: 'Permanent — non-returnable contribution' },
-                        { value: 2, label: 'Returnable — contributor expects this back' },
+                        { value: 1, label: 'Permanent - non-returnable contribution' },
+                        { value: 2, label: 'Returnable - contributor expects this back' },
                       ]}
                     />
                   </Form.Item>
@@ -746,7 +803,7 @@ export function NewReceiptPage() {
             Confirm & Print ({money(total, currency)}) <span style={{ opacity: 0.6, fontSize: 12, marginInlineStart: 8 }}>⌃↵</span>
           </Button>
           <Button size="large" block icon={<SaveOutlined />} style={{ marginBlockStart: 8 }} disabled
-            title="Draft saving coming later — confirm posts to the ledger immediately">
+            title="Draft saving coming later - confirm posts to the ledger immediately">
             Save as draft
           </Button>
         </Col>
@@ -759,6 +816,94 @@ export function NewReceiptPage() {
 /// cell is still blank, we seed it from the receipt date in `MMM YYYY` form (e.g. "Apr 2026").
 /// The cashier can edit freely afterwards. Uses a ref so we don't keep stomping the value if
 /// the cashier deliberately clears it.
+/// Inline warning rendered under a receipt line whose commitment has open post-dated cheques
+/// pledged against it. Cuts the "manual receipt collected while a cheque was still pending"
+/// failure mode by surfacing the conflict at the moment the line is being authored - with a
+/// one-click "cancel cheque" action so the cashier doesn't have to navigate away.
+function PdcWarningRow({ commitmentId, installmentId }: { commitmentId: string; installmentId?: string }) {
+  const qc = useQueryClient();
+  const { message, modal } = AntdApp.useApp();
+  const pdcsQ = useQuery({
+    queryKey: ['pdcs', commitmentId],
+    queryFn: () => postDatedChequesApi.listByCommitment(commitmentId),
+  });
+  const cancelMut = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      postDatedChequesApi.cancel(id, { cancelledOn: dayjs().format('YYYY-MM-DD'), reason }),
+    onSuccess: () => {
+      message.success('Cheque cancelled. The contributor should get the physical paper back.');
+      void qc.invalidateQueries({ queryKey: ['pdcs', commitmentId] });
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed.'),
+  });
+
+  const open = (pdcsQ.data ?? []).filter((p) => p.status === 1 || p.status === 2);
+  const matching = installmentId
+    ? open.filter((p) => p.commitmentInstallmentId === installmentId)
+    : open;
+  if (matching.length === 0) return null;
+
+  const exact = !!installmentId;
+  const promptCancel = (p: PostDatedCheque) => {
+    let reason = `Replaced by manual receipt (instalment #${p.installmentNo ?? '-'})`;
+    modal.confirm({
+      title: `Cancel cheque ${p.chequeNumber}?`,
+      content: (
+        <div>
+          <p style={{ margin: 0, fontSize: 13 }}>
+            The cheque will move to <strong>Cancelled</strong> status. Return the physical paper to the contributor.
+          </p>
+          <div style={{ marginBlockStart: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', marginBlockEnd: 4 }}>Reason (audit log):</div>
+            <Input.TextArea rows={2} defaultValue={reason} onChange={(e) => { reason = e.target.value; }} autoFocus />
+          </div>
+        </div>
+      ),
+      okText: 'Cancel cheque',
+      okButtonProps: { danger: true },
+      onOk: () => { if (!reason.trim()) throw new Error('Reason required'); return cancelMut.mutateAsync({ id: p.id, reason }); },
+    });
+  };
+
+  return (
+    <tr style={{ background: '#FEF3C7' /* warm cream */ }}>
+      <td colSpan={5} style={{ padding: '10px 12px', fontSize: 12 }}>
+        <Space align="start" size={8} wrap>
+          <WarningOutlined style={{ color: '#B45309', fontSize: 16, marginBlockStart: 2 }} />
+          <div style={{ color: '#92400E' }}>
+            <div style={{ fontWeight: 600, marginBlockEnd: 4 }}>
+              {exact
+                ? `${matching.length} cheque(s) already pledged against this instalment`
+                : `${matching.length} cheque(s) outstanding on this commitment`}
+            </div>
+            <div style={{ marginBlockEnd: 6 }}>
+              {exact
+                ? "Recording a manual receipt won't auto-cancel the cheque - you'd be left with both. If the contributor is paying differently, cancel the cheque first."
+                : "Pick the matching instalment so the system can flag if any of these cover the same line."}
+            </div>
+            <Space wrap size={8}>
+              {matching.map((p) => (
+                <Tag key={p.id} color="orange" style={{ fontSize: 11, padding: '2px 8px' }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{p.chequeNumber}</span>
+                  {' · '}{money(p.amount, p.currency)}
+                  {p.installmentNo && <> · #{p.installmentNo}</>}
+                  {' · '}{PdcStatusLabel[p.status]}
+                  {exact && (
+                    <Button size="small" type="link" danger style={{ padding: '0 0 0 6px', height: 'auto', fontSize: 11 }}
+                      onClick={() => promptCancel(p)}>
+                      Cancel
+                    </Button>
+                  )}
+                </Tag>
+              ))}
+            </Space>
+          </div>
+        </Space>
+      </td>
+    </tr>
+  );
+}
+
 function PeriodInput({ value, onChange, requiresPeriod, receiptDate }: {
   value: string;
   onChange: (v: string) => void;
@@ -846,7 +991,7 @@ function InstallmentPicker({ commitmentId, value, currency, onChange }: {
 }
 
 /// Render the right input for a custom field's type. Values are stored as strings on the
-/// receipt — number/date/boolean are converted on the way in/out so the JSON blob stays
+/// receipt - number/date/boolean are converted on the way in/out so the JSON blob stays
 /// uniformly stringified and the API doesn't need to know the type.
 function CustomFieldInput({ field, value, onChange }: {
   field: FundTypeCustomField;

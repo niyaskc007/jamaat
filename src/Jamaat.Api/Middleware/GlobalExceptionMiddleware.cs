@@ -86,7 +86,7 @@ public sealed class GlobalExceptionMiddleware
         }
         catch
         {
-            // Swallow — an error while recording errors should never surface to the caller.
+            // Swallow - an error while recording errors should never surface to the caller.
         }
     }
 

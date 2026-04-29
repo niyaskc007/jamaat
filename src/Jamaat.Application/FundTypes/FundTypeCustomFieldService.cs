@@ -27,7 +27,7 @@ public sealed class FundTypeCustomFieldService(JamaatDbContextFacade db, IUnitOf
 
     public async Task<Result<FundTypeCustomFieldDto>> CreateAsync(CreateFundTypeCustomFieldDto dto, CancellationToken ct = default)
     {
-        // Validate the basics — keys must be code-friendly so frontend code can read them off the JSON.
+        // Validate the basics - keys must be code-friendly so frontend code can read them off the JSON.
         if (string.IsNullOrWhiteSpace(dto.FieldKey)) return Error.Validation("custom_field.key_required", "Field key is required.");
         var key = dto.FieldKey.Trim();
         if (!System.Text.RegularExpressions.Regex.IsMatch(key, "^[A-Za-z][A-Za-z0-9_]*$"))
@@ -61,7 +61,7 @@ public sealed class FundTypeCustomFieldService(JamaatDbContextFacade db, IUnitOf
     {
         var entity = await db.FundTypeCustomFields.FirstOrDefaultAsync(f => f.Id == id, ct);
         if (entity is null) return Result.Failure(Error.NotFound("custom_field.not_found", "Custom field not found."));
-        // We don't keep historical references on receipts when the field is deleted — but the
+        // We don't keep historical references on receipts when the field is deleted - but the
         // value is still in CustomFieldsJson if any older receipt captured it. Operators should
         // deactivate rather than delete to preserve schema-of-record semantics.
         db.FundTypeCustomFields.Remove(entity);

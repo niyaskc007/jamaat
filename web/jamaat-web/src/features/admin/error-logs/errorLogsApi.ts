@@ -97,7 +97,7 @@ export const errorLogsApi = {
     await api.post(`/api/v1/error-logs/${id}/ignore`);
   },
   report: async (input: ReportClientErrorInput): Promise<void> => {
-    // Fire-and-forget — never block the user on error reporting
+    // Fire-and-forget - never block the user on error reporting
     try {
       await api.post('/api/v1/error-logs/report', input);
     } catch {

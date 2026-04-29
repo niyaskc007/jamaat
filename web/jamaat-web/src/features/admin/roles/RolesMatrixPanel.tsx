@@ -8,7 +8,7 @@ import { extractProblem } from '../../../shared/api/client';
 /// Role × Permission matrix. Each row = one permission; each column = one role.
 /// Toggling a checkbox calls add/remove on the role and propagates to users in that role
 /// (server side), so the change takes effect on the user's next login. Administrator role is
-/// rendered locked-on for every permission — super-admin must always have everything.
+/// rendered locked-on for every permission - super-admin must always have everything.
 export function RolesMatrixPanel() {
   const qc = useQueryClient();
   const { message } = AntdApp.useApp();
@@ -59,7 +59,7 @@ export function RolesMatrixPanel() {
         message="How role-permission changes propagate"
         description={
           <ul style={{ margin: 0, paddingInlineStart: 18 }}>
-            <li>Toggling a permission on a role updates every user currently in that role — they'll see the change at their next login.</li>
+            <li>Toggling a permission on a role updates every user currently in that role - they'll see the change at their next login.</li>
             <li>The <b>Administrator</b> role always has every permission and cannot be modified here.</li>
             <li>To grant a one-off permission to a single user without changing their role, use the <b>Users · cross-functional</b> tab.</li>
           </ul>

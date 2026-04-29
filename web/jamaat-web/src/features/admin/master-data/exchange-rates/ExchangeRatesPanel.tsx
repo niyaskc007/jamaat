@@ -95,10 +95,10 @@ function NewRateModal({ open, onClose, currencies, onSaved, message }: { open: b
         <Form.Item name="rate" label="Rate (1 From = ? To)" rules={[{ required: true, type: 'number', min: 0.000001 }]}>
           <InputNumber min={0} step={0.0001} style={{ inlineSize: '100%' }} className="jm-tnum" />
         </Form.Item>
-        <Form.Item name="range" label="Effective period (To is optional — open-ended)" rules={[{ required: true }]}>
+        <Form.Item name="range" label="Effective period (To is optional - open-ended)" rules={[{ required: true }]}>
           <DatePicker.RangePicker allowEmpty={[false, true]} />
         </Form.Item>
-        <Form.Item name="source" label="Source (optional — e.g. OER, ECB, manual)"><Input /></Form.Item>
+        <Form.Item name="source" label="Source (optional - e.g. OER, ECB, manual)"><Input /></Form.Item>
       </Form>
     </Modal>
   );

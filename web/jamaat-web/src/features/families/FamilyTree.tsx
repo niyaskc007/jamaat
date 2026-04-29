@@ -11,7 +11,7 @@ import type { FamilyMember } from './familiesApi';
 /// ITS refs to draw a 3-row layout: parents → head + spouse → children.
 ///
 /// Anyone listed by ITS but not part of *this* family (e.g. an in-law) is shown with a
-/// muted tag — we resolve their name via the global members lookup so the tree still reads
+/// muted tag - we resolve their name via the global members lookup so the tree still reads
 /// well even when relatives sit in other families.
 export function FamilyTree({ familyId, headMemberId, members }: {
   familyId: string;
@@ -30,7 +30,7 @@ export function FamilyTree({ familyId, headMemberId, members }: {
   if (!headMemberId) {
     return (
       <Card title={<Space><ApartmentOutlined /> Family tree</Space>} size="small" style={{ border: '1px solid var(--jm-border)' }}>
-        <Empty description="No head set on this family — assign a head to render the tree." />
+        <Empty description="No head set on this family - assign a head to render the tree." />
       </Card>
     );
   }
@@ -56,7 +56,7 @@ function FamilyTreeBody({ head, familyMembers, familyId, onOpenMember }: {
   familyId: string;
   onOpenMember: (id: string) => void;
 }) {
-  // Resolve the parents + spouse by ITS number. They may or may not be in *this* family —
+  // Resolve the parents + spouse by ITS number. They may or may not be in *this* family -
   // a married woman's father will typically be in her parents' family. We fetch up to ~500
   // members and resolve in-memory so we don't fan out N round-trips for large families.
   const refsItsList = [head.fatherItsNumber, head.motherItsNumber, head.spouseItsNumber]
@@ -166,7 +166,7 @@ function PersonCardPlaceholder({ label, its }: { label: string; its: string | nu
       color: 'var(--jm-gray-500)',
     }}>
       <Tag style={{ marginBlockEnd: 6 }}>{label}</Tag>
-      <div style={{ fontSize: 12 }}>{its ? `ITS ${its} · not in directory` : '—'}</div>
+      <div style={{ fontSize: 12 }}>{its ? `ITS ${its} · not in directory` : '-'}</div>
       <Typography.Text type="secondary" style={{ fontSize: 11 }}>{its ? 'Add this member to the system to link.' : 'Not captured.'}</Typography.Text>
     </div>
   );

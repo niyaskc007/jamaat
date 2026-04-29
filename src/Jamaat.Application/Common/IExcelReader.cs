@@ -5,7 +5,7 @@ namespace Jamaat.Application.Common;
 /// and returns each subsequent row as a header-keyed dictionary of trimmed strings.
 public interface IExcelReader
 {
-    /// Read every data row from the given workbook. Cell values are coerced to string —
+    /// Read every data row from the given workbook. Cell values are coerced to string -
     /// dates emit ISO yyyy-MM-dd, decimals invariant culture, booleans 'true'/'false'.
     /// Empty rows (all cells blank) are skipped silently.
     IReadOnlyList<ExcelImportRow> Read(Stream stream, int sheetIndex = 0);
@@ -19,7 +19,7 @@ public sealed record ExcelImportRow(int RowNumber, IReadOnlyDictionary<string, s
     public string? Get(params string[] aliases)
     {
         // Some operators export with slightly different headers (e.g. "Full Name" vs "FullName").
-        // Accept any of the supplied aliases — match is case-insensitive, ignores whitespace.
+        // Accept any of the supplied aliases - match is case-insensitive, ignores whitespace.
         foreach (var a in aliases)
             if (Cells.TryGetValue(a, out var v) && !string.IsNullOrWhiteSpace(v)) return v;
         return null;

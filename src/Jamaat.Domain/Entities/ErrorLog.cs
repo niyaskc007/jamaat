@@ -5,7 +5,7 @@ namespace Jamaat.Domain.Entities;
 
 /// <summary>
 /// Platform-wide error log. Unlike AuditLog (which tracks mutations), this tracks
-/// exceptions and surfaced errors — API unhandled exceptions, client-reported runtime
+/// exceptions and surfaced errors - API unhandled exceptions, client-reported runtime
 /// errors, axios failures, background job failures, etc.
 ///
 /// Grouped via a deterministic Fingerprint (exception type + normalized message +

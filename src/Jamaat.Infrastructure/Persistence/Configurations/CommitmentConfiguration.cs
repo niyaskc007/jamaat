@@ -40,6 +40,9 @@ public sealed class CommitmentConfiguration : IEntityTypeConfiguration<Commitmen
         b.Property(x => x.Notes).HasMaxLength(2000);
         b.Property(x => x.AgreementText).HasColumnType("nvarchar(max)");
         b.Property(x => x.AgreementAcceptedByName).HasMaxLength(200);
+        b.Property(x => x.AgreementAcceptedIpAddress).HasMaxLength(64);
+        b.Property(x => x.AgreementAcceptedUserAgent).HasMaxLength(1024);
+        b.Property(x => x.AgreementAcceptanceMethod).HasConversion<int?>();
         b.Property(x => x.CancellationReason).HasMaxLength(500);
 
         b.HasIndex(x => new { x.TenantId, x.Code }).IsUnique();

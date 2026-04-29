@@ -49,7 +49,7 @@ public sealed class FundTypeRepository(JamaatDbContext db) : IFundTypeRepository
                 e.CreditAccountId,
                 db.Accounts.Where(a => a.Id == e.CreditAccountId).Select(a => a.Name).FirstOrDefault(),
                 e.DefaultTemplateId, e.RulesJson,
-                // Join the new master tables — both nullable, so left-join semantics via subselects.
+                // Join the new master tables - both nullable, so left-join semantics via subselects.
                 e.FundCategoryId,
                 db.FundCategories.Where(c => c.Id == e.FundCategoryId).Select(c => c.Code).FirstOrDefault(),
                 db.FundCategories.Where(c => c.Id == e.FundCategoryId).Select(c => c.Name).FirstOrDefault(),

@@ -44,7 +44,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      {/* Public Event Portal — no auth, no app chrome */}
+      {/* Public Event Portal - no auth, no app chrome */}
       <Route path="/portal/events" element={<PortalEventsListPage />} />
       <Route path="/portal/events/:slug" element={<PortalEventPage />} />
       <Route

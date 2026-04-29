@@ -4,7 +4,7 @@ using Jamaat.Domain.Enums;
 namespace Jamaat.Domain.Entities;
 
 /// <summary>
-/// Admin-managed master classification for fund types — replaces the legacy <see cref="FundCategory"/>
+/// Admin-managed master classification for fund types - replaces the legacy <see cref="FundCategory"/>
 /// enum on <see cref="FundType"/>. The Jamaat can author Permanent Income, Temporary Income, Loan Fund,
 /// Commitment Scheme and Function-based categories without code changes; each carries a <see cref="Kind"/>
 /// flag the system uses to drive behaviour (returnable vs not, loan-issuing, etc.).

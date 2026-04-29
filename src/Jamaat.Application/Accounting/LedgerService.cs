@@ -75,7 +75,7 @@ public sealed class ReportsService(Persistence.JamaatDbContextFacade db) : IRepo
     {
         // EF Core can't translate GroupBy into a record projection here (the currency field
         // is a value-object-backed string). Fetch the narrow projection first, then group in
-        // memory — receipt volumes are bounded so this is cheap.
+        // memory - receipt volumes are bounded so this is cheap.
         var raw = await db.Receipts.AsNoTracking()
             .Where(r => r.Status == ReceiptStatus.Confirmed && r.ReceiptDate >= from && r.ReceiptDate <= to)
             .Select(r => new { r.ReceiptDate, r.Currency, r.AmountTotal })
@@ -107,7 +107,7 @@ public sealed class ReportsService(Persistence.JamaatDbContextFacade db) : IRepo
 
     public async Task<IReadOnlyList<ReportDailyPaymentDto>> DailyPaymentsAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
     {
-        // Same GroupBy-translation issue as DailyCollectionAsync — fetch narrow then group in memory.
+        // Same GroupBy-translation issue as DailyCollectionAsync - fetch narrow then group in memory.
         var raw = await db.Vouchers.AsNoTracking()
             .Where(v => v.Status == VoucherStatus.Paid && v.VoucherDate >= from && v.VoucherDate <= to)
             .Select(v => new { v.VoucherDate, v.Currency, v.AmountTotal })
@@ -169,20 +169,20 @@ public sealed class ReportsService(Persistence.JamaatDbContextFacade db) : IRepo
             }).ToListAsync(ct);
 
         return lines.Select(x => new ReportMemberContributionRow(
-            x.ReceiptDate, x.ReceiptNumber ?? "—", x.FundCode, x.FundName,
+            x.ReceiptDate, x.ReceiptNumber ?? "-", x.FundCode, x.FundName,
             x.PeriodReference, x.Purpose, x.Amount, x.Currency,
             x.BaseAmount, x.BaseCurrency)).ToList();
     }
 
     public async Task<ReportFundBalanceDto> FundBalanceAsync(Guid fundTypeId, CancellationToken ct = default)
     {
-        // Total cash received (any status that posted to the ledger — Confirmed only) per
+        // Total cash received (any status that posted to the ledger - Confirmed only) per
         // intention. We aggregate by line amount because returnable receipts post to a
         // liability account, but the user-facing total is what they put in the cash drawer.
         var fund = await db.Funds.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fundTypeId, ct);
         if (fund is null) throw new InvalidOperationException("Fund type not found.");
 
-        // Pull receipts that touch this fund — any line.FundTypeId == fundTypeId — that are Confirmed.
+        // Pull receipts that touch this fund - any line.FundTypeId == fundTypeId - that are Confirmed.
         var raw = await (from r in db.Receipts.AsNoTracking()
                          where r.Status == ReceiptStatus.Confirmed
                             && r.Lines.Any(l => l.FundTypeId == fundTypeId)

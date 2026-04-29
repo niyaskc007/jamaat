@@ -20,7 +20,7 @@ type RenderProps = {
 };
 
 /**
- * Polymorphic renderer — reads a section's JSON content and delegates to the right template.
+ * Polymorphic renderer - reads a section's JSON content and delegates to the right template.
  * Used both in the admin designer (as a live preview) and on the public portal.
  */
 export function SectionRenderer({ section, event, onRegistered }: RenderProps) {
@@ -130,7 +130,7 @@ function HeroRender({ content, event }: { content: HeroContent; event: PortalEve
 // ---- Text -----------------------------------------------------------------
 
 function TextRender({ content }: { content: TextContent }) {
-  // TipTap stores HTML; legacy content may still be plain text w/ minimal markdown — detect and transform.
+  // TipTap stores HTML; legacy content may still be plain text w/ minimal markdown - detect and transform.
   const body = content.body ?? '';
   const html = looksLikeHtml(body) ? body : renderLite(body);
   return (
@@ -183,7 +183,7 @@ function AgendaRender({ content, event }: { content: AgendaContent; event: Porta
                 <div key={a.id} style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 16, padding: '14px 0', borderBlockStart: '1px solid #F1F5F9' }}>
                   {content.showTime !== false && (
                     <div className="jm-tnum" style={{ fontWeight: 600, color: 'var(--portal-primary)' }}>
-                      {a.startTime ?? '—'}{a.endTime ? ` – ${a.endTime}` : ''}
+                      {a.startTime ?? '-'}{a.endTime ? ` – ${a.endTime}` : ''}
                     </div>
                   )}
                   <div>
@@ -407,7 +407,7 @@ function RegistrationRender({ content, event, onRegistered }: {
                   <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.85 }}>Registered · code</div>
                   <div className="jm-tnum" style={{ fontSize: 32, fontWeight: 700, marginBlockStart: 6 }}>{registered.code}</div>
                   <div style={{ marginBlockStart: 6, opacity: 0.9 }}>
-                    Status: {registered.status === 2 ? 'Confirmed' : registered.status === 1 ? 'Pending approval' : registered.status === 3 ? 'Waitlisted' : '—'}
+                    Status: {registered.status === 2 ? 'Confirmed' : registered.status === 1 ? 'Pending approval' : registered.status === 3 ? 'Waitlisted' : '-'}
                   </div>
                 </div>
               )
@@ -576,4 +576,4 @@ function CustomHtmlRender({ content }: { content: CustomHtmlContent }) {
   );
 }
 
-export function renderDateTime(s?: string | null) { return s ? formatDateTime(s) : '—'; }
+export function renderDateTime(s?: string | null) { return s ? formatDateTime(s) : '-'; }

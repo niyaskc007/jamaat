@@ -14,7 +14,7 @@ public sealed class MemberBulkController(IMemberProfileService svc) : Controller
 {
     /// <summary>Mark many members as data-verified in a single transaction.</summary>
     /// <remarks>
-    /// Request body accepts up to 500 distinct ids — anything larger is truncated.
+    /// Request body accepts up to 500 distinct ids - anything larger is truncated.
     /// Missing ids are returned in the response so the caller can reconcile.
     /// </remarks>
     [HttpPost("verify-data")]

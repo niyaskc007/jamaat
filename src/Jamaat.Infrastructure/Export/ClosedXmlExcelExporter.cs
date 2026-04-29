@@ -5,7 +5,7 @@ namespace Jamaat.Infrastructure.Export;
 
 /// Thin wrapper around ClosedXML that turns <see cref="ExcelSheet"/> definitions into
 /// an XLSX byte array. Writes a bold + coloured header row, freezes the first row,
-/// auto-sizes columns, and applies per-type number formats. No external styling file —
+/// auto-sizes columns, and applies per-type number formats. No external styling file -
 /// everything is set programmatically so the output opens identically in Excel/LibreOffice.
 public sealed class ClosedXmlExcelExporter : IExcelExporter
 {

@@ -74,7 +74,7 @@ export function ErrorLogsPage() {
         ? <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 12 }}>
             <Tag style={{ marginInlineEnd: 6 }}>{row?.httpMethod ?? 'GET'}</Tag>{v}
           </span>
-        : <span style={{ color: 'var(--jm-gray-400)' }}>—</span>,
+        : <span style={{ color: 'var(--jm-gray-400)' }}>-</span>,
     },
     {
       title: 'Message', dataIndex: 'message', key: 'message',
@@ -93,7 +93,7 @@ export function ErrorLogsPage() {
       <Card size="small" style={{ marginBlockEnd: 12 }} styles={{ body: { padding: 12 } }}>
         <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--jm-gray-500)', marginBlockEnd: 4 }}>Endpoint</div>
         <div className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 13 }}>
-          {row.httpMethod && <Tag>{row.httpMethod}</Tag>} {row.endpoint ?? '—'}
+          {row.httpMethod && <Tag>{row.httpMethod}</Tag>} {row.endpoint ?? '-'}
         </div>
         {row.correlationId && (
           <div style={{ marginBlockStart: 6, fontSize: 12, color: 'var(--jm-gray-500)' }}>
@@ -300,7 +300,7 @@ function StatCard({ label, value, icon, accent, variant }: { label: string; valu
         <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--jm-gray-500)' }}>{label}</span>
       </div>
       <div className="jm-tnum" style={{ fontFamily: "'Inter Tight', 'Inter', sans-serif", fontSize: 28, fontWeight: 600, color: value === undefined ? 'var(--jm-gray-400)' : 'var(--jm-gray-900)', marginBlockStart: 4 }}>
-        {value === undefined ? '—' : value.toLocaleString()}
+        {value === undefined ? '-' : value.toLocaleString()}
       </div>
     </Card>
   );
@@ -357,7 +357,7 @@ function Meta({ label, value, mono, small }: { label: string; value?: string | n
           fontFamily: mono ? "'JetBrains Mono', ui-monospace, monospace" : undefined,
           wordBreak: 'break-all',
         }}
-      >{value ?? '—'}</div>
+      >{value ?? '-'}</div>
     </div>
   );
 }

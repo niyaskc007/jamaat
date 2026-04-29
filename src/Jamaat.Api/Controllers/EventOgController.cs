@@ -8,7 +8,7 @@ namespace Jamaat.Api.Controllers;
 /// <summary>
 /// Bot-facing HTML stub for social link previews (WhatsApp, Twitter, LinkedIn, Slack, etc.).
 /// The SPA renders OG tags client-side via react-helmet-async, but most social scrapers do NOT
-/// execute JavaScript — so they'd see an empty &lt;head&gt;. Routing bots to <c>/og/events/{slug}</c>
+/// execute JavaScript - so they'd see an empty &lt;head&gt;. Routing bots to <c>/og/events/{slug}</c>
 /// gives them a fully-populated meta document plus a &lt;meta http-equiv="refresh"&gt; fallback so
 /// humans who happen to hit this URL still reach the real portal page.
 ///

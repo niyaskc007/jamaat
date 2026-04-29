@@ -31,7 +31,7 @@ const VerificationLabel: Record<VerificationStatus, string> = { 0: 'Not started'
 const VerificationColor: Record<VerificationStatus, string> = { 0: 'default', 1: 'gold', 2: 'green', 3: 'red' };
 
 async function exportMembers(query: MemberListQuery) {
-  // Server-side XLSX export — branded headers, proper number formats, locale-safe.
+  // Server-side XLSX export - branded headers, proper number formats, locale-safe.
   await downloadServerXlsx('/api/v1/members/export.xlsx', query as Record<string, unknown>, `members_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
@@ -85,7 +85,7 @@ export function MembersPage() {
         </div>
       ),
     },
-    { title: 'Phone', dataIndex: 'phone', key: 'phone', width: 140, render: (v?: string) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+    { title: 'Phone', dataIndex: 'phone', key: 'phone', width: 140, render: (v?: string) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
     {
       title: 'Status',
       dataIndex: 'status',
@@ -132,7 +132,7 @@ export function MembersPage() {
             onClick: () => {
               modal.confirm({
                 title: 'Deactivate member?',
-                content: `${row.fullName} will be marked inactive. This is reversible — use Edit to change the status back.`,
+                content: `${row.fullName} will be marked inactive. This is reversible - use Edit to change the status back.`,
                 okText: 'Deactivate',
                 okButtonProps: { danger: true },
                 onOk: () => deleteMutation.mutateAsync(row.id),
@@ -318,7 +318,7 @@ export function MembersPage() {
         templateEndpoint="/api/v1/members/import-template.xlsx"
         templateFilename="members-import-template.xlsx"
         invalidateKeys={[['members']]}
-        hint={<>Upserts by ITS — existing members are updated, new ones created. Required columns: <strong>ITS</strong> + <strong>Full name</strong>.</>}
+        hint={<>Upserts by ITS - existing members are updated, new ones created. Required columns: <strong>ITS</strong> + <strong>Full name</strong>.</>}
       />
 
       {isError && (

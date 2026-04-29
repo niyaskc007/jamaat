@@ -45,7 +45,7 @@ export function LookupsPanel() {
     { title: 'Category', dataIndex: 'category', width: 200, render: (v: string) => <Tag color="blue">{v}</Tag> },
     { title: 'Code', dataIndex: 'code', width: 160 },
     { title: 'Name', dataIndex: 'name' },
-    { title: 'Arabic', dataIndex: 'nameArabic', width: 160, render: (v: string | null) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+    { title: 'Arabic', dataIndex: 'nameArabic', width: 160, render: (v: string | null) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
     { title: 'Order', dataIndex: 'sortOrder', width: 80 },
     { title: 'Status', dataIndex: 'isActive', width: 100, render: (a: boolean) => <Tag color={a ? 'green' : 'default'}>{a ? 'Active' : 'Inactive'}</Tag> },
     {

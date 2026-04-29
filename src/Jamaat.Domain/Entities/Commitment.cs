@@ -71,13 +71,18 @@ public sealed class Commitment : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public CommitmentStatus Status { get; private set; }
     public string? Notes { get; private set; }
 
-    // Agreement snapshot
+    // Agreement snapshot - includes acceptance proof (IP, User-Agent, method) so the
+    // commitment carries a self-contained audit record of who took the action and from
+    // where, independently of any external log.
     public Guid? AgreementTemplateId { get; private set; }
     public int? AgreementTemplateVersion { get; private set; }
     public string? AgreementText { get; private set; }
     public DateTimeOffset? AgreementAcceptedAtUtc { get; private set; }
     public Guid? AgreementAcceptedByUserId { get; private set; }
     public string? AgreementAcceptedByName { get; private set; }
+    public string? AgreementAcceptedIpAddress { get; private set; }
+    public string? AgreementAcceptedUserAgent { get; private set; }
+    public AgreementAcceptanceMethod? AgreementAcceptanceMethod { get; private set; }
 
     public DateTimeOffset? CancelledAtUtc { get; private set; }
     public string? CancellationReason { get; private set; }
@@ -102,7 +107,10 @@ public sealed class Commitment : AggregateRoot<Guid>, ITenantScoped, IAuditable
         EndDate = _installments.Count == 0 ? null : _installments.Max(i => i.DueDate);
     }
 
-    public void AcceptAgreement(Guid? templateId, int? templateVersion, string renderedText, Guid userId, string userName, DateTimeOffset at)
+    public void AcceptAgreement(
+        Guid? templateId, int? templateVersion, string renderedText,
+        Guid userId, string userName, DateTimeOffset at,
+        string? ipAddress, string? userAgent, AgreementAcceptanceMethod method)
     {
         if (Status != CommitmentStatus.Draft) throw new InvalidOperationException("Agreement already accepted.");
         AgreementTemplateId = templateId;
@@ -111,6 +119,9 @@ public sealed class Commitment : AggregateRoot<Guid>, ITenantScoped, IAuditable
         AgreementAcceptedAtUtc = at;
         AgreementAcceptedByUserId = userId;
         AgreementAcceptedByName = userName;
+        AgreementAcceptedIpAddress = ipAddress;
+        AgreementAcceptedUserAgent = userAgent;
+        AgreementAcceptanceMethod = method;
         Status = CommitmentStatus.Active;
     }
 

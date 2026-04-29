@@ -29,7 +29,7 @@ public sealed class Event : AggregateRoot<Guid>, ITenantScoped, IAuditable
     }
 
     public Guid TenantId { get; private set; }
-    /// URL-safe identifier unique per tenant — used for the public portal URL.
+    /// URL-safe identifier unique per tenant - used for the public portal URL.
     public string Slug { get; private set; } = default!;
     public string Name { get; private set; } = default!;
     public string? NameArabic { get; private set; }
@@ -55,7 +55,7 @@ public sealed class Event : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public string? PrimaryColor { get; private set; }    // #RRGGBB
     public string? AccentColor { get; private set; }
 
-    // Share / SEO — rendered into <title> + <meta> tags on the portal page.
+    // Share / SEO - rendered into <title> + <meta> tags on the portal page.
     public string? ShareTitle { get; private set; }
     public string? ShareDescription { get; private set; }
     public string? ShareImageUrl { get; private set; }

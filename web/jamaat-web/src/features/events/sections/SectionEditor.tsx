@@ -112,7 +112,7 @@ function TextEditor({ value, onChange }: { value: TextContent; onChange: (v: Tex
   return (
     <Form layout="vertical" requiredMark={false}>
       <Form.Item label="Heading (optional)"><Input value={v.heading ?? ''} onChange={(e) => onChange({ ...v, heading: e.target.value })} /></Form.Item>
-      <Form.Item label="Body" required help="Rich text — use the toolbar or type Markdown inline.">
+      <Form.Item label="Body" required help="Rich text - use the toolbar or type Markdown inline.">
         <RichTextEditor value={v.body ?? ''} onChange={(md) => onChange({ ...v, body: md })} />
       </Form.Item>
       <Form.Item label="Alignment">
@@ -133,7 +133,7 @@ function AgendaEditor({ value, onChange }: { value: AgendaContent; onChange: (v:
         <Space><Switch checked={v.showSpeaker !== false} onChange={(c) => onChange({ ...v, showSpeaker: c })} /> Show speaker</Space>
       </Space>
       <Typography.Text type="secondary" style={{ display: 'block', marginBlockStart: 12 }}>
-        Items come from the Agenda tab on this event. Add/edit them there — this section simply displays them.
+        Items come from the Agenda tab on this event. Add/edit them there - this section simply displays them.
       </Typography.Text>
     </Form>
   );
@@ -176,7 +176,7 @@ function VenueEditor({ value, onChange }: { value: VenueContent; onChange: (v: V
       <Form.Item label="Override address" help="Leave blank to use the event's venue address."><Input value={v.addressOverride ?? ''} onChange={(e) => onChange({ ...v, addressOverride: e.target.value })} /></Form.Item>
       <Space><Switch checked={v.showMap !== false} onChange={(c) => onChange({ ...v, showMap: c })} /> Show embedded map</Space>
       <Typography.Text type="secondary" style={{ display: 'block', marginBlockStart: 8 }}>
-        The map uses the event's Latitude / Longitude — set those under the Overview tab.
+        The map uses the event's Latitude / Longitude - set those under the Overview tab.
       </Typography.Text>
     </Form>
   );
@@ -338,7 +338,7 @@ function CustomHtmlEditor({ value, onChange }: { value: CustomHtmlContent; onCha
   return (
     <Form layout="vertical" requiredMark={false}>
       <Typography.Text type="warning" style={{ display: 'block', marginBlockEnd: 8 }}>
-        Raw HTML renders as-is. Anyone with page-designer permission can inject arbitrary markup — review carefully.
+        Raw HTML renders as-is. Anyone with page-designer permission can inject arbitrary markup - review carefully.
       </Typography.Text>
       <Form.Item label="HTML">
         <Input.TextArea autoSize={{ minRows: 10, maxRows: 30 }} style={{ fontFamily: 'Consolas, monospace', fontSize: 13 }}

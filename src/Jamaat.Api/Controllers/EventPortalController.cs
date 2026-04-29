@@ -35,7 +35,7 @@ public sealed class EventPortalController(IEventPortalService portalSvc, IEventR
     public async Task<IActionResult> LookupByCode(string code, CancellationToken ct)
     { var r = await regSvc.GetByCodeAsync(code, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
 
-    /// <summary>Self-service cancellation — requires the registration code as a weak token.</summary>
+    /// <summary>Self-service cancellation - requires the registration code as a weak token.</summary>
     [HttpPost("registration/{code}/cancel")]
     [AllowAnonymous]
     public async Task<IActionResult> CancelByCode(string code, [FromBody] CancelRegistrationDto dto, CancellationToken ct)

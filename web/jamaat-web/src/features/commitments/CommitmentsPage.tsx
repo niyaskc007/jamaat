@@ -140,7 +140,7 @@ export function CommitmentsPage() {
         <ModuleEmptyState
           icon={<HeartOutlined />}
           title="No commitments yet"
-          description="A commitment is a pledge from a member or family — usually multiple instalments against a fund. Receipts allocated here close out instalments automatically."
+          description="A commitment is a pledge from a member or family - usually multiple instalments against a fund. Receipts allocated here close out instalments automatically."
           primaryAction={canCreate ? { label: 'Create your first commitment', onClick: () => navigate('/commitments/new') } : undefined}
           helpHref="/help"
         />

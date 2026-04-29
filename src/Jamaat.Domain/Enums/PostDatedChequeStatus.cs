@@ -2,7 +2,7 @@ namespace Jamaat.Domain.Enums;
 
 /// <summary>
 /// Lifecycle of a post-dated cheque held against a commitment installment.
-/// The cheque does <em>not</em> apply payment until it transitions to <see cref="Cleared"/> —
+/// The cheque does <em>not</em> apply payment until it transitions to <see cref="Cleared"/> -
 /// at that point the system issues a normal Receipt against the linked installment.
 /// </summary>
 public enum PostDatedChequeStatus

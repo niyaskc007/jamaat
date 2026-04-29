@@ -4,13 +4,13 @@ import { QuestionCircleOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 
 type Props = {
-  /// Module icon (already tinted/coloured by caller — we just wrap it).
+  /// Module icon (already tinted/coloured by caller - we just wrap it).
   icon: ReactNode;
   /// Short headline, e.g. "No commitments yet".
   title: string;
   /// One or two sentences explaining what the module does and when to use it.
   description: ReactNode;
-  /// Primary CTA — usually "New X". Hide it (pass undefined) when the user
+  /// Primary CTA - usually "New X". Hide it (pass undefined) when the user
   /// lacks the create permission so we don't dangle a button they can't use.
   primaryAction?: { label: string; onClick: () => void };
   /// Optional secondary CTA (e.g. "Import from Excel").
@@ -20,7 +20,7 @@ type Props = {
 };
 
 /// First-run card shown by list pages when there are zero rows *and* no active filters.
-/// Keeps the tone consistent across modules — the pages themselves decide whether
+/// Keeps the tone consistent across modules - the pages themselves decide whether
 /// to render this or a "No matches for your filter" variant.
 export function ModuleEmptyState({ icon, title, description, primaryAction, secondaryAction, helpHref }: Props) {
   return (

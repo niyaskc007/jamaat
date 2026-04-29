@@ -99,7 +99,7 @@ public sealed record CreateReceiptDto(
     // service validates required fields and serialises to Receipt.CustomFieldsJson.
     IReadOnlyDictionary<string, string>? CustomFieldValues = null);
 
-/// <summary>Process a return on a returnable receipt — issues a voucher to the contributor and
+/// <summary>Process a return on a returnable receipt - issues a voucher to the contributor and
 /// records the amount against the original receipt's running total.</summary>
 public sealed record ReturnContributionDto(
     Guid ReceiptId,

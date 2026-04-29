@@ -76,7 +76,7 @@ export function VouchersPage() {
       title: 'Voucher #', dataIndex: 'voucherNumber', key: 'vn', width: 140,
       render: (v?: string, row?: VoucherListItem) => v
         ? <a onClick={(e) => { e.preventDefault(); navigate(`/vouchers/${row!.id}`); }} style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontWeight: 600 }}>{v}</a>
-        : <span style={{ color: 'var(--jm-gray-400)' }}>—</span>,
+        : <span style={{ color: 'var(--jm-gray-400)' }}>-</span>,
     },
     { title: 'Date', dataIndex: 'voucherDate', key: 'date', width: 120, render: (v: string) => formatDate(v) },
     { title: 'Pay to', dataIndex: 'payTo', key: 'payto', render: (v: string) => <span style={{ fontWeight: 500 }}>{v}</span> },
@@ -182,7 +182,7 @@ export function VouchersPage() {
         templateEndpoint="/api/v1/vouchers/import-template.xlsx"
         templateFilename="vouchers-import-template.xlsx"
         invalidateKeys={[['vouchers']]}
-        hint={<>Each row creates one single-line draft voucher — Approve & Pay manually after import to post to the ledger. Required: <strong>Date, Pay to, Expense, Amount, Mode</strong>.</>}
+        hint={<>Each row creates one single-line draft voucher - Approve & Pay manually after import to post to the ledger. Required: <strong>Date, Pay to, Expense, Amount, Mode</strong>.</>}
       />
     </div>
   );

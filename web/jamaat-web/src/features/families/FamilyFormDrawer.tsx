@@ -207,7 +207,7 @@ export function MemberPicker({ value, onChange, disabled }: { value: string; onC
 
   const items = useMemo(() => options.map((m) => ({
     value: m.id,
-    label: `${m.itsNumber} — ${m.fullName}`,
+    label: `${m.itsNumber} - ${m.fullName}`,
   })), [options]);
 
   return (

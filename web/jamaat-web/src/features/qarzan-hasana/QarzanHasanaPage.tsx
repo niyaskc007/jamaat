@@ -36,7 +36,7 @@ export function QarzanHasanaPage() {
     { title: 'Requested', dataIndex: 'amountRequested', width: 140, align: 'end',
       render: (v: number, r) => <span className="jm-tnum">{money(v, r.currency)}</span> },
     { title: 'Approved', dataIndex: 'amountApproved', width: 140, align: 'end',
-      render: (v: number, r) => v > 0 ? <span className="jm-tnum" style={{ fontWeight: 500 }}>{money(v, r.currency)}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+      render: (v: number, r) => v > 0 ? <span className="jm-tnum" style={{ fontWeight: 500 }}>{money(v, r.currency)}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
     {
       title: 'Progress', key: 'progress', width: 200,
       render: (_: unknown, r) => r.amountDisbursed > 0 ? (
@@ -47,7 +47,7 @@ export function QarzanHasanaPage() {
             Repaid {money(r.amountRepaid, r.currency)} · outstanding {money(r.amountOutstanding, r.currency)}
           </div>
         </div>
-      ) : <span style={{ color: 'var(--jm-gray-400)' }}>—</span>,
+      ) : <span style={{ color: 'var(--jm-gray-400)' }}>-</span>,
     },
     { title: 'Status', dataIndex: 'status', width: 130, render: (s: QhStatus) => <Tag color={QhStatusColor[s]}>{QhStatusLabel[s]}</Tag> },
     { title: 'Start', dataIndex: 'startDate', width: 110, render: (v: string) => formatDate(v) },

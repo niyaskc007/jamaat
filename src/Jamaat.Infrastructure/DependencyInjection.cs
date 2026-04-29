@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
         services.AddScoped<CorrelationContext>();
         services.AddScoped<ICorrelationContext>(sp => sp.GetRequiredService<CorrelationContext>());
+        services.AddScoped<IRequestContext>(sp => sp.GetRequiredService<CorrelationContext>());
 
         services.AddScoped<AuditInterceptor>();
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
@@ -60,7 +61,7 @@ public static class DependencyInjection
             opt.UseSqlServer(connectionString, sql =>
             {
                 sql.MigrationsHistoryTable("__EFMigrationsHistory", "dbo");
-                // Note: no EnableRetryOnFailure — incompatible with user-initiated transactions
+                // Note: no EnableRetryOnFailure - incompatible with user-initiated transactions
                 // used by the posting engine. Wrap in CreateExecutionStrategy() if retries needed.
             });
             opt.AddInterceptors(sp.GetRequiredService<AuditInterceptor>());
@@ -142,7 +143,7 @@ public static class DependencyInjection
         services.Configure<PhotoStorageOptions>(config.GetSection(PhotoStorageOptions.SectionName));
         services.AddSingleton<IPhotoStorage, LocalFileSystemPhotoStorage>();
 
-        // Excel exporter / reader — ClosedXML-backed, stateless, safe as singletons.
+        // Excel exporter / reader - ClosedXML-backed, stateless, safe as singletons.
         services.AddSingleton<Application.Common.IExcelExporter, Export.ClosedXmlExcelExporter>();
         services.AddSingleton<Application.Common.IExcelReader, Export.ClosedXmlExcelReader>();
 

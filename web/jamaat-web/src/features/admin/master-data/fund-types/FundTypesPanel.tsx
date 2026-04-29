@@ -72,7 +72,7 @@ export function FundTypesPanel() {
           {row.requiresMaturityTracking && <Tag color="blue" style={{ margin: 0 }}>Maturity</Tag>}
           {row.requiresNiyyath && <Tag color="cyan" style={{ margin: 0 }}>Niyyath</Tag>}
           {row.eventName && <Tag color="geekblue" style={{ margin: 0 }}>Event · {row.eventName}</Tag>}
-          {!row.isReturnable && !row.requiresAgreement && !row.requiresMaturityTracking && !row.requiresNiyyath && !row.eventName && <span style={{ color: 'var(--jm-gray-400)', fontSize: 12 }}>—</span>}
+          {!row.isReturnable && !row.requiresAgreement && !row.requiresMaturityTracking && !row.requiresNiyyath && !row.eventName && <span style={{ color: 'var(--jm-gray-400)', fontSize: 12 }}>-</span>}
         </Space>
       ),
     },
@@ -109,7 +109,7 @@ export function FundTypesPanel() {
             label: row.isActive ? 'Deactivate' : 'Already inactive', disabled: !row.isActive,
             onClick: () => modal.confirm({
               title: 'Deactivate fund type?',
-              content: `${row.nameEnglish} will be marked inactive. This is reversible — use Edit.`,
+              content: `${row.nameEnglish} will be marked inactive. This is reversible - use Edit.`,
               okText: 'Deactivate', okButtonProps: { danger: true },
               onOk: () => deleteMut.mutateAsync(row.id),
             }),

@@ -29,7 +29,7 @@ export function OrganisationsPanel() {
   const cols: TableProps<Organisation>['columns'] = [
     { title: 'Code', dataIndex: 'code', width: 140 },
     { title: 'Name', dataIndex: 'name' },
-    { title: 'Category', dataIndex: 'category', width: 140, render: (v: string | null) => v ?? '—' },
+    { title: 'Category', dataIndex: 'category', width: 140, render: (v: string | null) => v ?? '-' },
     { title: 'Members', dataIndex: 'memberCount', width: 100 },
     { title: 'Status', dataIndex: 'isActive', width: 100, render: (a: boolean) => <Tag color={a ? 'green' : 'default'}>{a ? 'Active' : 'Inactive'}</Tag> },
     {

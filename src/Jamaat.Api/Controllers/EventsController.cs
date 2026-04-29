@@ -77,7 +77,7 @@ public sealed class EventsController(IEventService svc, IEventRegistrationServic
         var key = Guid.Parse(id.ToString("N")[..8] + Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee").ToString("N")[8..]);
         await using var stream = file.OpenReadStream();
         var url = await photoStorage.StoreAsync(key, stream, file.ContentType, ct);
-        // The returned URL points at /api/v1/members/{id}/profile/photo/file — remap to an event-specific URL
+        // The returned URL points at /api/v1/members/{id}/profile/photo/file - remap to an event-specific URL
         // that resolves through the same storage key.
         var publicUrl = $"/api/v1/events/{id}/cover/file";
         var r = await svc.UpdateBrandingAsync(id, new UpdateEventBrandingDto(publicUrl, null, null, null), ct);

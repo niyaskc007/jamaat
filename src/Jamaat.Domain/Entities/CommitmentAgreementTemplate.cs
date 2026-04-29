@@ -41,7 +41,7 @@ public sealed class CommitmentAgreementTemplate : AggregateRoot<Guid>, ITenantSc
     public Guid TenantId { get; private set; }
     public string Code { get; private set; } = default!;
     public string Name { get; private set; } = default!;
-    /// Optional — bind this template specifically to a fund type. If null, template is a generic default.
+    /// Optional - bind this template specifically to a fund type. If null, template is a generic default.
     public Guid? FundTypeId { get; private set; }
     public string Language { get; private set; } = "en";
     public string BodyMarkdown { get; private set; } = default!;

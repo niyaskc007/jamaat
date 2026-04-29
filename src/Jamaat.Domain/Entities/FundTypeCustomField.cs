@@ -35,7 +35,7 @@ public sealed class FundTypeCustomField : AggregateRoot<Guid>, ITenantScoped, IA
 
     public Guid TenantId { get; private set; }
     public Guid FundTypeId { get; private set; }
-    /// <summary>Stable internal key used to look the value up on a receipt — letters/digits/underscore only.</summary>
+    /// <summary>Stable internal key used to look the value up on a receipt - letters/digits/underscore only.</summary>
     public string FieldKey { get; private set; } = default!;
     /// <summary>Display label shown on the receipt form.</summary>
     public string Label { get; private set; } = default!;

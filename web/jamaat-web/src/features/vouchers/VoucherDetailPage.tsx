@@ -74,7 +74,7 @@ export function VoucherDetailPage() {
           </span>
         </div>
         <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 3 }}>
-          <Descriptions.Item label="Voucher #"><span className="jm-tnum" style={{ fontWeight: 600 }}>{data.voucherNumber ?? '—'}</span></Descriptions.Item>
+          <Descriptions.Item label="Voucher #"><span className="jm-tnum" style={{ fontWeight: 600 }}>{data.voucherNumber ?? '-'}</span></Descriptions.Item>
           <Descriptions.Item label="Date">{dayjs(data.voucherDate).format('DD MMM YYYY')}</Descriptions.Item>
           <Descriptions.Item label="Currency">
             {data.currency}
@@ -136,7 +136,7 @@ export function VoucherDetailPage() {
             <Button
               icon={<StopOutlined />}
               loading={cancelMut.isPending}
-              // Disable for terminal states (Paid/Cancelled/Reversed) — reversal goes via Reverse, not Cancel.
+              // Disable for terminal states (Paid/Cancelled/Reversed) - reversal goes via Reverse, not Cancel.
               disabled={data.status === 4 || data.status === 5 || data.status === 6 || cancelMut.isPending}
               onClick={() => promptReason(modal, 'Cancel voucher', 'Reason for cancellation', (r) => cancelMut.mutate(r))}
             >

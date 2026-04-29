@@ -151,7 +151,7 @@ public sealed class EventService(
         var items = dto.Items.Select(i => new EventAgendaItem(
             Guid.NewGuid(), i.Title, i.StartTime, i.EndTime, i.Speaker, i.Location, i.Description)).ToList();
         e.ReplaceAgenda(items);
-        // Force the new owned children into Added state (EF OwnsMany workaround — see QarzanHasanaService).
+        // Force the new owned children into Added state (EF OwnsMany workaround - see QarzanHasanaService).
         foreach (var ai in e.Agenda) db.MarkAdded(ai);
         await uow.SaveChangesAsync(ct);
         return await GetAsync(e.Id, ct);
@@ -165,7 +165,7 @@ public sealed class EventService(
         var hasRegistrations = await db.EventRegistrations.AnyAsync(r => r.EventId == id, ct);
         if (hasScans || hasRegistrations)
         {
-            // Soft-deactivate when history exists — never nuke audit trail.
+            // Soft-deactivate when history exists - never nuke audit trail.
             e.UpdateCore(e.Name, e.NameArabic, e.Tagline, e.Description, e.Category, e.EventDate, e.EventDateHijri,
                 e.StartsAtUtc, e.EndsAtUtc, e.Place, e.VenueAddress, e.VenueLatitude, e.VenueLongitude,
                 e.ContactPhone, e.ContactEmail, e.Notes, isActive: false);

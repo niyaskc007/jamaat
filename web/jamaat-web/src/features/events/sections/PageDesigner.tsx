@@ -25,7 +25,7 @@ type Props = {
 };
 
 /**
- * Full page designer — left rail lists sections with drag/up-down ordering + visibility toggle + edit/delete;
+ * Full page designer - left rail lists sections with drag/up-down ordering + visibility toggle + edit/delete;
  * main canvas shows a live preview using the same renderers the public portal uses.
  */
 export function PageDesigner({ eventId, eventSlug, primaryColor, accentColor }: Props) {
@@ -113,7 +113,7 @@ export function PageDesigner({ eventId, eventSlug, primaryColor, accentColor }: 
         message={
           <span>
             Compose your event's public page by stacking sections. Drag to reorder, toggle visibility,
-            or click Edit to tweak content. Preview updates live on the right — visit{' '}
+            or click Edit to tweak content. Preview updates live on the right - visit{' '}
             <a href={`/portal/events/${eventSlug}`} target="_blank" rel="noreferrer">/portal/events/{eventSlug}</a>{' '}
             to see the published page.
           </span>
@@ -321,7 +321,7 @@ function PresetMenu({ eventId, eventSlug, hasExistingSections }: { eventId: stri
   const applyMut = useMutation({
     mutationFn: ({ key, replace }: { key: string; replace: boolean }) => pageDesignerApi.applyPreset(eventId, key, replace),
     onSuccess: (rows) => {
-      message.success(`Applied preset — ${rows.length} section${rows.length === 1 ? '' : 's'} created.`);
+      message.success(`Applied preset - ${rows.length} section${rows.length === 1 ? '' : 's'} created.`);
       void qc.invalidateQueries({ queryKey: ['event-sections', eventId] });
       void qc.invalidateQueries({ queryKey: ['portal-preview', eventSlug] });
     },

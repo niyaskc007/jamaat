@@ -12,7 +12,7 @@ namespace Jamaat.Domain.Entities;
 /// </summary>
 /// <remarks>
 /// Why a separate aggregate rather than mutating the receipt: a Receipt represents money
-/// received by the Jamaat. A PDC is a future promise — issuing a Receipt before the cheque
+/// received by the Jamaat. A PDC is a future promise - issuing a Receipt before the cheque
 /// clears would overstate income. This aggregate carries the cheque's lifecycle distinct
 /// from the ledger; only the <see cref="Cleared"/> transition produces a real Receipt.
 /// </remarks>
@@ -84,17 +84,26 @@ public sealed class PostDatedCheque : AggregateRoot<Guid>, ITenantScoped, IAudit
     {
         if (Status != PostDatedChequeStatus.Pledged)
             throw new InvalidOperationException($"Only Pledged cheques can be marked Deposited (current: {Status}).");
+        // The whole point of "post-dated" is that the cheque cannot be presented to the bank
+        // before its printed date - the bank will reject it. Treat depositing-before-the-date
+        // as a logic error so the cashier doesn't strand the cheque in a wrong state.
+        if (on < ChequeDate)
+            throw new InvalidOperationException(
+                $"Cannot deposit cheque {ChequeNumber} on {on:yyyy-MM-dd} - it's dated {ChequeDate:yyyy-MM-dd}. Wait until on/after the cheque date.");
         Status = PostDatedChequeStatus.Deposited;
         DepositedOn = on;
     }
 
     /// <summary>Bank confirmed clearance. The matching Receipt id is recorded so the cheque
     /// has an audit trail back to the ledger entry. Caller is responsible for issuing the
-    /// Receipt via the standard ReceiptService — this method only flips the lifecycle.</summary>
+    /// Receipt via the standard ReceiptService - this method only flips the lifecycle.</summary>
     public void MarkCleared(DateOnly on, Guid receiptId)
     {
         if (Status is PostDatedChequeStatus.Cleared or PostDatedChequeStatus.Bounced or PostDatedChequeStatus.Cancelled)
             throw new InvalidOperationException($"Cheque is already {Status}.");
+        if (on < ChequeDate)
+            throw new InvalidOperationException(
+                $"Cannot clear cheque {ChequeNumber} on {on:yyyy-MM-dd} - it's dated {ChequeDate:yyyy-MM-dd}. Wait until on/after the cheque date.");
         Status = PostDatedChequeStatus.Cleared;
         ClearedOn = on;
         ClearedReceiptId = receiptId;
@@ -105,6 +114,9 @@ public sealed class PostDatedCheque : AggregateRoot<Guid>, ITenantScoped, IAudit
         if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("Reason required.", nameof(reason));
         if (Status is PostDatedChequeStatus.Cleared or PostDatedChequeStatus.Cancelled)
             throw new InvalidOperationException($"Cheque is already {Status}.");
+        if (on < ChequeDate)
+            throw new InvalidOperationException(
+                $"Cannot bounce cheque {ChequeNumber} on {on:yyyy-MM-dd} - it's dated {ChequeDate:yyyy-MM-dd}.");
         Status = PostDatedChequeStatus.Bounced;
         BouncedOn = on;
         BounceReason = reason;
@@ -114,7 +126,7 @@ public sealed class PostDatedCheque : AggregateRoot<Guid>, ITenantScoped, IAudit
     {
         if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("Reason required.", nameof(reason));
         if (Status == PostDatedChequeStatus.Cleared)
-            throw new InvalidOperationException("A cleared cheque cannot be cancelled — reverse the receipt instead.");
+            throw new InvalidOperationException("A cleared cheque cannot be cancelled - reverse the receipt instead.");
         Status = PostDatedChequeStatus.Cancelled;
         CancelledOn = on;
         CancellationReason = reason;

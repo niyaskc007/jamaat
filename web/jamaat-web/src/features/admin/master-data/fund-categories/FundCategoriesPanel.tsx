@@ -8,8 +8,8 @@ import { fundCategoriesApi, FundCategoryKindLabel, type FundCategory, type FundC
 
 /// Master-data panel for the new admin-managed fund classification.
 /// Two tabs:
-///   1. Categories (e.g. Permanent Income / Loan Fund) — every fund type belongs to exactly one.
-///   2. Sub-categories (e.g. Mohammedi Scheme under Permanent Income) — optional second tier.
+///   1. Categories (e.g. Permanent Income / Loan Fund) - every fund type belongs to exactly one.
+///   2. Sub-categories (e.g. Mohammedi Scheme under Permanent Income) - optional second tier.
 /// Both are tenant-scoped and behave like reference data: deactivate rather than delete once
 /// any FundType references them; the API enforces that.
 export function FundCategoriesPanel() {
@@ -40,7 +40,7 @@ function CategoriesTab() {
     <>
       <div style={{ display: 'flex', gap: 8, marginBlockEnd: 12, alignItems: 'center' }}>
         <Typography.Text type="secondary" style={{ flex: 1, fontSize: 13 }}>
-          Top-level classification — Permanent Income, Loan Fund, etc. Each category carries a <strong>kind</strong> that
+          Top-level classification - Permanent Income, Loan Fund, etc. Each category carries a <strong>kind</strong> that
           drives system behaviour (income vs liability, loan-issuing capability).
         </Typography.Text>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>New category</Button>
@@ -53,7 +53,7 @@ function CategoriesTab() {
             { title: 'Code', dataIndex: 'code', width: 140, render: (v) => <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontWeight: 500 }}>{v}</span> },
             { title: 'Name', dataIndex: 'name', render: (v) => <span style={{ fontWeight: 500 }}>{v}</span> },
             { title: 'Kind', dataIndex: 'kind', width: 160, render: (k: FundCategoryKind) => <Tag color={kindColor(k)}>{FundCategoryKindLabel[k]}</Tag> },
-            { title: 'Description', dataIndex: 'description', render: (v?: string | null) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+            { title: 'Description', dataIndex: 'description', render: (v?: string | null) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
             { title: 'Fund types', dataIndex: 'fundTypeCount', width: 110, align: 'right', render: (v: number) => <span className="jm-tnum">{v}</span> },
             { title: 'Subs', dataIndex: 'subCategoryCount', width: 80, align: 'right', render: (v: number) => <span className="jm-tnum">{v}</span> },
             { title: 'Status', dataIndex: 'isActive', width: 100, render: (a: boolean) => a ? <Tag color="green" style={{ margin: 0 }}>Active</Tag> : <Tag style={{ margin: 0 }}>Inactive</Tag> },
@@ -63,7 +63,7 @@ function CategoriesTab() {
                 <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(row)} />
                 <Button size="small" icon={<DeleteOutlined />} danger
                   disabled={row.fundTypeCount > 0 || row.subCategoryCount > 0}
-                  title={row.fundTypeCount > 0 || row.subCategoryCount > 0 ? 'In use — deactivate instead' : 'Delete'}
+                  title={row.fundTypeCount > 0 || row.subCategoryCount > 0 ? 'In use - deactivate instead' : 'Delete'}
                   onClick={() => modal.confirm({
                     title: `Delete category "${row.name}"?`,
                     content: 'Permanent. Use only when nothing references this category.',
@@ -105,7 +105,7 @@ function CategoryModal({ open, onClose, entity }: { open: boolean; onClose: () =
         initialValues={entity ? { ...entity } : { kind: 1, sortOrder: 0, isActive: true }}
         onFinish={(v) => mut.mutate(v)}>
         <Form.Item name="code" label="Code" rules={[{ required: true, max: 32, pattern: /^[A-Z0-9_-]+$/i, message: 'Letters, digits, underscore, hyphen' }]}
-          tooltip="Internal identifier — uppercased on save (e.g. PERM_INCOME, MOHAMMEDI_SCHEME).">
+          tooltip="Internal identifier - uppercased on save (e.g. PERM_INCOME, MOHAMMEDI_SCHEME).">
           <Input disabled={isEdit} placeholder="PERM_INCOME" />
         </Form.Item>
         <Form.Item name="name" label="Name" rules={[{ required: true, max: 200 }]}><Input placeholder="Permanent Income" /></Form.Item>
@@ -139,7 +139,7 @@ function SubCategoriesTab() {
     <>
       <div style={{ display: 'flex', gap: 8, marginBlockEnd: 12, alignItems: 'center' }}>
         <Typography.Text type="secondary" style={{ flex: 1, fontSize: 13 }}>
-          Optional second tier under a category — e.g. Mohammedi Scheme + Hussaini Scheme under different income categories.
+          Optional second tier under a category - e.g. Mohammedi Scheme + Hussaini Scheme under different income categories.
           Many fund types can map to the same sub-category.
         </Typography.Text>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} disabled={!cats.data || cats.data.length === 0}>
@@ -154,7 +154,7 @@ function SubCategoriesTab() {
             { title: 'Category', dataIndex: 'fundCategoryName', width: 200, render: (v: string, row) => <span style={{ fontWeight: 500 }}>{v} <span style={{ color: 'var(--jm-gray-400)', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>· {row.fundCategoryCode}</span></span> },
             { title: 'Code', dataIndex: 'code', width: 140, render: (v) => <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontWeight: 500 }}>{v}</span> },
             { title: 'Name', dataIndex: 'name', render: (v) => <span style={{ fontWeight: 500 }}>{v}</span> },
-            { title: 'Description', dataIndex: 'description', render: (v?: string | null) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+            { title: 'Description', dataIndex: 'description', render: (v?: string | null) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
             { title: 'Fund types', dataIndex: 'fundTypeCount', width: 110, align: 'right', render: (v: number) => <span className="jm-tnum">{v}</span> },
             { title: 'Status', dataIndex: 'isActive', width: 100, render: (a: boolean) => a ? <Tag color="green" style={{ margin: 0 }}>Active</Tag> : <Tag style={{ margin: 0 }}>Inactive</Tag> },
             { title: '', key: 'a', width: 110, render: (_, row) => (
@@ -162,7 +162,7 @@ function SubCategoriesTab() {
                 <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(row)} />
                 <Button size="small" icon={<DeleteOutlined />} danger
                   disabled={row.fundTypeCount > 0}
-                  title={row.fundTypeCount > 0 ? 'In use — deactivate instead' : 'Delete'}
+                  title={row.fundTypeCount > 0 ? 'In use - deactivate instead' : 'Delete'}
                   onClick={() => modal.confirm({
                     title: `Delete sub-category "${row.name}"?`,
                     okText: 'Delete', okButtonProps: { danger: true },

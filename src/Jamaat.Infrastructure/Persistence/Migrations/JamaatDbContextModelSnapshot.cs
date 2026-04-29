@@ -225,6 +225,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int?>("AgreementAcceptanceMethod")
+                        .HasColumnType("int");
+
                     b.Property<DateTimeOffset?>("AgreementAcceptedAtUtc")
                         .HasColumnType("datetimeoffset");
 
@@ -234,6 +237,14 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("AgreementAcceptedByUserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AgreementAcceptedIpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("AgreementAcceptedUserAgent")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
 
                     b.Property<Guid?>("AgreementTemplateId")
                         .HasColumnType("uniqueidentifier");

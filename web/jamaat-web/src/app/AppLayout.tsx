@@ -44,7 +44,7 @@ export function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
 
   // Global cashier-friendly shortcuts. Alt+N jumps to New Receipt; "/" jumps to
-  // the Members search page (global top-bar search isn't wired yet — when it is,
+  // the Members search page (global top-bar search isn't wired yet - when it is,
   // this'll refocus the box instead). Both respect permission gates.
   useHotkey({ key: 'n', modifiers: ['alt'] }, () => {
     if (hasPermission('receipt.create')) navigate('/receipts/new');
@@ -53,7 +53,7 @@ export function AppLayout() {
     if (hasPermission('member.view')) navigate('/members');
   });
 
-  // Permission-gated nav — every entry lists the permissions that grant access.
+  // Permission-gated nav - every entry lists the permissions that grant access.
   // Dashboard + Help are always visible; everything else requires at least one matching claim.
   const navItems: MenuProps['items'] = useMemo(() => {
     const any = (...perms: string[]) => perms.length === 0 || perms.some(hasPermission);

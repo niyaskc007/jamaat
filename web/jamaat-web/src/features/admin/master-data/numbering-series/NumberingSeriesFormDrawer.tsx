@@ -71,7 +71,7 @@ export function NumberingSeriesFormDrawer({ open, onClose, entity }: { open: boo
       }
     >
       <Form layout="vertical" requiredMark={false}>
-        <Form.Item label="Scope" required tooltip="What this series numbers — Receipt, Voucher, or Journal. Each scope can only have one active series at a time.">
+        <Form.Item label="Scope" required tooltip="What this series numbers - Receipt, Voucher, or Journal. Each scope can only have one active series at a time.">
           <Controller name="scope" control={control}
             render={({ field }) => (
               <Select {...field} disabled={isEdit}
@@ -82,13 +82,13 @@ export function NumberingSeriesFormDrawer({ open, onClose, entity }: { open: boo
         <Form.Item label="Name" required tooltip="Internal label so admins can tell two series apart (e.g. 'Main counter' vs 'Special drives')." validateStatus={errors.name ? 'error' : ''} help={errors.name?.message}>
           <Controller name="name" control={control} render={({ field }) => <Input {...field} placeholder="Default receipt series" autoFocus />} />
         </Form.Item>
-        <Form.Item label="Prefix" required tooltip="Goes at the start of every generated number (e.g. 'R-' produces 'R-000123'). Keep short — it appears on every receipt." validateStatus={errors.prefix ? 'error' : ''} help={errors.prefix?.message}>
+        <Form.Item label="Prefix" required tooltip="Goes at the start of every generated number (e.g. 'R-' produces 'R-000123'). Keep short - it appears on every receipt." validateStatus={errors.prefix ? 'error' : ''} help={errors.prefix?.message}>
           <Controller name="prefix" control={control} render={({ field }) => <Input {...field} />} />
         </Form.Item>
         <Form.Item label="Pad length" required tooltip="How many digits the running number is padded to. 6 digits = up to 999,999 receipts before rollover.">
           <Controller name="padLength" control={control} render={({ field }) => <InputNumber min={1} max={12} {...field} style={{ inlineSize: 120 }} />} />
         </Form.Item>
-        <Form.Item label="Year reset" tooltip="When ON, the counter resets on Jan 1 and the year suffix (YY) is included in the number — e.g. R-26-000001. When OFF, the counter runs forever.">
+        <Form.Item label="Year reset" tooltip="When ON, the counter resets on Jan 1 and the year suffix (YY) is included in the number - e.g. R-26-000001. When OFF, the counter runs forever.">
           <Controller name="yearReset" control={control} render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />} />
         </Form.Item>
         <Form.Item label="Preview">

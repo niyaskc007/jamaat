@@ -47,7 +47,7 @@ export function EventsPage() {
     ) },
     { title: 'Name', dataIndex: 'name', render: (v: string, row) => <div><a style={{ fontWeight: 500, color: 'var(--jm-gray-900)' }} onClick={() => navigate(`/events/${row.id}`)}>{v}</a>{row.nameArabic && <div dir="rtl" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.nameArabic}</div>}</div> },
     { title: 'Category', dataIndex: 'category', width: 140, render: (c: EventCategory) => <Tag color="blue">{EventCategoryLabel[c]}</Tag> },
-    { title: 'Place', dataIndex: 'place', width: 200, render: (v: string | null) => v ?? '—' },
+    { title: 'Place', dataIndex: 'place', width: 200, render: (v: string | null) => v ?? '-' },
     { title: 'Attendees', dataIndex: 'scanCount', width: 110,
       render: (v: number, row) => <Button type="link" size="small" onClick={() => setScansFor(row)}>{v} scanned</Button> },
     { title: 'Status', dataIndex: 'isActive', width: 100, render: (a: boolean) => <Tag color={a ? 'green' : 'default'}>{a ? 'Active' : 'Inactive'}</Tag> },
@@ -213,7 +213,7 @@ function ScansModal({ event, onClose }: { event: Event; onClose: () => void }) {
           { title: 'ITS', dataIndex: 'memberItsNumber', width: 110 },
           { title: 'Name', dataIndex: 'memberName' },
           { title: 'Scanned at', dataIndex: 'scannedAtUtc', render: (v: string) => formatDateTime(v) },
-          { title: 'Location', dataIndex: 'location', render: (v: string | null) => v ?? '—' },
+          { title: 'Location', dataIndex: 'location', render: (v: string | null) => v ?? '-' },
         ]}
       />
     </Modal>

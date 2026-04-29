@@ -219,7 +219,7 @@ function FamilyTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSave
                 <Button size="small" type="link" onClick={() => navigate('/families')}>Manage families</Button>
               </Space>
           },
-          { key: 'role', label: 'Role', children: profile.familyRole ? String(profile.familyRole) : '—' },
+          { key: 'role', label: 'Role', children: profile.familyRole ? String(profile.familyRole) : '-' },
         ]}
       />
       {familyDrawerOpen && profile.familyId && (
@@ -322,11 +322,11 @@ function OriginTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSave
           <Col span={8}><Form.Item label="Jamiaat" name="jamiaat"><Input placeholder="e.g., Khaleej" /></Form.Item></Col>
           <Col span={12}><Form.Item label="Sector" name="sectorId">
             <Select allowClear showSearch optionFilterProp="label" onChange={(v) => { setSectorId(v); form.setFieldValue('subSectorId', null); }}
-              options={(sectorsQ.data?.items ?? []).map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }))} />
+              options={(sectorsQ.data?.items ?? []).map((s) => ({ value: s.id, label: `${s.code} - ${s.name}` }))} />
           </Form.Item></Col>
           <Col span={12}><Form.Item label="Sub-sector" name="subSectorId">
             <Select allowClear showSearch optionFilterProp="label" disabled={!sectorId}
-              options={(subsQ.data?.items ?? []).map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }))} />
+              options={(subsQ.data?.items ?? []).map((s) => ({ value: s.id, label: `${s.code} - ${s.name}` }))} />
           </Form.Item></Col>
         </Row>
       </Form>
@@ -453,7 +453,7 @@ function OrganisationsTab({ memberId, memberships }: { memberId: string; members
         <Select showSearch placeholder="Select organisation" style={{ inlineSize: 320 }}
           value={orgId} onChange={setOrgId}
           optionFilterProp="label"
-          options={(orgsQ.data?.items ?? []).map((o) => ({ value: o.id, label: `${o.code} — ${o.name}` }))} />
+          options={(orgsQ.data?.items ?? []).map((o) => ({ value: o.id, label: `${o.code} - ${o.name}` }))} />
         <Input placeholder="Role" value={role} onChange={(e) => setRole(e.target.value)} style={{ inlineSize: 200 }} />
         <Button type="primary" loading={addMut.isPending} disabled={!orgId || !role} onClick={() => addMut.mutate()}>Add membership</Button>
       </Space>
@@ -495,7 +495,7 @@ function VerificationTab({ profile, onSaved, onErr }: { profile: MemberProfile; 
       {!canVerify && (
         <Alert
           type="info" showIcon style={{ marginBlockEnd: 16 }}
-          message="You don't have the 'member.verify' permission — the verification buttons below are hidden. Contact an administrator if you need this access."
+          message="You don't have the 'member.verify' permission - the verification buttons below are hidden. Contact an administrator if you need this access."
         />
       )}
       <Row gutter={24}>
@@ -504,7 +504,7 @@ function VerificationTab({ profile, onSaved, onErr }: { profile: MemberProfile; 
             <Descriptions size="small" column={1}
               items={[
                 { key: 's', label: 'Status', children: <Tag color={VerificationStatusColor[profile.dataVerificationStatus]}>{VerificationStatusLabel[profile.dataVerificationStatus]}</Tag> },
-                { key: 'd', label: 'Date', children: profile.dataVerifiedOn ?? '—' },
+                { key: 'd', label: 'Date', children: profile.dataVerifiedOn ?? '-' },
               ]}
             />
             {canVerify && (
@@ -521,7 +521,7 @@ function VerificationTab({ profile, onSaved, onErr }: { profile: MemberProfile; 
             <Descriptions size="small" column={1}
               items={[
                 { key: 's', label: 'Status', children: <Tag color={VerificationStatusColor[profile.photoVerificationStatus]}>{VerificationStatusLabel[profile.photoVerificationStatus]}</Tag> },
-                { key: 'd', label: 'Date', children: profile.photoVerifiedOn ?? '—' },
+                { key: 'd', label: 'Date', children: profile.photoVerifiedOn ?? '-' },
               ]}
             />
             <div style={{ marginBlockStart: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -556,8 +556,8 @@ function VerificationTab({ profile, onSaved, onErr }: { profile: MemberProfile; 
         <Card size="small" title="Last event scan" style={{ border: '1px solid var(--jm-border)' }}>
           <Descriptions size="small" column={2}
             items={[
-              { key: 'e', label: 'Event', children: profile.lastScannedEventName ?? '—' },
-              { key: 'p', label: 'Place', children: profile.lastScannedPlace ?? '—' },
+              { key: 'e', label: 'Event', children: profile.lastScannedEventName ?? '-' },
+              { key: 'p', label: 'Place', children: profile.lastScannedPlace ?? '-' },
               { key: 't', label: 'When', children: formatDateTime(profile.lastScannedAtUtc) },
             ]}
           />

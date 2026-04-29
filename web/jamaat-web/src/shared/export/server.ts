@@ -1,7 +1,7 @@
 import { api } from '../api/client';
 
 /// Fetch a server-rendered XLSX (or any binary) and trigger a browser download.
-/// Uses axios so the JWT auth header rides along automatically — that's why we
+/// Uses axios so the JWT auth header rides along automatically - that's why we
 /// can't just use a raw <a download> link.
 export async function downloadServerXlsx(
   path: string,

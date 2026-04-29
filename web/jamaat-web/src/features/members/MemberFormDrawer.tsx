@@ -105,7 +105,7 @@ function CreateForm({ open, onClose, qc, message }: { open: boolean; onClose: ()
         <Form.Item label="Full name (English)" required validateStatus={errors.fullName ? 'error' : ''} help={errors.fullName?.message}>
           <Controller name="fullName" control={control} render={({ field }) => <Input {...field} />} />
         </Form.Item>
-        <Form.Item label="Full name (Arabic)" help="Optional — populated in Phase 2 bilingual rollout">
+        <Form.Item label="Full name (Arabic)" help="Optional - populated in Phase 2 bilingual rollout">
           <Controller name="fullNameArabic" control={control} render={({ field }) => <Input {...field} dir="rtl" />} />
         </Form.Item>
         <Form.Item label="Full name (Hindi)">

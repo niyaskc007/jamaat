@@ -1,6 +1,6 @@
 /**
  * Section-content schemas, one per EventPageSectionType. These are discriminated unions keyed by `type`
- * — use {@link parseSection} to turn the raw API row into a strongly-typed value.
+ * - use {@link parseSection} to turn the raw API row into a strongly-typed value.
  */
 
 export type EventPageSectionType = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
@@ -22,7 +22,7 @@ export const EventPageSectionTypeLabel: Record<EventPageSectionType, string> = {
 };
 
 export const EventPageSectionTypeDescription: Record<EventPageSectionType, string> = {
-  1: 'Large banner at the top of the page — heading, subtitle and a call-to-action button.',
+  1: 'Large banner at the top of the page - heading, subtitle and a call-to-action button.',
   2: 'A rich text block with formatted body content.',
   3: 'Shows the event agenda (uses the schedule you set under the Agenda tab).',
   4: 'Grid of speakers with photo, name and title.',
@@ -34,7 +34,7 @@ export const EventPageSectionTypeDescription: Record<EventPageSectionType, strin
   10: 'Live countdown timer to the event start (days / hours / minutes).',
   11: 'A row of big-number highlights (e.g., "500 attendees last year").',
   12: 'Logo wall for sponsors or partners.',
-  13: 'Raw HTML for advanced use — renders as-is. Use sparingly.',
+  13: 'Raw HTML for advanced use - renders as-is. Use sparingly.',
 };
 
 export const EventPageSectionTypeIcon: Record<EventPageSectionType, string> = {
@@ -164,7 +164,7 @@ export type RawSection = {
 export function parseSection(raw: RawSection): SectionContent & { id: string; sortOrder: number; isVisible: boolean } {
   let content: unknown;
   try { content = JSON.parse(raw.contentJson || '{}'); } catch { content = {}; }
-  // Cast — section renderers tolerate missing fields with fallbacks, so we don't validate deeply here.
+  // Cast - section renderers tolerate missing fields with fallbacks, so we don't validate deeply here.
   return { id: raw.id, sortOrder: raw.sortOrder, isVisible: raw.isVisible, type: raw.type, content: content as never };
 }
 

@@ -13,7 +13,7 @@ type Props = {
 
 /**
  * Welcoming placeholder page used while a module is on the roadmap.
- * Not a shrug — it communicates what's coming and why.
+ * Not a shrug - it communicates what's coming and why.
  */
 export function EmptyHero({ milestone, icon, title, description, features, primaryAction }: Props) {
   return (

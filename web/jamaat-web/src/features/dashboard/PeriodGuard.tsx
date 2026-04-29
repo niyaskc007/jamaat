@@ -7,7 +7,7 @@ import { periodsApi } from '../ledger/ledgerApi';
 import { extractProblem } from '../../shared/api/client';
 
 /**
- * Guards the rest of the dashboard — if today is not covered by an open financial period,
+ * Guards the rest of the dashboard - if today is not covered by an open financial period,
  * shows a blocking banner with a one-click setup flow.
  */
 export function PeriodGuard() {
@@ -48,7 +48,7 @@ export function PeriodGuard() {
         description={
           <span>
             Receipts and vouchers need a financial period to post into the ledger.
-            Create one now — you can always close it later from{' '}
+            Create one now - you can always close it later from{' '}
             <a href="/admin/master-data?tab=periods">Master Data → Financial Periods</a>.
           </span>
         }

@@ -15,7 +15,7 @@ type Props = {
 
 export function KpiCard({ icon, label, value, format = 'money', deltaPercent, sparkline, accent = 'var(--jm-primary-500)' }: Props) {
   const hasData = value !== null && value !== undefined;
-  const formatted = !hasData ? '—' : format === 'money' ? compactMoney(value) : new Intl.NumberFormat('en-IN').format(value);
+  const formatted = !hasData ? '-' : format === 'money' ? compactMoney(value) : new Intl.NumberFormat('en-IN').format(value);
 
   const deltaColor =
     deltaPercent === null || deltaPercent === undefined

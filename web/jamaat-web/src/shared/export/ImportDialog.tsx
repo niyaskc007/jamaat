@@ -32,7 +32,7 @@ type Props = {
 ///   1. User drops an XLSX (or downloads the template first).
 ///   2. Submit → POSTs multipart to <uploadEndpoint>.
 ///   3. Show committed count + per-row errors. User can fix and re-upload.
-/// One file per upload — the backend already commits valid rows even when others error,
+/// One file per upload - the backend already commits valid rows even when others error,
 /// so re-uploading with a fixed sheet only retries the previously-failed rows.
 export function ImportDialog({
   open, onClose, title, uploadEndpoint, templateEndpoint, templateFilename,
@@ -60,7 +60,7 @@ export function ImportDialog({
         for (const k of invalidateKeys ?? []) await qc.invalidateQueries({ queryKey: k });
         onCommitted?.();
       } else if (data.errors.length > 0) {
-        message.warning('No rows imported — see errors below.');
+        message.warning('No rows imported - see errors below.');
       } else {
         message.info('No rows in the file.');
       }
@@ -125,7 +125,7 @@ export function ImportDialog({
               pagination={result.errors.length > 25 ? { pageSize: 25 } : false}
               columns={[
                 { title: 'Row', dataIndex: 'rowNumber', width: 70, render: (v: number) => <span className="jm-tnum">{v}</span> },
-                { title: 'Field', dataIndex: 'field', width: 140, render: (v?: string | null) => v ?? '—' },
+                { title: 'Field', dataIndex: 'field', width: 140, render: (v?: string | null) => v ?? '-' },
                 { title: 'Error', dataIndex: 'message', render: (v: string) => <Typography.Text type="danger" style={{ fontSize: 12 }}>{v}</Typography.Text> },
               ]}
             />

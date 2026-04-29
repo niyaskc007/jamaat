@@ -27,12 +27,12 @@ export function HelpPage() {
         'Directory of every person in the Jamaat. Profile has 12 tabs (Identity, Contact, Family, Education, Profession, Health, Sabeel & Sila, Personal, Photo, Background, Permissions, Notes).',
       steps: [
         'Search by ITS/Name/TanzeemFileNo from the list.',
-        'Open a profile and move between tabs — each tab saves independently.',
+        'Open a profile and move between tabs - each tab saves independently.',
         'Data Verifier can mark a profile "Verified" once fields are cross-checked.',
         'Sync pulls fresh data from ITS; local edits win only for fields not sourced from ITS.',
       ],
       gotchas: [
-        'TanzeemFileNo is globally unique across tenants — duplicates are rejected.',
+        'TanzeemFileNo is globally unique across tenants - duplicates are rejected.',
         'Photo upload max 5 MB; images are stored under App_Data and streamed via /api/v1/members/{id}/profile/photo/file.',
       ],
     },
@@ -62,8 +62,8 @@ export function HelpPage() {
         'Receipts allocated against this commitment close out instalments automatically.',
       ],
       gotchas: [
-        'Donations are not required to have a commitment — Receipt form shows a visual cue when none is linked.',
-        'Cancelling a commitment reverses no ledger entries — existing receipts remain valid.',
+        'Donations are not required to have a commitment - Receipt form shows a visual cue when none is linked.',
+        'Cancelling a commitment reverses no ledger entries - existing receipts remain valid.',
       ],
     },
     {
@@ -93,7 +93,7 @@ export function HelpPage() {
         'Repayments come in as receipts allocated to the loan.',
       ],
       gotchas: [
-        'A guarantor who has their own defaulted QH cannot be added — the form blocks and explains why.',
+        'A guarantor who has their own defaulted QH cannot be added - the form blocks and explains why.',
         'Waive requires L2 + a written reason; the event is audited.',
       ],
     },
@@ -107,13 +107,13 @@ export function HelpPage() {
         'Branded event portal with registration, guests, check-in, and a section-based Page Designer (13 section types + 3 theme presets).',
       steps: [
         'Create an event → Basics, Schedule, Registration options.',
-        'Open Page Designer to build the public landing page — drag sections, pick a preset.',
+        'Open Page Designer to build the public landing page - drag sections, pick a preset.',
         'Share tab: set OG title/description/image; copy the portal URL.',
         'On the day: use Scan mode (barcode/QR) to check attendees in.',
       ],
       gotchas: [
         'Public URL: /portal/events/{slug}. The API also serves /og/events/{slug} for social-media bots.',
-        'CustomHtml sections are sanitised on render — external scripts are dropped.',
+        'CustomHtml sections are sanitised on render - external scripts are dropped.',
       ],
     },
     {
@@ -122,16 +122,16 @@ export function HelpPage() {
       icon: <FileTextOutlined />,
       permissions: ['receipt.view', 'receipt.create', 'receipt.confirm', 'receipt.reprint', 'receipt.cancel', 'receipt.reverse'],
       path: '/receipts',
-      summary: 'Every inward transaction. Ledger posts on Confirm — Draft and Cancelled never post.',
+      summary: 'Every inward transaction. Ledger posts on Confirm - Draft and Cancelled never post.',
       steps: [
         'Capture → pick member → add allocation lines → payment details.',
         'Confirm → ledger + numbering are locked atomically.',
         'Reprint captures a reason; Cancel is allowed before any dependent posting.',
-        'Reverse creates a balancing posting — original row is never mutated.',
+        'Reverse creates a balancing posting - original row is never mutated.',
       ],
       gotchas: [
         'Cheque fields required when Payment Mode = Cheque. Bank dropdown filters by tenant.',
-        'Receipt Number comes from the active numbering series — closed periods cannot be back-dated into.',
+        'Receipt Number comes from the active numbering series - closed periods cannot be back-dated into.',
       ],
     },
     {
@@ -166,7 +166,7 @@ export function HelpPage() {
       path: '/reports',
       summary: 'Daily collection, fund-wise, member contribution, cheque-wise, cancelled, reprint log, cash & bank books, QH summary, voluntary summary.',
       steps: ['Pick report → parameters → Run.', 'Export to Excel/PDF (needs reports.export).'],
-      gotchas: ['Large ranges can take a few seconds on first run — results are cached per-query.'],
+      gotchas: ['Large ranges can take a few seconds on first run - results are cached per-query.'],
     },
     {
       key: 'admin',
@@ -180,7 +180,7 @@ export function HelpPage() {
         'Master data: every panel is CRUD with validation.',
         'Audit: every mutation (Create/Update/Cancel/Reverse/Print/Login) is captured with before/after JSON.',
       ],
-      gotchas: ['Permissions are additive — a user gets the union of role claims + their own claims.'],
+      gotchas: ['Permissions are additive - a user gets the union of role claims + their own claims.'],
     },
   ];
 
@@ -252,22 +252,22 @@ export function HelpPage() {
               Every persona ships with password <Text code>Test@12345</Text>.
             </Paragraph>
             <ul style={{ paddingInlineStart: 18, marginBlockEnd: 0 }}>
-              <li><Text code>admin@jamaat.local</Text> — full access</li>
-              <li><Text code>cashier@jamaat.local</Text> — Counter (receipts + scan)</li>
-              <li><Text code>accountant@jamaat.local</Text> — Receipts, vouchers, ledger, periods, reports</li>
-              <li><Text code>events@jamaat.local</Text> — Events + scan</li>
-              <li><Text code>qh-l1@jamaat.local</Text> — QH create + L1 approval</li>
-              <li><Text code>qh-l2@jamaat.local</Text> — QH L2 approval, disburse, waive</li>
-              <li><Text code>verifier@jamaat.local</Text> — Member verify only</li>
-              <li><Text code>viewer@jamaat.local</Text> — Read-only across the app</li>
+              <li><Text code>admin@jamaat.local</Text> - full access</li>
+              <li><Text code>cashier@jamaat.local</Text> - Counter (receipts + scan)</li>
+              <li><Text code>accountant@jamaat.local</Text> - Receipts, vouchers, ledger, periods, reports</li>
+              <li><Text code>events@jamaat.local</Text> - Events + scan</li>
+              <li><Text code>qh-l1@jamaat.local</Text> - QH create + L1 approval</li>
+              <li><Text code>qh-l2@jamaat.local</Text> - QH L2 approval, disburse, waive</li>
+              <li><Text code>verifier@jamaat.local</Text> - Member verify only</li>
+              <li><Text code>viewer@jamaat.local</Text> - Read-only across the app</li>
             </ul>
           </Card>
 
           <Card title="Keyboard shortcuts" size="small" style={{ marginBlockEnd: 16 }}>
             <ul style={{ paddingInlineStart: 18, marginBlockEnd: 0 }}>
-              <li><kbd>Alt</kbd>+<kbd>N</kbd> — New Receipt (from anywhere)</li>
-              <li><kbd>/</kbd> — Jump to Members search</li>
-              <li><kbd>Ctrl</kbd>+<kbd>Enter</kbd> — Confirm &amp; Print on the New Receipt screen (works from any field)</li>
+              <li><kbd>Alt</kbd>+<kbd>N</kbd> - New Receipt (from anywhere)</li>
+              <li><kbd>/</kbd> - Jump to Members search</li>
+              <li><kbd>Ctrl</kbd>+<kbd>Enter</kbd> - Confirm &amp; Print on the New Receipt screen (works from any field)</li>
             </ul>
           </Card>
 
@@ -276,16 +276,16 @@ export function HelpPage() {
               <li>Dates are stored in UTC and shown in the tenant's locale.</li>
               <li>Amounts are stored in the original currency + converted to base (AED) via the latest exchange rate.</li>
               <li>Every mutation is recorded in the Audit Log with before/after JSON.</li>
-              <li>Errors show a trace ID — copy it into support tickets for fast triage.</li>
+              <li>Errors show a trace ID - copy it into support tickets for fast triage.</li>
             </ul>
           </Card>
 
           <Card title="Where things live" size="small">
             <ul style={{ paddingInlineStart: 18, marginBlockEnd: 0 }}>
-              <li><SafetyOutlined /> <Link to="/admin/audit">Audit log</Link> — every mutation with before/after JSON.</li>
-              <li><Link to="/admin/error-logs">Error logs</Link> — client + server exceptions, grouped by trace ID.</li>
-              <li><Link to="/admin/integrations">Integrations</Link> — ITS sync, Excel import/export, sync errors.</li>
-              <li><Link to="/admin/master-data">Master data</Link> — fund types, numbering, COA, periods, currencies.</li>
+              <li><SafetyOutlined /> <Link to="/admin/audit">Audit log</Link> - every mutation with before/after JSON.</li>
+              <li><Link to="/admin/error-logs">Error logs</Link> - client + server exceptions, grouped by trace ID.</li>
+              <li><Link to="/admin/integrations">Integrations</Link> - ITS sync, Excel import/export, sync errors.</li>
+              <li><Link to="/admin/master-data">Master data</Link> - fund types, numbering, COA, periods, currencies.</li>
             </ul>
           </Card>
         </Col>

@@ -56,7 +56,7 @@ export function ChartOfAccountsPanel() {
     { title: 'Name', dataIndex: 'name', key: 'name', render: (v: string) => <span style={{ fontWeight: 500 }}>{v}</span> },
     { title: 'Type', dataIndex: 'type', key: 'type', width: 140, render: (v: AccountType) => <TypeTag type={v} /> },
     { title: 'Parent', dataIndex: 'parentCode', key: 'parent', width: 120,
-      render: (v?: string) => v ? <span className="jm-tnum">{v}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+      render: (v?: string) => v ? <span className="jm-tnum">{v}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
     {
       title: 'Role', key: 'role', width: 110,
       render: (_: unknown, row: Account) => row.isControl

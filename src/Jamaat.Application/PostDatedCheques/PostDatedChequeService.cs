@@ -57,14 +57,14 @@ public sealed class PostDatedChequeService(
             return Error.Validation("pdc.amount_invalid", "Amount must be positive.");
 
         var memberId = commitment.MemberId
-            ?? throw new InvalidOperationException("Commitment has no MemberId — PDC requires a member context.");
+            ?? throw new InvalidOperationException("Commitment has no MemberId - PDC requires a member context.");
 
         var currency = (dto.Currency ?? commitment.Currency).ToUpperInvariant();
         if (currency != commitment.Currency)
             return Error.Business("pdc.currency_mismatch",
                 $"Cheque currency {currency} doesn't match commitment currency {commitment.Currency}.");
 
-        // Check the installment's remaining balance — a PDC for more than the line owes means
+        // Check the installment's remaining balance - a PDC for more than the line owes means
         // either a multi-instalment cheque (uncommon) or a typo.
         if (dto.CommitmentInstallmentId is Guid iId)
         {
@@ -106,7 +106,7 @@ public sealed class PostDatedChequeService(
         if (pdc.CommitmentInstallmentId is null)
             return Error.Business("pdc.no_installment", "Link the cheque to an installment before clearing.");
 
-        // Resolve the commitment's fund type — every receipt line needs it.
+        // Resolve the commitment's fund type - every receipt line needs it.
         var commitment = await db.Commitments
             .Include(c => c.Installments)
             .FirstOrDefaultAsync(c => c.Id == pdc.CommitmentId, ct);
@@ -129,7 +129,7 @@ public sealed class PostDatedChequeService(
                 new CreateReceiptLineDto(
                     FundTypeId: commitment.FundTypeId,
                     Amount: pdc.Amount,
-                    Purpose: $"PDC clear — commitment {commitment.Code}",
+                    Purpose: $"PDC clear - commitment {commitment.Code}",
                     PeriodReference: null,
                     CommitmentId: pdc.CommitmentId,
                     CommitmentInstallmentId: pdc.CommitmentInstallmentId),
@@ -194,7 +194,7 @@ public sealed class PostDatedChequeService(
         var receiptNumbers = receiptIds.Count == 0
             ? new Dictionary<Guid, string>()
             : await db.Receipts.AsNoTracking().Where(r => receiptIds.Contains(r.Id))
-                .ToDictionaryAsync(r => r.Id, r => r.ReceiptNumber ?? "—", ct);
+                .ToDictionaryAsync(r => r.Id, r => r.ReceiptNumber ?? "-", ct);
 
         return rows.Select(r =>
         {
@@ -205,9 +205,9 @@ public sealed class PostDatedChequeService(
             var receiptNumber = r.ClearedReceiptId is Guid rid && receiptNumbers.TryGetValue(rid, out var rn) ? rn : null;
             return new PostDatedChequeDto(
                 r.Id,
-                r.CommitmentId, commitment?.Code ?? "—", commitment?.PartyNameSnapshot ?? "—",
+                r.CommitmentId, commitment?.Code ?? "-", commitment?.PartyNameSnapshot ?? "-",
                 r.CommitmentInstallmentId, inst?.InstallmentNo, inst?.DueDate,
-                r.MemberId, member?.ItsNumber ?? "—", member?.FullName ?? "—",
+                r.MemberId, member?.ItsNumber ?? "-", member?.FullName ?? "-",
                 r.ChequeNumber, r.ChequeDate, r.DrawnOnBank,
                 r.Amount, r.Currency,
                 r.Status,

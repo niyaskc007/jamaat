@@ -54,7 +54,7 @@ export function DashboardPage() {
           type="info"
           showIcon
           icon={<RocketOutlined />}
-          message="Welcome — let's get set up"
+          message="Welcome - let's get set up"
           description={
             <div>
               <Typography.Paragraph style={{ margin: 0, fontSize: 13 }}>
@@ -224,7 +224,7 @@ export function DashboardPage() {
                   </span>
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending approvals</div>
-                    <div className="jm-tnum" style={{ fontSize: 22, fontWeight: 600, fontFamily: "'Inter Tight', 'Inter', sans-serif" }}>{stats?.pendingApprovals ?? '—'}</div>
+                    <div className="jm-tnum" style={{ fontSize: 22, fontWeight: 600, fontFamily: "'Inter Tight', 'Inter', sans-serif" }}>{stats?.pendingApprovals ?? '-'}</div>
                   </div>
                 </div>
               </Card>
@@ -237,7 +237,7 @@ export function DashboardPage() {
                   </span>
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Open errors</div>
-                    <div className="jm-tnum" style={{ fontSize: 22, fontWeight: 600, fontFamily: "'Inter Tight', 'Inter', sans-serif" }}>{stats?.syncErrors ?? '—'}</div>
+                    <div className="jm-tnum" style={{ fontSize: 22, fontWeight: 600, fontFamily: "'Inter Tight', 'Inter', sans-serif" }}>{stats?.syncErrors ?? '-'}</div>
                   </div>
                 </div>
               </Card>

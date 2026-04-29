@@ -42,7 +42,7 @@ public sealed class CommitmentsController(ICommitmentService svc, IExcelExporter
             },
             page.Items.Select(c => (IReadOnlyList<object?>)new object?[]
             {
-                c.Code, c.PartyName, c.PartyType.ToString(), $"{c.FundTypeCode} — {c.FundTypeName}",
+                c.Code, c.PartyName, c.PartyType.ToString(), $"{c.FundTypeCode} - {c.FundTypeName}",
                 c.TotalAmount, c.PaidAmount, c.RemainingAmount, c.Currency,
                 c.NumberOfInstallments, c.Frequency.ToString(), c.StartDate, c.Status.ToString(),
             }).ToList());

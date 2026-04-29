@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   Card, Space, Button, Table, Tag, Descriptions, Progress, Modal, Input, App as AntdApp, Result, Spin,
 } from 'antd';
@@ -229,22 +229,7 @@ export function CommitmentDetailPage() {
           />
         </Card>
 
-        <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
-          <div style={{ marginBlockEnd: 16 }}>
-            <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Progress</div>
-            <Progress
-              type="dashboard"
-              percent={Math.min(100, Number(c.progressPercent.toFixed(1)))}
-              status={c.status === 3 ? 'success' : c.status === 4 || c.status === 5 ? 'exception' : 'active'}
-            />
-          </div>
-          <Descriptions size="small" column={1}
-            items={[
-              { key: 'paid', label: 'Paid', children: <span className="jm-tnum" style={{ color: '#0E5C40', fontWeight: 600 }}>{money(c.paidAmount, c.currency)}</span> },
-              { key: 'rem', label: 'Remaining', children: <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(c.remainingAmount, c.currency)}</span> },
-            ]}
-          />
-        </Card>
+        <CommitmentProgressCard commitment={c} installments={data.installments} />
       </div>
 
       <Card
@@ -392,4 +377,124 @@ export function CommitmentDetailPage() {
       </Modal>
     </div>
   );
+}
+
+/// Visual summary on the right side of the commitment detail page. Combines:
+///   1. A health pill (On track / Behind / Ahead / Completed / etc.) computed from
+///      "instalments paid by today" vs "instalments due by today" + overdue count.
+///   2. A circular Progress dashboard showing % paid, themed green to read as money.
+///   3. The raw Paid / Remaining figures.
+///   4. A horizontal "instalment ribbon" - one cell per instalment colored by status -
+///      so the operator can scan at a glance whether the contributor is in a clean
+///      streak or has gaps/overdues.
+function CommitmentProgressCard({
+  commitment, installments,
+}: {
+  commitment: { currency: string; paidAmount: number; remainingAmount: number; progressPercent: number; status: number; startDate: string; endDate?: string | null };
+  installments: Installment[];
+}) {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const dueByToday = installments.filter((i) => i.dueDate <= todayIso).length;
+  const settledByToday = installments.filter((i) => i.dueDate <= todayIso && (i.status === 3 || i.status === 5)).length;
+  const overdueCount = installments.filter((i) => i.status === 4).length;
+  const allSettled = installments.length > 0 && installments.every((i) => i.status === 3 || i.status === 5);
+
+  // Health pill: completed > overdue > behind > on-track > ahead. Colors echo the AntD
+  // semantic palette so the meaning is consistent with the rest of the app.
+  const health = (() => {
+    if (commitment.status === 4 /* Cancelled */) return { label: 'Cancelled', color: '#9CA3AF', bg: '#F3F4F6' };
+    if (allSettled) return { label: 'Completed', color: '#0E5C40', bg: '#DCFCE7' };
+    if (overdueCount > 0) return { label: `${overdueCount} overdue`, color: '#B91C1C', bg: '#FEE2E2' };
+    const deficit = dueByToday - settledByToday;
+    if (deficit > 0) return { label: `Behind by ${deficit}`, color: '#B45309', bg: '#FEF3C7' };
+    const ahead = settledByToday - dueByToday;
+    if (ahead > 0) return { label: `Ahead by ${ahead}`, color: '#0E5C40', bg: '#DCFCE7' };
+    return { label: 'On track', color: '#0E5C40', bg: '#DCFCE7' };
+  })();
+
+  const isCompleted = commitment.status === 3;
+  const isFailed = commitment.status === 4 || commitment.status === 5;
+
+  return (
+    <Card size="small" style={{ border: '1px solid var(--jm-border)' }}
+      styles={{ body: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', blockSize: '100%', gap: 18, padding: 20 } }}>
+      <div style={{
+        fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
+        color: health.color, background: health.bg, padding: '4px 12px', borderRadius: 999,
+      }}
+        title="Computed by comparing instalments paid/waived vs instalments due by today's date.">
+        {health.label}
+      </div>
+
+      <Progress
+        type="dashboard"
+        size={160}
+        percent={Math.min(100, Number(commitment.progressPercent.toFixed(1)))}
+        strokeColor={isFailed ? '#DC2626' : { '0%': '#10B981', '100%': '#0E5C40' }}
+        strokeWidth={10}
+        status={isCompleted ? 'success' : isFailed ? 'exception' : 'active'}
+        format={(percent) => (
+          <div>
+            <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--jm-gray-900, #1F2937)', lineHeight: 1 }}>{percent}%</div>
+            <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>paid</div>
+          </div>
+        )}
+      />
+
+      <div style={{ inlineSize: '100%', maxInlineSize: 260, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <ProgressRow label="Paid" value={money(commitment.paidAmount, commitment.currency)} accent="#0E5C40" />
+        <ProgressRow label="Remaining" value={money(commitment.remainingAmount, commitment.currency)} />
+        <ProgressRow label="Instalments" value={`${settledByToday} settled · ${dueByToday - settledByToday} open · ${installments.length - dueByToday} upcoming`} muted />
+      </div>
+
+      {/* Instalment ribbon: one slim cell per instalment, colored by status. Lets the
+          operator scan the whole schedule at a glance - a clean green strip means a
+          healthy contributor, gaps/red cells flag a problem. */}
+      {installments.length > 0 && (
+        <div style={{ inlineSize: '100%', maxInlineSize: 260 }}>
+          <div style={{ fontSize: 10, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 6, textAlign: 'center' }}>
+            Schedule (oldest to newest)
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${installments.length}, 1fr)`, gap: 2 }}>
+            {installments.map((i) => (
+              <div key={i.id}
+                title={`#${i.installmentNo} · due ${i.dueDate} · ${InstallmentStatusLabel[i.status]}`}
+                style={{
+                  blockSize: 14, borderRadius: 2,
+                  background: ribbonColor(i.status),
+                }}
+              />
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--jm-gray-500)', marginBlockStart: 6 }}>
+            <span>{formatDate(commitment.startDate)}</span>
+            <span>{commitment.endDate ? formatDate(commitment.endDate) : ''}</span>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function ProgressRow({ label, value, accent, muted }: { label: string; value: ReactNode; accent?: string; muted?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 13 }}>
+      <span style={{ color: 'var(--jm-gray-500)' }}>{label}</span>
+      <span className="jm-tnum"
+        style={{ fontWeight: 600, color: accent ?? (muted ? 'var(--jm-gray-600)' : 'var(--jm-gray-900, #1F2937)'), fontSize: muted ? 12 : 14 }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/// Ribbon cell color per InstallmentStatus enum (Pending=1, PartiallyPaid=2, Paid=3, Overdue=4, Waived=5).
+function ribbonColor(status: number): string {
+  switch (status) {
+    case 3: return '#10B981'; // paid - green
+    case 2: return '#FBBF24'; // partial - amber
+    case 4: return '#EF4444'; // overdue - red
+    case 5: return '#A78BFA'; // waived - purple
+    default: return '#E5E7EB'; // pending - gray
+  }
 }

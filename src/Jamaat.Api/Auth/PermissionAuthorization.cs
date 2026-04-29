@@ -22,7 +22,7 @@ public sealed class PermissionHandler : AuthorizationHandler<PermissionRequireme
     }
 }
 
-/// Lazily builds a policy for every "permission:<name>" lookup — no need to register each permission
+/// Lazily builds a policy for every "permission:<name>" lookup - no need to register each permission
 /// up-front; controllers/actions attach [Authorize(Policy = "member.view")] and a policy is created on demand.
 /// Extends DefaultAuthorizationPolicyProvider directly to avoid a circular dependency on
 /// IAuthorizationPolicyProvider.

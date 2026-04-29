@@ -41,7 +41,7 @@ export function PeriodsPanel() {
               render: (s: 1 | 2) => s === 1
                 ? <Tag style={{ margin: 0, background: '#D1FAE5', color: '#065F46', border: 'none', fontWeight: 500 }}>Open</Tag>
                 : <Tag style={{ margin: 0, background: '#E5E9EF', color: '#475569', border: 'none', fontWeight: 500 }}>Closed</Tag> },
-            { title: 'Closed at', key: 'c', render: (_, row) => row.closedAtUtc ? <span style={{ fontSize: 12 }}>{formatDateTime(row.closedAtUtc)}{row.closedByUserName ? ` · ${row.closedByUserName}` : ''}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+            { title: 'Closed at', key: 'c', render: (_, row) => row.closedAtUtc ? <span style={{ fontSize: 12 }}>{formatDateTime(row.closedAtUtc)}{row.closedByUserName ? ` · ${row.closedByUserName}` : ''}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
             { title: '', key: 'a', width: 200, render: (_, row) => row.status === 1 ? (
               <Button icon={<LockOutlined />} danger size="small"
                 onClick={() => modal.confirm({
@@ -53,7 +53,7 @@ export function PeriodsPanel() {
                       </p>
                       <ul style={{ marginBlockStart: 8, paddingInlineStart: 18, color: 'var(--jm-gray-600)', fontSize: 13 }}>
                         <li>New receipts and vouchers cannot post into this window.</li>
-                        <li>Draft receipts within the window must be confirmed or cancelled first — the server will refuse to close otherwise.</li>
+                        <li>Draft receipts within the window must be confirmed or cancelled first - the server will refuse to close otherwise.</li>
                         <li>An admin can reopen later, but every reopen is recorded in the audit log.</li>
                       </ul>
                     </div>

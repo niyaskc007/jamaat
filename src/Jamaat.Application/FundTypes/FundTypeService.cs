@@ -91,7 +91,7 @@ public sealed class FundTypeService(
 
     /// Resolve the new master FundCategory + sub-category for the given DTO ids and write them
     /// to the entity. Validates that both belong to the current tenant; if FundCategoryId is
-    /// null (legacy callers), skips the write — the legacy <see cref="FundCategory"/> enum stays
+    /// null (legacy callers), skips the write - the legacy <see cref="FundCategory"/> enum stays
     /// authoritative until the caller is migrated.
     private async Task ApplyClassificationAsync(FundType e, Guid? fundCategoryId, Guid? fundSubCategoryId,
         bool isReturnable, bool requiresAgreement, bool requiresMaturity, bool requiresNiyyath, CancellationToken ct)

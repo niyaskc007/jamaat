@@ -50,9 +50,9 @@ export function MePage() {
       <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)', marginBlockEnd: 16 }}>
         <Descriptions title="Account" size="small" column={{ xs: 1, sm: 2 }}
           items={[
-            { key: 'name', label: 'Full name', children: me?.fullName ?? user?.fullName ?? '—' },
-            { key: 'user', label: 'Username', children: me?.userName ?? user?.userName ?? '—' },
-            { key: 'email', label: 'Email', children: me?.email ?? '—' },
+            { key: 'name', label: 'Full name', children: me?.fullName ?? user?.fullName ?? '-' },
+            { key: 'user', label: 'Username', children: me?.userName ?? user?.userName ?? '-' },
+            { key: 'email', label: 'Email', children: me?.email ?? '-' },
             { key: 'lang', label: 'Preferred language', children: me?.preferredLanguage ?? 'en' },
             { key: 'tenant', label: 'Tenant id', children: <code style={{ fontSize: 12 }}>{me?.tenantId ?? user?.tenantId}</code>, span: 2 },
           ]}

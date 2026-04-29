@@ -1,8 +1,8 @@
-# Jamaat — Donation, Receipt, Payment & Accounting System
+# Jamaat - Donation, Receipt, Payment & Accounting System
 
 Centralized Jamaat financial operations platform: digitizes receipt collection, payment vouchers, donation management, and internal accounting. Syncs members from the main Jamaat platform (ITS) and exposes APIs for external integration.
 
-**Status:** M0 Foundations — solution skeleton, domain model, auth+audit scaffolding, React shell.
+**Status:** M0 Foundations - solution skeleton, domain model, auth+audit scaffolding, React shell.
 
 ## Stack
 
@@ -95,8 +95,8 @@ dotnet test tests/Jamaat.IntegrationTests            # spins up MSSQL via Testco
 
 ## Configuration
 
-`src/Jamaat.Api/appsettings.json` — production defaults.
-`src/Jamaat.Api/appsettings.Development.json` — dev overrides (Seq sink, verbose logging).
+`src/Jamaat.Api/appsettings.json` - production defaults.
+`src/Jamaat.Api/appsettings.Development.json` - dev overrides (Seq sink, verbose logging).
 
 Critical secrets (JWT key, connection strings) must be set via environment variables or user-secrets in production. **Never commit real secrets.**
 
@@ -113,5 +113,5 @@ Critical secrets (JWT key, connection strings) must be set via environment varia
 
 ## Phase roadmap
 
-- **Phase 1 (current):** Web-only portal — master data, members, receipts, vouchers, accounting, reports, audit.
+- **Phase 1 (current):** Web-only portal - master data, members, receipts, vouchers, accounting, reports, audit.
 - **Phase 2:** Flutter mobile app (offline-first, thermal printer, QR scan), bilingual UI/print (Ar/Hi/Ur + RTL), ITS SSO, advanced dashboards.

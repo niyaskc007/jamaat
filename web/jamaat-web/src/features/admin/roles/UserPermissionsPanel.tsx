@@ -32,7 +32,7 @@ export function UserPermissionsPanel() {
     enabled: !!userId,
   });
 
-  // Permissions inherited via roles (so the UI can show them as "from role: X" — read-only).
+  // Permissions inherited via roles (so the UI can show them as "from role: X" - read-only).
   const fromRoles = useMemo(() => {
     if (!detailQ.data || !rolesQ.data) return new Map<string, string[]>();
     const map = new Map<string, string[]>();
@@ -75,7 +75,7 @@ export function UserPermissionsPanel() {
         type="info" showIcon
         style={{ marginBlockEnd: 12 }}
         message="Cross-functional grants"
-        description="Use this panel to give a single user one or two extra permissions without changing their role. A Super-admin (Administrator role) already has everything — picking them here is a no-op."
+        description="Use this panel to give a single user one or two extra permissions without changing their role. A Super-admin (Administrator role) already has everything - picking them here is a no-op."
       />
 
       <Card size="small" style={{ border: '1px solid var(--jm-border)', marginBlockEnd: 12 }}>
@@ -114,7 +114,7 @@ export function UserPermissionsPanel() {
         <Alert
           type="warning" showIcon
           style={{ marginBlockEnd: 12 }}
-          message="This user is in the Administrator role — they already have every permission system-wide."
+          message="This user is in the Administrator role - they already have every permission system-wide."
         />
       )}
 

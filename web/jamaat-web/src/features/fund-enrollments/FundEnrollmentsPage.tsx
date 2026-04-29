@@ -83,8 +83,8 @@ export function FundEnrollmentsPage() {
   const cols: TableProps<FundEnrollment>['columns'] = [
     { title: 'Code', dataIndex: 'code', width: 110, render: (v: string) => <span className="jm-tnum">{v}</span> },
     { title: 'Member', dataIndex: 'memberName', render: (v: string, row) => <div><div style={{ fontWeight: 500 }}>{v}</div><div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>ITS {row.memberItsNumber}</div></div> },
-    { title: 'Fund', dataIndex: 'fundTypeName', width: 160, render: (v: string, row) => `${row.fundTypeCode} — ${v}` },
-    { title: 'Sub-type', dataIndex: 'subType', width: 140, render: (v: string | null) => v ?? '—' },
+    { title: 'Fund', dataIndex: 'fundTypeName', width: 160, render: (v: string, row) => `${row.fundTypeCode} - ${v}` },
+    { title: 'Sub-type', dataIndex: 'subType', width: 140, render: (v: string | null) => v ?? '-' },
     { title: 'Recurrence', dataIndex: 'recurrence', width: 120, render: (r: Recurrence) => RecurrenceLabel[r] },
     { title: 'Collected', dataIndex: 'totalCollected', width: 140, align: 'end',
       render: (v: number) => <span className="jm-tnum">{money(v, 'AED')}</span> },
@@ -143,7 +143,7 @@ export function FundEnrollmentsPage() {
             options={Object.entries(EnrollmentStatusLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
           <Select allowClear placeholder="Fund type" style={{ inlineSize: 240 }} value={fundFilter} onChange={setFundFilter}
             showSearch optionFilterProp="label"
-            options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} — ${f.nameEnglish}` }))} />
+            options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} - ${f.nameEnglish}` }))} />
           <div style={{ flex: 1 }} />
           <Button icon={<ReloadOutlined />} onClick={() => refetch()} loading={isFetching && !isLoading} />
         </div>
@@ -168,7 +168,7 @@ export function FundEnrollmentsPage() {
           rowSelection={canApprove ? {
             selectedRowKeys: selectedIds,
             onChange: (keys) => setSelectedIds(keys as string[]),
-            // Only Draft (status=1) rows can be approved — disable selection on the others.
+            // Only Draft (status=1) rows can be approved - disable selection on the others.
             getCheckboxProps: (row) => ({ disabled: row.status !== 1 }),
             preserveSelectedRowKeys: true,
           } : undefined}
@@ -223,7 +223,7 @@ function NewEnrollmentDrawer({ open, onClose }: { open: boolean; onClose: () => 
         <Form.Item label="Member" required><MemberPicker value={memberId} onChange={setMemberId} /></Form.Item>
         <Form.Item label="Fund type" required>
           <Select value={fundTypeId} onChange={setFundTypeId} showSearch optionFilterProp="label"
-            options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} — ${f.nameEnglish}` }))} />
+            options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} - ${f.nameEnglish}` }))} />
         </Form.Item>
         <Form.Item label="Sub-type" help="Enter the Lookup code (e.g., PROFESSIONAL, LOCAL, LQ).">
           <Input value={subType} onChange={(e) => setSubType(e.target.value)} />

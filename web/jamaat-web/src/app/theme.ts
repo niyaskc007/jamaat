@@ -1,7 +1,7 @@
 import type { ThemeConfig } from 'antd';
 
 /**
- * Jamaat theme — maps our CSS token palette into Ant Design's design tokens.
+ * Jamaat theme - maps our CSS token palette into Ant Design's design tokens.
  * Keep in sync with src/app/tokens.css.
  */
 export const jamaatTheme: ThemeConfig = {

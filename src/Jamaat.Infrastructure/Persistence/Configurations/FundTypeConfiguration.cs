@@ -67,7 +67,7 @@ public sealed class FundSubCategoryConfiguration : IEntityTypeConfiguration<Fund
         b.Property(x => x.Code).HasMaxLength(32).IsRequired();
         b.Property(x => x.Name).HasMaxLength(200).IsRequired();
         b.Property(x => x.Description).HasMaxLength(1000);
-        // Code unique within (tenant, parent category) — distinct categories can reuse the same code.
+        // Code unique within (tenant, parent category) - distinct categories can reuse the same code.
         b.HasIndex(x => new { x.TenantId, x.FundCategoryId, x.Code }).IsUnique();
         b.HasIndex(x => new { x.TenantId, x.FundCategoryId });
     }

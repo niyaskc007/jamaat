@@ -40,7 +40,7 @@ export function BankAccountsPanel() {
     { title: 'Account no.', dataIndex: 'accountNumber', key: 'accountNumber', width: 200,
       render: (v: string) => <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{v}</span> },
     { title: 'Currency', dataIndex: 'currency', key: 'currency', width: 100, render: (v: string) => <Tag style={{ margin: 0 }}>{v}</Tag> },
-    { title: 'IFSC', dataIndex: 'ifsc', key: 'ifsc', width: 140, render: (v?: string) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+    { title: 'IFSC', dataIndex: 'ifsc', key: 'ifsc', width: 140, render: (v?: string) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
     {
       title: 'Status', dataIndex: 'isActive', key: 'isActive', width: 100,
       render: (v: boolean) => v

@@ -12,7 +12,7 @@ type Props = {
 };
 
 /// Route-level guard that renders a friendly 403 screen when the user lacks the
-/// required permissions. Used by deep-linked URLs — e.g. a viewer who types
+/// required permissions. Used by deep-linked URLs - e.g. a viewer who types
 /// `/admin/users` directly should see this screen, not a half-broken page.
 export function RequirePermission({ anyOf, children }: Props) {
   const { user, hasPermission } = useAuth();

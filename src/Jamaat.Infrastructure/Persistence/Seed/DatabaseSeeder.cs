@@ -120,7 +120,7 @@ public static class DatabaseSeeder
         }
         else
         {
-            // Admin already exists — idempotently reconcile permission claims so that
+            // Admin already exists - idempotently reconcile permission claims so that
             // permissions added in a later release flow to the existing admin user.
             var currentClaims = (await userMgr.GetClaimsAsync(admin))
                 .Where(c => c.Type == "permission")
@@ -152,7 +152,7 @@ public static class DatabaseSeeder
         await SeedOrganisationsAsync(db, defaultTenantId, logger, ct);
         await SeedTestUsersAsync(userMgr, defaultTenantId, logger, config);
 
-        // Dev-only bulk data generator — populates members/families/enrollments/commitments/events
+        // Dev-only bulk data generator - populates members/families/enrollments/commitments/events
         // so every screen has something to render. Off by default; enable via Seed:DevData=true.
         if (bool.TryParse(config["Seed:DevData"] ?? "false", out var devData) && devData)
         {
@@ -246,7 +246,7 @@ public static class DatabaseSeeder
                 logger.LogInformation("Seeded test user {Email} with password '{Password}'", email, password);
             }
 
-            // Idempotently reconcile permission claims — additions only, so manual grants survive.
+            // Idempotently reconcile permission claims - additions only, so manual grants survive.
             var current = (await userMgr.GetClaimsAsync(user))
                 .Where(c => c.Type == "permission")
                 .Select(c => c.Value)
@@ -478,7 +478,7 @@ Accepted on {{today}}.
 
     private static async Task SeedFundCategoriesAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
     {
-        // Idempotent — the migration's SQL also seeds these for any existing tenant, but a brand-new
+        // Idempotent - the migration's SQL also seeds these for any existing tenant, but a brand-new
         // tenant added later (multi-tenant future) won't hit that path, so we re-check here.
         var existing = await db.FundCategories.AsNoTracking()
             .Where(c => c.TenantId == tenantId)
@@ -488,9 +488,9 @@ Accepted on {{today}}.
         var seeds = new (string Code, string Name, FundCategoryKind Kind, int SortOrder, string Description)[]
         {
             ("PERM_INCOME", "Permanent Income", FundCategoryKind.PermanentIncome, 10,
-                "Permanent contributions — receipts post to income; no return obligation. (Mohammedi-style schemes belong here.)"),
+                "Permanent contributions - receipts post to income; no return obligation. (Mohammedi-style schemes belong here.)"),
             ("TEMP_INCOME", "Temporary Income", FundCategoryKind.TemporaryIncome, 20,
-                "Returnable contributions — receipts create a return obligation; not income. (Hussaini-style schemes belong here.)"),
+                "Returnable contributions - receipts create a return obligation; not income. (Hussaini-style schemes belong here.)"),
             ("LOAN_FUND", "Loan Fund", FundCategoryKind.LoanFund, 30,
                 "Funds that issue loans (e.g. Qarzan Hasana). Same fund may also receive returnable + permanent contributions."),
             ("COMMIT_SCHEME", "Commitment Scheme", FundCategoryKind.CommitmentScheme, 40,
@@ -535,7 +535,7 @@ Accepted on {{today}}.
             ("SILA_FITRA", "Sila Fitra", false, FundCategory.Donation, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
             ("NAZURMAKAM", "Nazurmakam", false, FundCategory.Donation, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
             ("MUTAFRIQ", "Mutafriq (Misc)", false, FundCategory.Donation, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),
-            // QH lights up every behaviour flag — it accepts returnable + permanent contributions
+            // QH lights up every behaviour flag - it accepts returnable + permanent contributions
             // AND issues loans, so it's the canonical example of the fund-management uplift.
             ("QARZAN", "Qarzan Hasana", true, FundCategory.Loan, FundCategoryKind.LoanFund, loanFund?.Id, true, true, true, true),
             ("CHARITY", "General Charity", false, FundCategory.Charity, FundCategoryKind.PermanentIncome, permIncome?.Id, false, false, false, false),

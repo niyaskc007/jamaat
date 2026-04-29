@@ -40,7 +40,7 @@ public sealed class ReceiptService(
         var member = await db.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == dto.MemberId, ct);
         if (member is null) return Error.NotFound("member.not_found", "Member not found.");
 
-        // Resolve optional family context — either explicit or inferred from member
+        // Resolve optional family context - either explicit or inferred from member
         Family? family = null;
         var familyId = dto.FamilyId ?? member.FamilyId;
         if (familyId is Guid fid)
@@ -170,7 +170,7 @@ public sealed class ReceiptService(
 
         // --- Custom field validation (batch 3) ----
         // Pull the active fields for every fund touched by this receipt and ensure required ones
-        // are present in the supplied dictionary. We accept the union — the form already only
+        // are present in the supplied dictionary. We accept the union - the form already only
         // shows fields the user can see, but the API has to defend against direct calls too.
         var customFieldDefs = await db.FundTypeCustomFields.AsNoTracking()
             .Where(f => lineFundIds.Contains(f.FundTypeId) && f.IsActive)

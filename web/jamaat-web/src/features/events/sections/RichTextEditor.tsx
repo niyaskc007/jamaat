@@ -7,7 +7,7 @@ import { BoldOutlined, ItalicOutlined, LinkOutlined, OrderedListOutlined, Unorde
 /**
  * Thin wrapper over TipTap that edits HTML. The Text-section renderer stores whatever this
  * component outputs into `body`; the renderer uses a lightweight HTML sanitiser equivalent
- * (CSS-scoped `<div dangerouslySetInnerHTML>`) to display. Inline formatting only —
+ * (CSS-scoped `<div dangerouslySetInnerHTML>`) to display. Inline formatting only -
  * no images, no tables, no code blocks, to keep the design aesthetic consistent.
  */
 export function RichTextEditor({ value, onChange }: { value: string; onChange: (html: string) => void }) {

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Card, Space, Form, Input, Select, InputNumber, DatePicker, Button, Table, Radio, Alert,
-  Switch, Typography, App as AntdApp, Steps, Result,
+  Switch, Typography, App as AntdApp, Steps, Result, Tabs,
 } from 'antd';
+import { AgreementMarkdown } from '../../shared/ui/AgreementMarkdown';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -155,7 +156,7 @@ export function NewCommitmentPage() {
                 value={form.fundTypeId}
                 onChange={(v) => setForm((f) => ({ ...f, fundTypeId: v }))}
                 placeholder="Select fund"
-                options={(fundsQ.data?.items ?? []).map((x) => ({ value: x.id, label: `${x.code} — ${x.nameEnglish}` }))}
+                options={(fundsQ.data?.items ?? []).map((x) => ({ value: x.id, label: `${x.code} - ${x.nameEnglish}` }))}
               />
             </Form.Item>
 
@@ -212,7 +213,7 @@ export function NewCommitmentPage() {
                 rows={2}
                 value={form.notes ?? ''}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                placeholder="Optional — any context for this pledge."
+                placeholder="Optional - any context for this pledge."
               />
             </Form.Item>
 
@@ -295,7 +296,7 @@ function AcceptanceStep({ commitmentId }: { commitmentId: string }) {
   const [templateId, setTemplateId] = useState<string | undefined>();
   const [preview, setPreview] = useState<string>('');
 
-  const tenantName = 'Jamaat'; // Tenant name not yet surfaced via API — placeholder value
+  const tenantName = 'Jamaat'; // Tenant name not yet surfaced via API - placeholder value
 
   useEffect(() => {
     // Default to the fund-specific template if any, else the default template
@@ -334,21 +335,48 @@ function AcceptanceStep({ commitmentId }: { commitmentId: string }) {
         frequency: (FrequencyLabel[c.frequency]),
         installment_amount: money(installmentAmount, c.currency),
         start_date: formatDate(c.startDate),
-        end_date: c.endDate ? formatDate(c.endDate) : '—',
+        end_date: c.endDate ? formatDate(c.endDate) : '-',
         today: formatDate(new Date().toISOString()),
         jamaat_name: tenantName,
       },
     });
   }, [commitmentQ.data, selectedTemplate]);
 
+  const { modal } = AntdApp.useApp();
   const acceptMut = useMutation({
-    mutationFn: () => commitmentsApi.acceptAgreement(commitmentId, { templateId, renderedText: preview }),
+    mutationFn: () => commitmentsApi.acceptAgreement(commitmentId, { templateId, renderedText: preview, acceptedByAdmin: true }),
     onSuccess: () => {
-      message.success('Agreement accepted — commitment is now active.');
+      message.success('Agreement accepted - commitment is now active.');
       navigate(`/commitments/${commitmentId}`);
     },
     onError: (err) => { const p = extractProblem(err); message.error(p.detail ?? 'Failed to accept agreement'); },
   });
+
+  // Admin-on-behalf acceptance: today only staff have logins, so any "Accept" click is the
+  // admin signing on behalf of the contributor. The system stamps the admin's name + IP +
+  // device onto the commitment, so we make that explicit before the click is final.
+  const confirmAndAccept = (partyName: string) => {
+    modal.confirm({
+      title: 'Accept agreement on behalf of contributor?',
+      content: (
+        <div style={{ marginBlockStart: 8 }}>
+          <p style={{ margin: 0 }}>
+            You are accepting this agreement <strong>on behalf of {partyName}</strong>.
+          </p>
+          <ul style={{ marginBlockStart: 8, paddingInlineStart: 18, color: 'var(--jm-gray-600)', fontSize: 13 }}>
+            <li>The commitment becomes <strong>Active</strong> immediately and starts accepting payments.</li>
+            <li>Your name, the timestamp, your IP address and device will be recorded as proof of acceptance.</li>
+            <li>Make sure the contributor has reviewed and agreed to the text shown above.</li>
+          </ul>
+        </div>
+      ),
+      okText: 'Yes, accept on their behalf',
+      okButtonProps: { type: 'primary' },
+      cancelText: 'Not yet',
+      width: 520,
+      onOk: () => acceptMut.mutateAsync(),
+    });
+  };
 
   if (commitmentQ.isLoading || templatesQ.isLoading) return <div>Loading…</div>;
   if (!commitmentQ.data) return <Result status="404" title="Commitment not found" />;
@@ -375,19 +403,41 @@ function AcceptanceStep({ commitmentId }: { commitmentId: string }) {
           />
         </Form.Item>
 
-        <Form.Item label="Preview (what will be snapshotted onto this commitment)">
-          <Input.TextArea
-            value={preview}
-            onChange={(e) => setPreview(e.target.value)}
-            autoSize={{ minRows: 10, maxRows: 24 }}
-            style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, whiteSpace: 'pre-wrap' }}
+        <Form.Item label="Agreement (what will be snapshotted onto this commitment)"
+          tooltip="Templates are authored in Markdown so headings/bold/lists render as formatted text. Use Preview to see how the contributor will see it; use Edit to tweak the rendered text before accepting (rare).">
+          <Tabs
+            defaultActiveKey="preview"
+            items={[
+              {
+                key: 'preview', label: 'Preview',
+                children: (
+                  <div style={{ border: '1px solid var(--jm-border)', borderRadius: 6, padding: 16, background: 'var(--jm-gray-50, #FAFAFA)', maxBlockSize: 480, overflow: 'auto' }}>
+                    {preview.trim()
+                      ? <AgreementMarkdown source={preview} />
+                      : <span style={{ color: 'var(--jm-gray-500)' }}>No preview yet - select a template above.</span>}
+                  </div>
+                ),
+              },
+              {
+                key: 'source', label: 'Edit (Markdown)',
+                children: (
+                  <Input.TextArea
+                    value={preview}
+                    onChange={(e) => setPreview(e.target.value)}
+                    autoSize={{ minRows: 10, maxRows: 24 }}
+                    style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 12, whiteSpace: 'pre-wrap' }}
+                  />
+                ),
+              },
+            ]}
           />
         </Form.Item>
       </Form>
 
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Button onClick={() => navigate(`/commitments/${commitmentId}`)}>Skip — keep as draft</Button>
-        <Button type="primary" loading={acceptMut.isPending} disabled={!preview.trim()} onClick={() => acceptMut.mutate()}>
+        <Button onClick={() => navigate(`/commitments/${commitmentId}`)}>Skip - keep as draft</Button>
+        <Button type="primary" loading={acceptMut.isPending} disabled={!preview.trim()}
+          onClick={() => confirmAndAccept(commitmentQ.data?.commitment.partyName ?? 'this contributor')}>
           Accept agreement
         </Button>
       </div>
@@ -412,7 +462,7 @@ function FamilyPicker({ value, onChange }: { value: string; onChange: (v: string
       placeholder="Search families by name or code"
       options={(data?.items ?? []).map((f) => ({
         value: f.id,
-        label: `${f.code} — ${f.familyName}${f.headName ? ` (Head: ${f.headName})` : ''}`,
+        label: `${f.code} - ${f.familyName}${f.headName ? ` (Head: ${f.headName})` : ''}`,
       }))}
     />
   );

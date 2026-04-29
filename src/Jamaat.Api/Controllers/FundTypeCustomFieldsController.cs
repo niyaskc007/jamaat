@@ -7,7 +7,7 @@ namespace Jamaat.Api.Controllers;
 
 /// <summary>
 /// Admin-managed custom fields per fund type. The receipt form reads the active fields for the
-/// chosen fund and renders inputs dynamically — values land in <c>Receipt.CustomFieldsJson</c>.
+/// chosen fund and renders inputs dynamically - values land in <c>Receipt.CustomFieldsJson</c>.
 /// </summary>
 [ApiController]
 [Authorize]
@@ -21,7 +21,7 @@ public sealed class FundTypeCustomFieldsController(IFundTypeCustomFieldService s
 
     /// <summary>List endpoint for callers who already know the fund type and want active fields.</summary>
     /// <remarks>
-    /// Receipt form uses this — it doesn't have admin.masterdata permission on a normal counter
+    /// Receipt form uses this - it doesn't have admin.masterdata permission on a normal counter
     /// user. We expose a permissive variant under the receipts hierarchy that requires only
     /// receipt.create. See the <c>ReceiptCustomFieldsController</c> below.
     /// </remarks>
@@ -53,7 +53,7 @@ public sealed class FundTypeCustomFieldsController(IFundTypeCustomFieldService s
 }
 
 /// <summary>
-/// Read-only endpoint the receipt form hits — same data as the admin endpoint but only
+/// Read-only endpoint the receipt form hits - same data as the admin endpoint but only
 /// requires receipt.view so cashiers can render the dynamic fields without admin.masterdata.
 /// </summary>
 [ApiController]

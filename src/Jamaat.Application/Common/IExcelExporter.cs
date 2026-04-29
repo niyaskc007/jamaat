@@ -1,7 +1,7 @@
 namespace Jamaat.Application.Common;
 
 /// Abstraction over the XLSX writer so Application code doesn't depend on ClosedXML directly.
-/// Reports build a <see cref="ExcelSheet"/> per tab and hand them off — the Infrastructure
+/// Reports build a <see cref="ExcelSheet"/> per tab and hand them off - the Infrastructure
 /// implementation handles formatting, header styling, and byte-buffer production.
 public interface IExcelExporter
 {

@@ -9,7 +9,7 @@ public sealed record UpdateLookupDto(string Name, string? NameArabic, int SortOr
 
 public sealed record LookupListQuery(int Page = 1, int PageSize = 200, string? Category = null, string? Search = null, bool? Active = null);
 
-/// <summary>Known lookup category names — listed here for discoverability.</summary>
+/// <summary>Known lookup category names - listed here for discoverability.</summary>
 public static class LookupCategories
 {
     public const string SabilType = "SabilType";

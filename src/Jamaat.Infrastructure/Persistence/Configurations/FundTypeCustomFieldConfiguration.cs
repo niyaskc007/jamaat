@@ -19,7 +19,7 @@ public sealed class FundTypeCustomFieldConfiguration : IEntityTypeConfiguration<
         b.Property(x => x.DefaultValue).HasMaxLength(500);
         b.Property(x => x.FieldType).HasConversion<int>();
 
-        // Field key unique within (tenant, fundType) — different fund types can reuse the same key.
+        // Field key unique within (tenant, fundType) - different fund types can reuse the same key.
         b.HasIndex(x => new { x.TenantId, x.FundTypeId, x.FieldKey }).IsUnique();
         b.HasIndex(x => new { x.TenantId, x.FundTypeId, x.SortOrder });
     }

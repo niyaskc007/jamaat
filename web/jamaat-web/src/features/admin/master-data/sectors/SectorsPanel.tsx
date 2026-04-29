@@ -43,8 +43,8 @@ function SectorsList() {
   const cols: TableProps<Sector>['columns'] = [
     { title: 'Code', dataIndex: 'code', width: 110 },
     { title: 'Name', dataIndex: 'name' },
-    { title: 'Male Incharge', dataIndex: 'maleInchargeName', render: (v: string | null) => v ?? '—' },
-    { title: 'Female Incharge', dataIndex: 'femaleInchargeName', render: (v: string | null) => v ?? '—' },
+    { title: 'Male Incharge', dataIndex: 'maleInchargeName', render: (v: string | null) => v ?? '-' },
+    { title: 'Female Incharge', dataIndex: 'femaleInchargeName', render: (v: string | null) => v ?? '-' },
     { title: 'Sub-sectors', dataIndex: 'subSectorCount', width: 120 },
     { title: 'Members', dataIndex: 'memberCount', width: 100 },
     { title: 'Status', dataIndex: 'isActive', width: 100, render: (a: boolean) => <Tag color={a ? 'green' : 'default'}>{a ? 'Active' : 'Inactive'}</Tag> },
@@ -154,8 +154,8 @@ function SubSectorsList() {
     { title: 'Sector', dataIndex: 'sectorCode', width: 120 },
     { title: 'Code', dataIndex: 'code', width: 100 },
     { title: 'Name', dataIndex: 'name' },
-    { title: 'Male Incharge', dataIndex: 'maleInchargeName', render: (v) => v ?? '—' },
-    { title: 'Female Incharge', dataIndex: 'femaleInchargeName', render: (v) => v ?? '—' },
+    { title: 'Male Incharge', dataIndex: 'maleInchargeName', render: (v) => v ?? '-' },
+    { title: 'Female Incharge', dataIndex: 'femaleInchargeName', render: (v) => v ?? '-' },
     { title: 'Members', dataIndex: 'memberCount', width: 100 },
     { title: 'Status', dataIndex: 'isActive', width: 100, render: (a: boolean) => <Tag color={a ? 'green' : 'default'}>{a ? 'Active' : 'Inactive'}</Tag> },
     {
@@ -177,7 +177,7 @@ function SubSectorsList() {
         <Input placeholder="Search" prefix={<SearchOutlined />} allowClear value={search}
           onChange={(e) => setSearch(e.target.value)} onPressEnter={() => setPage(1)} style={{ inlineSize: 240 }} />
         <Select allowClear placeholder="Filter by sector" style={{ inlineSize: 200 }} value={sectorFilter} onChange={setSectorFilter}
-          options={(sectorsQ.data?.items ?? []).map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }))} />
+          options={(sectorsQ.data?.items ?? []).map((s) => ({ value: s.id, label: `${s.code} - ${s.name}` }))} />
         <div style={{ flex: 1 }} />
         <Button icon={<ReloadOutlined />} onClick={() => refetch()} loading={isFetching && !isLoading} />
         <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>New sub-sector</Button>
@@ -220,7 +220,7 @@ function SubSectorDrawer({ open, onClose, sub, sectors }: { open: boolean; onClo
       <Form layout="vertical" form={form} requiredMark={false} initialValues={sub ?? { isActive: true }}>
         {!isEdit && (
           <Form.Item label="Sector" name="sectorId" rules={[{ required: true }]}>
-            <Select options={sectors.map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }))} />
+            <Select options={sectors.map((s) => ({ value: s.id, label: `${s.code} - ${s.name}` }))} />
           </Form.Item>
         )}
         {!isEdit && <Form.Item label="Code" name="code" rules={[{ required: true }]}><Input /></Form.Item>}

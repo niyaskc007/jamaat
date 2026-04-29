@@ -7,8 +7,8 @@ namespace Jamaat.Domain.Enums;
 /// </summary>
 public enum FundCategory
 {
-    Donation = 1,          // e.g., Sabil, Wajebaat, Niyaz, Mutafariq — recurring or one-off giving
-    Loan = 2,              // e.g., Qarzan Hasana — interest-free loans (receivable on the balance sheet)
+    Donation = 1,          // e.g., Sabil, Wajebaat, Niyaz, Mutafariq - recurring or one-off giving
+    Loan = 2,              // e.g., Qarzan Hasana - interest-free loans (receivable on the balance sheet)
     Charity = 3,           // beneficiary-directed giving (zakat, fitrah, disbursement-type charity)
     CommunitySupport = 4,  // funds directed at community programmes (education, housing, relief)
     Other = 99,

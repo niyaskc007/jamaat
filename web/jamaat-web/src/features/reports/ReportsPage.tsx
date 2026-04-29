@@ -173,7 +173,7 @@ function CashBook() {
 function MemberContribution() {
   const { range, setRange, from, to } = useRange();
   const { hasPermission } = useAuth();
-  // Member picker — fetch active members so the report can be run quickly. We don't lazy-search
+  // Member picker - fetch active members so the report can be run quickly. We don't lazy-search
   // here because the count is small enough; if a Jamaat grows large, swap to type-ahead lookup.
   const membersQuery = useQuery({ queryKey: ['members', 'for-report'], queryFn: () => membersApi.list({ page: 1, pageSize: 500, status: 1 }) });
   const [memberId, setMemberId] = useState<string | undefined>();
@@ -200,9 +200,9 @@ function MemberContribution() {
         columns={[
           { title: 'Date', dataIndex: 'receiptDate', key: 'd', width: 110, render: (v: string) => formatDate(v) },
           { title: 'Receipt #', dataIndex: 'receiptNumber', key: 'rn', width: 120, render: (v: string) => <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{v}</span> },
-          { title: 'Fund', dataIndex: 'fundName', key: 'fn', render: (v: string, row) => <span><strong>{row.fundCode}</strong> — {v}</span> },
-          { title: 'Period', dataIndex: 'periodReference', key: 'pr', width: 120, render: (v?: string | null) => v ?? '—' },
-          { title: 'Purpose', dataIndex: 'purpose', key: 'pu', render: (v?: string | null) => v ?? '—' },
+          { title: 'Fund', dataIndex: 'fundName', key: 'fn', render: (v: string, row) => <span><strong>{row.fundCode}</strong> - {v}</span> },
+          { title: 'Period', dataIndex: 'periodReference', key: 'pr', width: 120, render: (v?: string | null) => v ?? '-' },
+          { title: 'Purpose', dataIndex: 'purpose', key: 'pu', render: (v?: string | null) => v ?? '-' },
           { title: 'Amount', dataIndex: 'amount', key: 'a', align: 'right', width: 140, render: (v: number, row) => <span className="jm-tnum" style={{ fontWeight: 500 }}>{money(v, row.currency)}</span> },
         ]}
         summary={(rows) => rows.length > 0 ? (
@@ -235,7 +235,7 @@ function FundBalance() {
         <Select style={{ inlineSize: 320 }} placeholder="Select fund"
           showSearch optionFilterProp="label"
           value={fundTypeId} onChange={setFundTypeId}
-          options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} — ${f.nameEnglish}` }))} />
+          options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} - ${f.nameEnglish}` }))} />
       </div>
       {!fundTypeId && <Empty description="Select a fund to see its dual-balance view" />}
       {fundTypeId && isLoading && <div style={{ padding: 24, textAlign: 'center' }}>Loading…</div>}
@@ -276,7 +276,7 @@ function FundBalance() {
           description={
             <div style={{ marginBlockStart: 16, fontSize: 12, color: 'var(--jm-gray-500)', textAlign: 'left' }}>
               <strong>Why two numbers?</strong> Total cash is what the fund has received from contributors.
-              Net strength subtracts the still-outstanding return obligation — that part of the cash is
+              Net strength subtracts the still-outstanding return obligation - that part of the cash is
               effectively borrowed from contributors and must be returned. Without this distinction,
               reports would treat returnable money as permanent income and overstate the fund.
             </div>
@@ -304,21 +304,21 @@ function ReturnableContributions() {
         <Select style={{ inlineSize: 320 }} placeholder="All funds (or pick one)"
           allowClear showSearch optionFilterProp="label"
           value={fundTypeId} onChange={setFundTypeId}
-          options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} — ${f.nameEnglish}` }))} />
+          options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} - ${f.nameEnglish}` }))} />
         <div style={{ flex: 1 }} />
         {hasPermission('reports.export') && <ExportButton onClick={() => downloadXlsx('/api/v1/reports/returnable-contributions.xlsx', fundTypeId ? { fundTypeId } : {}, `returnable-contributions_${new Date().toISOString().slice(0, 10)}.xlsx`)} />}
       </div>
       <Table rowKey={(r) => r.receiptId} size="middle" loading={isLoading} dataSource={data ?? []} pagination={{ pageSize: 25 }}
         columns={[
           { title: 'Receipt date', dataIndex: 'receiptDate', key: 'rd', width: 120, render: (v: string) => formatDate(v) },
-          { title: 'Receipt #', dataIndex: 'receiptNumber', key: 'rn', width: 130, render: (v?: string | null) => v ?? '—' },
+          { title: 'Receipt #', dataIndex: 'receiptNumber', key: 'rn', width: 130, render: (v?: string | null) => v ?? '-' },
           { title: 'Member', dataIndex: 'memberName', key: 'mn', render: (v: string, row) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.itsNumber}</span> · {v}</span> },
-          { title: 'Fund', dataIndex: 'fundTypeName', key: 'f', render: (v: string, row) => `${row.fundTypeCode} — ${v}` },
+          { title: 'Fund', dataIndex: 'fundTypeName', key: 'f', render: (v: string, row) => `${row.fundTypeCode} - ${v}` },
           { title: 'Amount', dataIndex: 'amountTotal', key: 'a', align: 'right', width: 130, render: (v: number, row) => <span className="jm-tnum">{money(v, row.currency)}</span> },
-          { title: 'Returned', dataIndex: 'amountReturned', key: 'rt', align: 'right', width: 130, render: (v: number, row) => v ? <span className="jm-tnum" style={{ color: 'var(--jm-gray-700)' }}>{money(v, row.currency)}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+          { title: 'Returned', dataIndex: 'amountReturned', key: 'rt', align: 'right', width: 130, render: (v: number, row) => v ? <span className="jm-tnum" style={{ color: 'var(--jm-gray-700)' }}>{money(v, row.currency)}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
           { title: 'Outstanding', dataIndex: 'amountReturnable', key: 'ob', align: 'right', width: 130, render: (v: number, row) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, row.currency)}</span> },
-          { title: 'Maturity', dataIndex: 'maturityDate', key: 'm', width: 120, render: (v: string | null, row) => v ? <span><span style={{ display: 'block' }}>{formatDate(v)}</span><Tag color={row.isMatured ? 'green' : 'gold'} style={{ margin: 0, fontSize: 11 }}>{row.isMatured ? 'Matured' : 'Not matured'}</Tag></span> : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
-          { title: 'Agreement', dataIndex: 'agreementReference', key: 'ag', width: 150, render: (v?: string | null) => v ? <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>{v}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+          { title: 'Maturity', dataIndex: 'maturityDate', key: 'm', width: 120, render: (v: string | null, row) => v ? <span><span style={{ display: 'block' }}>{formatDate(v)}</span><Tag color={row.isMatured ? 'green' : 'gold'} style={{ margin: 0, fontSize: 11 }}>{row.isMatured ? 'Matured' : 'Not matured'}</Tag></span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
+          { title: 'Agreement', dataIndex: 'agreementReference', key: 'ag', width: 150, render: (v?: string | null) => v ? <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>{v}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
         ]}
         locale={{ emptyText: <Empty description="No returnable contributions" /> }}
       />
@@ -340,12 +340,12 @@ function ChequeWise() {
       <Table rowKey={(_, i) => String(i)} size="middle" loading={isLoading} dataSource={data ?? []} pagination={false}
         columns={[
           { title: 'Receipt date', dataIndex: 'receiptDate', key: 'rd', width: 120, render: (v: string) => formatDate(v) },
-          { title: 'Receipt #', dataIndex: 'receiptNumber', key: 'rn', width: 120, render: (v?: string | null) => v ?? '—' },
+          { title: 'Receipt #', dataIndex: 'receiptNumber', key: 'rn', width: 120, render: (v?: string | null) => v ?? '-' },
           { title: 'ITS', dataIndex: 'itsNumber', key: 'its', width: 110, render: (v: string) => <span className="jm-tnum">{v}</span> },
           { title: 'Member', dataIndex: 'memberName', key: 'mn' },
-          { title: 'Cheque #', dataIndex: 'chequeNumber', key: 'cn', width: 130, render: (v?: string | null) => v ? <span className="jm-tnum">{v}</span> : '—' },
-          { title: 'Cheque date', dataIndex: 'chequeDate', key: 'cd', width: 120, render: (v?: string | null) => v ? formatDate(v) : '—' },
-          { title: 'Bank', dataIndex: 'bankAccountName', key: 'b', render: (v?: string | null) => v ?? '—' },
+          { title: 'Cheque #', dataIndex: 'chequeNumber', key: 'cn', width: 130, render: (v?: string | null) => v ? <span className="jm-tnum">{v}</span> : '-' },
+          { title: 'Cheque date', dataIndex: 'chequeDate', key: 'cd', width: 120, render: (v?: string | null) => v ? formatDate(v) : '-' },
+          { title: 'Bank', dataIndex: 'bankAccountName', key: 'b', render: (v?: string | null) => v ?? '-' },
           { title: 'Amount', dataIndex: 'amount', key: 'a', align: 'right', width: 140, render: (v: number, row) => <span className="jm-tnum" style={{ fontWeight: 500 }}>{money(v, row.currency)}</span> },
           { title: 'Status', dataIndex: 'status', key: 's', width: 110 },
         ]}

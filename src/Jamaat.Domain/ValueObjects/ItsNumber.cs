@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace Jamaat.Domain.ValueObjects;
 
-/// ITS (Intricate Tracking System) number — 8-digit identifier used across the main Jamaat platform.
+/// ITS (Intricate Tracking System) number - 8-digit identifier used across the main Jamaat platform.
 public readonly partial record struct ItsNumber
 {
     public string Value { get; }

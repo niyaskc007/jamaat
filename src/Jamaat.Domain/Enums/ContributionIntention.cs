@@ -6,7 +6,7 @@ namespace Jamaat.Domain.Enums;
 /// receipts create a return obligation tracked until matured + settled.
 /// </summary>
 /// <remarks>
-/// Defaults to <see cref="Permanent"/> for backwards compatibility — every receipt that existed
+/// Defaults to <see cref="Permanent"/> for backwards compatibility - every receipt that existed
 /// before this enum was added is treated as permanent. The Receipt form only surfaces the choice
 /// when the selected FundType has <c>IsReturnable=true</c>.
 /// </remarks>

@@ -137,19 +137,19 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
 
             // Seed five default FundCategory rows per tenant, then backfill FundType.FundCategoryId
             // from the legacy Category enum so the new master is fully populated for existing data.
-            // We use NEWID() per (tenant, kind) — each tenant gets its own master row.
+            // We use NEWID() per (tenant, kind) - each tenant gets its own master row.
             migrationBuilder.Sql(@"
 DECLARE @now DATETIMEOFFSET = SYSDATETIMEOFFSET();
 
 -- Seed default categories per tenant
 INSERT INTO [cfg].[FundCategory] (Id, TenantId, Code, Name, Kind, Description, SortOrder, IsActive, CreatedAtUtc)
 SELECT NEWID(), t.Id, 'PERM_INCOME', 'Permanent Income', 1,
-       'Permanent contributions — receipts post to income; no return obligation. (Mohammedi-style schemes belong here.)', 10, 1, @now
+       'Permanent contributions - receipts post to income; no return obligation. (Mohammedi-style schemes belong here.)', 10, 1, @now
 FROM [dbo].[Tenant] t;
 
 INSERT INTO [cfg].[FundCategory] (Id, TenantId, Code, Name, Kind, Description, SortOrder, IsActive, CreatedAtUtc)
 SELECT NEWID(), t.Id, 'TEMP_INCOME', 'Temporary Income', 2,
-       'Returnable contributions — receipts create a return obligation; not income. (Hussaini-style schemes belong here.)', 20, 1, @now
+       'Returnable contributions - receipts create a return obligation; not income. (Hussaini-style schemes belong here.)', 20, 1, @now
 FROM [dbo].[Tenant] t;
 
 INSERT INTO [cfg].[FundCategory] (Id, TenantId, Code, Name, Kind, Description, SortOrder, IsActive, CreatedAtUtc)
@@ -169,7 +169,7 @@ FROM [dbo].[Tenant] t;
 
 -- Backfill FundType.FundCategoryId based on the legacy Category enum.
 -- Category mapping:
---   1 Donation → PERM_INCOME      (default — most existing donations are permanent)
+--   1 Donation → PERM_INCOME      (default - most existing donations are permanent)
 --   2 Loan     → LOAN_FUND
 --   3 Charity  → PERM_INCOME      (charity is also permanent income from this view)
 --   4 CommunitySupport → PERM_INCOME

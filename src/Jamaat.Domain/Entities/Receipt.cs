@@ -39,7 +39,7 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public Guid? BankAccountId { get; private set; }
     public string? PaymentReference { get; private set; }
     public string? Remarks { get; private set; }
-    /// Optional — receipt is attributed to a family context (e.g., head paying for the whole family).
+    /// Optional - receipt is attributed to a family context (e.g., head paying for the whole family).
     public Guid? FamilyId { get; private set; }
     public string? FamilyNameSnapshot { get; private set; }
     /// JSON array of member ids this payment is on behalf of (when paying for family members).
@@ -59,7 +59,7 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
     // --- Returnable contribution tracking (batch 2 of fund-management uplift) ----
     /// <summary>Default Permanent. Set to Returnable when the contributor expects the money back.</summary>
     public ContributionIntention Intention { get; private set; } = ContributionIntention.Permanent;
-    /// <summary>Structured Niyyath note — required when the chosen FundType has RequiresNiyyath=true.</summary>
+    /// <summary>Structured Niyyath note - required when the chosen FundType has RequiresNiyyath=true.</summary>
     public string? NiyyathNote { get; private set; }
     /// <summary>For returnable contributions: the date from which the contributor can request return.</summary>
     public DateOnly? MaturityDate { get; private set; }

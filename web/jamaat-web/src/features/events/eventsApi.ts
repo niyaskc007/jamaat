@@ -167,7 +167,7 @@ export const eventsApi = {
   removeScan: async (id: string) => { await api.delete(`/api/v1/events/scans/${id}`); },
 };
 
-// Page designer — managed sections on an event's public portal page.
+// Page designer - managed sections on an event's public portal page.
 export type PageSection = {
   id: string; eventId: string;
   type: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
@@ -208,7 +208,7 @@ export const eventRegistrationsApi = {
     (await api.post(`/api/v1/event-registrations/${id}/cancel`, { reason })).data,
 };
 
-// Public portal — anonymous where noted.
+// Public portal - anonymous where noted.
 export type PortalEventSummary = {
   id: string; slug: string; name: string; tagline?: string | null;
   category: EventCategory; eventDate: string; eventDateHijri?: string | null;

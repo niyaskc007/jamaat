@@ -14,7 +14,7 @@ type HotkeySpec = {
   ignoreInInputs?: boolean;
 };
 
-/// Attach a document-level keyboard shortcut. Tailored for the Jamaat cashier flow —
+/// Attach a document-level keyboard shortcut. Tailored for the Jamaat cashier flow -
 /// enough to add Alt+N, Ctrl+Enter, and "/ focuses search" without a full library.
 export function useHotkey(spec: HotkeySpec, handler: (e: KeyboardEvent) => void) {
   useEffect(() => {
@@ -47,6 +47,6 @@ function isEditable(el: HTMLElement): boolean {
   const tag = el.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
   if (el.isContentEditable) return true;
-  // AntD Select / DatePicker render custom contenteditable shells — check ancestors.
+  // AntD Select / DatePicker render custom contenteditable shells - check ancestors.
   return !!el.closest('[contenteditable="true"]');
 }

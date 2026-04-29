@@ -23,7 +23,7 @@ public sealed class Family : AggregateRoot<Guid>, ITenantScoped, IAuditable
     /// Mirror of the HOF's ITS number; lets downstream systems reference the family by a stable ITS identifier.
     public string? FamilyItsNumber { get; private set; }
     public string FamilyName { get; private set; } = default!;
-    /// FK to Member.Id — the family head. Nullable during creation flow until a member is assigned.
+    /// FK to Member.Id - the family head. Nullable during creation flow until a member is assigned.
     public Guid? HeadMemberId { get; private set; }
     public string? HeadItsNumber { get; private set; }
     public string? ContactPhone { get; private set; }

@@ -66,7 +66,7 @@ export function ReceiptsPage() {
       title: 'Receipt #', dataIndex: 'receiptNumber', key: 'receiptNumber', width: 140,
       render: (v?: string, row?: ReceiptListItem) => v ? (
         <a onClick={(e) => { e.preventDefault(); navigate(`/receipts/${row!.id}`); }} style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontWeight: 600 }}>{v}</a>
-      ) : <span style={{ color: 'var(--jm-gray-400)' }}>—</span>,
+      ) : <span style={{ color: 'var(--jm-gray-400)' }}>-</span>,
     },
     { title: 'Date', dataIndex: 'receiptDate', key: 'receiptDate', width: 120, render: (v: string) => formatDate(v) },
     { title: 'Member', dataIndex: 'memberNameSnapshot', key: 'member', render: (v: string, row) => (
@@ -183,7 +183,7 @@ export function ReceiptsPage() {
         templateEndpoint="/api/v1/receipts/import-template.xlsx"
         templateFilename="receipts-import-template.xlsx"
         invalidateKeys={[['receipts'], ['dashboard']]}
-        hint={<>Each row creates one single-line confirmed receipt via the same flow as the counter UI — numbering, ledger posting and audit all run. Required: <strong>Date, ITS, Fund code, Amount, Mode</strong>. ITS must already exist as a member.</>}
+        hint={<>Each row creates one single-line confirmed receipt via the same flow as the counter UI - numbering, ledger posting and audit all run. Required: <strong>Date, ITS, Fund code, Amount, Mode</strong>. ITS must already exist as a member.</>}
       />
     </div>
   );

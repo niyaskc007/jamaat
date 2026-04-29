@@ -8,7 +8,7 @@ namespace Jamaat.Api.Controllers;
 
 /// <summary>
 /// Track post-dated cheques pledged against commitment installments. The cheque sits in
-/// state until the bank clears it — only then does the system issue a real Receipt that
+/// state until the bank clears it - only then does the system issue a real Receipt that
 /// posts to the ledger and pays down the installment.
 /// </summary>
 [ApiController]

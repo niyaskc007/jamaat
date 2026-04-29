@@ -27,7 +27,7 @@ public sealed class MembersController(IMemberService svc, IExcelExporter excel) 
     [Authorize(Policy = "member.view")]
     public async Task<IActionResult> Export([FromQuery] MemberListQuery query, CancellationToken ct)
     {
-        // Cap at 5000 rows in one shot — anything larger should use a dedicated report.
+        // Cap at 5000 rows in one shot - anything larger should use a dedicated report.
         var capped = query with { Page = 1, PageSize = 5000 };
         var page = await svc.ListAsync(capped, ct);
         var sheet = new ExcelSheet(
@@ -57,7 +57,7 @@ public sealed class MembersController(IMemberService svc, IExcelExporter excel) 
     }
 
     /// <summary>Import members from an XLSX upload (the "ITS sync via Excel" workflow).</summary>
-    /// <remarks>Upserts by ITS — existing members get updated, new ones get created. Per-row errors are returned alongside the commit count.</remarks>
+    /// <remarks>Upserts by ITS - existing members get updated, new ones get created. Per-row errors are returned alongside the commit count.</remarks>
     [HttpPost("import")]
     [Authorize(Policy = "member.create")]
     [RequestSizeLimit(20 * 1024 * 1024)]

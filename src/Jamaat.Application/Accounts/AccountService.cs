@@ -68,7 +68,7 @@ public sealed class AccountService(
         if (e.Code != dto.Code && await repo.CodeExistsAsync(dto.Code, id, ct))
             return Error.Conflict("account.code_duplicate", $"Account code '{dto.Code}' already exists.");
 
-        // Use reflection-free approach — Account has no SetAll method yet. Mutate via internals only exposed here.
+        // Use reflection-free approach - Account has no SetAll method yet. Mutate via internals only exposed here.
         typeof(Account).GetProperty(nameof(Account.Code))!.SetValue(e, dto.Code);
         typeof(Account).GetProperty(nameof(Account.Name))!.SetValue(e, dto.Name);
         typeof(Account).GetProperty(nameof(Account.Type))!.SetValue(e, dto.Type);

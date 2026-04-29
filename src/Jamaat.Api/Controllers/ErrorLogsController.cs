@@ -57,7 +57,7 @@ public sealed class ErrorLogsController(IErrorLogService svc) : ControllerBase
         return result.IsSuccess ? NoContent() : ProblemFor(result.Error);
     }
 
-    /// <summary>Client-side error ingestion — called by the web app and (later) mobile.</summary>
+    /// <summary>Client-side error ingestion - called by the web app and (later) mobile.</summary>
     [HttpPost("report")]
     [AllowAnonymous]   // unauthenticated clients (e.g. login page crash) can still report
     public async Task<IActionResult> Report([FromBody] ReportClientErrorDto dto, [FromServices] ICorrelationContext correlation, CancellationToken ct)
