@@ -2645,6 +2645,11 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("MaturityDate")
                         .HasColumnType("date");
 
+                    b.Property<int>("MaturityState")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<Guid>("MemberId")
                         .HasColumnType("uniqueidentifier");
 
@@ -2715,6 +2720,8 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "FamilyId");
 
                     b.HasIndex("TenantId", "Intention");
+
+                    b.HasIndex("TenantId", "MaturityState");
 
                     b.HasIndex("TenantId", "ReceiptDate");
 

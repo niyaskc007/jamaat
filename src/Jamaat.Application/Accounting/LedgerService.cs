@@ -87,14 +87,26 @@ public sealed class ReportsService(Persistence.JamaatDbContextFacade db) : IRepo
             .ToList();
     }
 
-    public async Task<IReadOnlyList<ReportFundWiseDto>> FundWiseAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct = default)
+    public Task<IReadOnlyList<ReportFundWiseDto>> FundWiseAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct = default)
+        => FundWiseAsync(new ReportFundWiseQuery(fromDate, toDate), ct);
+
+    public async Task<IReadOnlyList<ReportFundWiseDto>> FundWiseAsync(ReportFundWiseQuery q, CancellationToken ct = default)
     {
+        // Pre-filter the funds set by event / category before pulling lines, so an event scope
+        // doesn't fetch millions of unrelated receipt lines first.
+        var fundsQuery = db.Funds.AsNoTracking().AsQueryable();
+        if (q.EventId is not null) fundsQuery = fundsQuery.Where(f => f.EventId == q.EventId);
+        if (q.FundCategoryId is not null) fundsQuery = fundsQuery.Where(f => f.FundCategoryId == q.FundCategoryId);
+        var funds = await fundsQuery.Select(f => new { f.Id, f.Code, f.NameEnglish }).ToListAsync(ct);
+        if (funds.Count == 0) return Array.Empty<ReportFundWiseDto>();
+        var fundIds = funds.Select(f => f.Id).ToHashSet();
+
         var lines = await (from r in db.Receipts.AsNoTracking()
-                           where r.Status == ReceiptStatus.Confirmed && r.ReceiptDate >= fromDate && r.ReceiptDate <= toDate
+                           where r.Status == ReceiptStatus.Confirmed && r.ReceiptDate >= q.From && r.ReceiptDate <= q.To
                            from l in r.Lines
+                           where fundIds.Contains(l.FundTypeId)
                            select new { l.FundTypeId, l.Amount }).ToListAsync(ct);
 
-        var funds = await db.Funds.AsNoTracking().Select(f => new { f.Id, f.Code, f.NameEnglish }).ToListAsync(ct);
         return lines.GroupBy(x => x.FundTypeId)
             .Select(g =>
             {

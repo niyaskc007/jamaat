@@ -69,10 +69,26 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public decimal AmountReturned { get; private set; }
     /// <summary>JSON map of custom-field key → captured value. Populated when the chosen FundType has admin-defined custom fields.</summary>
     public string? CustomFieldsJson { get; private set; }
+    /// <summary>Stored maturity-state snapshot. Computed from intention/maturity-date/amount-returned
+    /// at write time so reports can filter without recomputing from each receipt's three fields.</summary>
+    public ReturnableMaturityState MaturityState { get; private set; } = ReturnableMaturityState.NotApplicable;
 
     public bool IsReturnable => Intention == ContributionIntention.Returnable;
     public decimal AmountReturnable => IsReturnable ? Math.Max(0m, AmountTotal - AmountReturned) : 0m;
     public bool IsMatured(DateOnly today) => MaturityDate is null || today >= MaturityDate.Value;
+
+    /// <summary>Refresh the stored MaturityState from current intention + maturity-date + amount-returned.
+    /// Call after any state-changing transition (intent set, return recorded). The "today" parameter
+    /// is passed in rather than read from a clock so the entity stays pure - callers supply IClock.Today.</summary>
+    public void RefreshMaturityState(DateOnly today)
+    {
+        if (!IsReturnable) { MaturityState = ReturnableMaturityState.NotApplicable; return; }
+        if (AmountReturned >= AmountTotal) { MaturityState = ReturnableMaturityState.FullyReturned; return; }
+        if (AmountReturned > 0) { MaturityState = ReturnableMaturityState.PartiallyReturned; return; }
+        MaturityState = MaturityDate is null || today >= MaturityDate.Value
+            ? ReturnableMaturityState.Matured
+            : ReturnableMaturityState.NotMatured;
+    }
 
     public DateTimeOffset CreatedAtUtc { get; private set; } = DateTimeOffset.UtcNow;
     public Guid? CreatedByUserId { get; private set; }

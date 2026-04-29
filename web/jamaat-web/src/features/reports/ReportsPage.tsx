@@ -12,6 +12,8 @@ import { StatusLabel as CommitmentStatusLabel, StatusColor as CommitmentStatusCo
 import { accountsApi } from '../admin/master-data/chart-of-accounts/accountsApi';
 import { membersApi } from '../members/membersApi';
 import { fundTypesApi } from '../admin/master-data/fund-types/fundTypesApi';
+import { eventsApi } from '../events/eventsApi';
+import { fundCategoriesApi } from '../admin/master-data/fund-categories/fundCategoriesApi';
 import { Tag } from 'antd';
 import { useBaseCurrency } from '../../shared/hooks/useBaseCurrency';
 import { useAuth } from '../../shared/auth/useAuth';
@@ -92,13 +94,31 @@ function FundWise() {
   const { range, setRange, from, to } = useRange();
   const baseCurrency = useBaseCurrency();
   const { hasPermission } = useAuth();
-  const { data, isLoading } = useQuery({ queryKey: ['rpt', 'fund', from, to], queryFn: () => reportsApi.fundWise(from, to) });
+  const [eventId, setEventId] = useState<string | undefined>();
+  const [fundCategoryId, setFundCategoryId] = useState<string | undefined>();
+  const eventsQ = useQuery({ queryKey: ['events', 'for-reports'], queryFn: () => eventsApi.list({ pageSize: 200 }) });
+  const categoriesQ = useQuery({ queryKey: ['fund-categories', 'reports'], queryFn: () => fundCategoriesApi.list(true) });
+  const { data, isLoading } = useQuery({
+    queryKey: ['rpt', 'fund', from, to, eventId, fundCategoryId],
+    queryFn: () => reportsApi.fundWise(from, to, { eventId, fundCategoryId }),
+  });
+  const exportParams = {
+    from, to,
+    ...(eventId ? { eventId } : {}),
+    ...(fundCategoryId ? { fundCategoryId } : {}),
+  };
   return (
     <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)' }} styles={{ body: { padding: 0 } }}>
-      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 8, alignItems: 'center' }}>
+      <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <RangePicker value={range} onChange={(v) => v && setRange(v as [Dayjs, Dayjs])} />
+        <Select style={{ inlineSize: 220 }} placeholder="All categories" allowClear showSearch optionFilterProp="label"
+          value={fundCategoryId} onChange={setFundCategoryId}
+          options={(categoriesQ.data ?? []).map((c) => ({ value: c.id, label: c.name }))} />
+        <Select style={{ inlineSize: 240 }} placeholder="All events / functions" allowClear showSearch optionFilterProp="label"
+          value={eventId} onChange={setEventId}
+          options={(eventsQ.data?.items ?? []).map((e) => ({ value: e.id, label: e.name }))} />
         <div style={{ flex: 1 }} />
-        {hasPermission('reports.export') && <ExportButton onClick={() => downloadXlsx('/api/v1/reports/fund-wise.xlsx', { from, to }, `fund-wise_${from}_${to}.xlsx`)} />}
+        {hasPermission('reports.export') && <ExportButton onClick={() => downloadXlsx('/api/v1/reports/fund-wise.xlsx', exportParams, `fund-wise_${from}_${to}.xlsx`)} />}
       </div>
       <Table rowKey="fundTypeId" size="middle" loading={isLoading} dataSource={data ?? []} pagination={false}
         columns={[

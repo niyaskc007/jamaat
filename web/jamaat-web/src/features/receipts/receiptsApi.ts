@@ -23,6 +23,17 @@ export type ReceiptLine = {
 export type ContributionIntention = 1 | 2;
 export const ContributionIntentionLabel: Record<ContributionIntention, string> = { 1: 'Permanent', 2: 'Returnable' };
 
+/// Stored maturity-state snapshot for returnable receipts.
+/// 0=NotApplicable (permanent), 1=NotMatured, 2=Matured, 3=PartiallyReturned, 4=FullyReturned.
+export type ReturnableMaturityState = 0 | 1 | 2 | 3 | 4;
+export const ReturnableMaturityStateLabel: Record<ReturnableMaturityState, string> = {
+  0: 'Not applicable', 1: 'Not yet matured', 2: 'Matured',
+  3: 'Partially returned', 4: 'Fully returned',
+};
+export const ReturnableMaturityStateColor: Record<ReturnableMaturityState, string> = {
+  0: 'default', 1: 'gold', 2: 'green', 3: 'blue', 4: 'default',
+};
+
 export type Receipt = {
   id: string; receiptNumber?: string | null; receiptDate: string;
   memberId: string; itsNumberSnapshot: string; memberNameSnapshot: string;
@@ -40,6 +51,7 @@ export type Receipt = {
   maturityDate?: string | null;
   agreementReference?: string | null;
   amountReturned: number;
+  maturityState: ReturnableMaturityState;
 };
 
 export type ReceiptListItem = {

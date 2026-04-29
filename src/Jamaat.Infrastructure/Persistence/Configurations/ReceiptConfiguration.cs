@@ -35,6 +35,8 @@ public sealed class ReceiptConfiguration : IEntityTypeConfiguration<Receipt>
         b.Property(x => x.NiyyathNote).HasMaxLength(2000);
         b.Property(x => x.AgreementReference).HasMaxLength(500);
         b.Property(x => x.AmountReturned).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
+        b.Property(x => x.MaturityState).HasConversion<int>().HasDefaultValue(Domain.Enums.ReturnableMaturityState.NotApplicable);
+        b.HasIndex(x => new { x.TenantId, x.MaturityState });
         b.Ignore(x => x.IsReturnable);     // computed
         b.Ignore(x => x.AmountReturnable); // computed
         // Custom fields blob (batch 3) - JSON map of admin-defined keys → values.

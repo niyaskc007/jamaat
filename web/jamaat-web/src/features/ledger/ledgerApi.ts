@@ -48,8 +48,8 @@ export const periodsApi = {
 export const reportsApi = {
   dailyCollection: async (from: string, to: string) =>
     (await api.get<{ date: string; receiptCount: number; amountTotal: number; currency: string }[]>('/api/v1/reports/daily-collection', { params: { from, to } })).data,
-  fundWise: async (from: string, to: string) =>
-    (await api.get<{ fundTypeId: string; fundTypeCode: string; fundTypeName: string; lineCount: number; amountTotal: number }[]>('/api/v1/reports/fund-wise', { params: { from, to } })).data,
+  fundWise: async (from: string, to: string, opts?: { eventId?: string; fundCategoryId?: string }) =>
+    (await api.get<{ fundTypeId: string; fundTypeCode: string; fundTypeName: string; lineCount: number; amountTotal: number }[]>('/api/v1/reports/fund-wise', { params: { from, to, ...opts } })).data,
   dailyPayments: async (from: string, to: string) =>
     (await api.get<{ date: string; voucherCount: number; amountTotal: number; currency: string }[]>('/api/v1/reports/daily-payments', { params: { from, to } })).data,
   cashBook: async (accountId: string, from: string, to: string) =>

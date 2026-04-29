@@ -12,14 +12,16 @@ public sealed class ReceiptPdfRenderer : IReceiptPdfRenderer
 {
     static ReceiptPdfRenderer() { QuestPDF.Settings.License = LicenseType.Community; }
 
-    public byte[] Render(ReceiptDto r, bool reprint)
+    public byte[] Render(ReceiptDto r, bool reprint, string? documentTitle = null)
     {
         var fxApplied = r.Currency != r.BaseCurrency && r.FxRate != 1m;
         // The contributor's Niyyath drives the document's whole framing: a Permanent contribution
         // is a donation (no obligation, treated as income), a Returnable contribution is a
         // future obligation we hold until matured + settled. Both must be unambiguous on paper.
+        // documentTitle (if provided) lets an admin override "Donation receipt" with the
+        // fund-specific TransactionLabel (e.g. "Mohammedi Contribution") configured in master data.
         var isReturnable = r.Intention == ContributionIntention.Returnable;
-        var headerSubtitle = isReturnable ? "Returnable contribution receipt" : "Donation receipt";
+        var headerSubtitle = documentTitle ?? (isReturnable ? "Returnable contribution receipt" : "Donation receipt");
         var natureLabel = isReturnable ? "Returnable per agreed terms" : "Non-returnable donation";
         var natureColor = isReturnable ? "#B45309" /* amber-700 */ : "#0E5C40" /* green-700 */;
         var natureBg = isReturnable ? "#FEF3C7" /* amber-100 */ : "#DCFCE7" /* green-100 */;

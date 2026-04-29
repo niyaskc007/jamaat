@@ -66,8 +66,8 @@ public sealed class ReportsController(IReportsService svc, IExcelExporter excel)
 
     [HttpGet("fund-wise")]
     [Authorize(Policy = "reports.view")]
-    public async Task<IActionResult> FundWise([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
-        => Ok(await svc.FundWiseAsync(from, to, ct));
+    public async Task<IActionResult> FundWise([FromQuery] ReportFundWiseQuery q, CancellationToken ct)
+        => Ok(await svc.FundWiseAsync(q, ct));
 
     [HttpGet("daily-payments")]
     [Authorize(Policy = "reports.view")]
@@ -104,9 +104,10 @@ public sealed class ReportsController(IReportsService svc, IExcelExporter excel)
 
     [HttpGet("fund-wise.xlsx")]
     [Authorize(Policy = "reports.export")]
-    public async Task<IActionResult> FundWiseXlsx([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
+    public async Task<IActionResult> FundWiseXlsx([FromQuery] ReportFundWiseQuery q, CancellationToken ct)
     {
-        var rows = await svc.FundWiseAsync(from, to, ct);
+        var rows = await svc.FundWiseAsync(q, ct);
+        var from = q.From; var to = q.To;
         var sheet = new ExcelSheet(
             "Fund-wise",
             new[]

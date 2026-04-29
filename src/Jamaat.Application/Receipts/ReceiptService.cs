@@ -143,7 +143,7 @@ public sealed class ReceiptService(
         var lineFundIds = dto.Lines.Select(l => l.FundTypeId).Distinct().ToList();
         var lineFunds = await db.FundTypes.AsNoTracking()
             .Where(f => lineFundIds.Contains(f.Id))
-            .Select(f => new { f.Id, f.Code, f.NameEnglish, f.IsActive, f.IsReturnable, f.RequiresAgreement, f.RequiresMaturityTracking, f.RequiresNiyyath })
+            .Select(f => new { f.Id, f.Code, f.NameEnglish, f.IsActive, f.AllowedPaymentModes, f.IsReturnable, f.RequiresAgreement, f.RequiresMaturityTracking, f.RequiresNiyyath })
             .ToListAsync(ct);
 
         // Block inactive fund types up-front. Inactive funds may be temporarily disabled
@@ -153,6 +153,18 @@ public sealed class ReceiptService(
         if (inactiveCodes.Count > 0)
             return Error.Business("fund_type.inactive",
                 $"Fund type(s) [{string.Join(", ", inactiveCodes)}] are inactive and cannot accept new receipts. Reactivate the fund or pick a different one.");
+
+        // Per-fund payment-mode allowlist. AllowedPaymentModes is a bit-flag enum on FundType -
+        // admins use it to constrain a fund to specific modes (e.g. cash-only Sila Fitra). When
+        // 0/None is configured we treat it as "no restriction" so funds without an explicit
+        // allowlist still accept any payment mode.
+        var modeViolations = lineFunds
+            .Where(f => f.AllowedPaymentModes != PaymentMode.None && (f.AllowedPaymentModes & dto.PaymentMode) == 0)
+            .Select(f => f.Code)
+            .ToList();
+        if (modeViolations.Count > 0)
+            return Error.Business("receipt.payment_mode_disallowed",
+                $"Payment mode {dto.PaymentMode} is not allowed on fund type(s) [{string.Join(", ", modeViolations)}]. Adjust the fund's allowed-modes config or pick a different mode.");
 
         if (dto.Intention == ContributionIntention.Returnable)
         {
@@ -203,6 +215,7 @@ public sealed class ReceiptService(
         receipt.SetPayment(dto.PaymentMode, dto.BankAccountId, dto.ChequeNumber, dto.ChequeDate, dto.PaymentReference);
         receipt.SetRemarks(dto.Remarks);
         receipt.SetContributionIntention(dto.Intention, dto.NiyyathNote, dto.MaturityDate, dto.AgreementReference);
+        receipt.RefreshMaturityState(clock.Today);
         // Persist custom-field values (if any) as a JSON map on the receipt. The receipt PDF +
         // detail page can read this map to render the captured values.
         if (dto.CustomFieldValues is { Count: > 0 })
@@ -384,6 +397,7 @@ public sealed class ReceiptService(
         // Receipt's running total moves up by the amount we just returned. This is the field
         // the report and PDF read to show "returned to date" + "outstanding".
         e.RecordReturn(dto.Amount);
+        e.RefreshMaturityState(clock.Today);
         repo.Update(e);
 
         await uow.SaveChangesAsync(ct);
@@ -413,7 +427,27 @@ public sealed class ReceiptService(
 
         var renderer = services.GetRequiredService<IReceiptPdfRenderer>();
         var dto = await MapAsync(e, ct);
-        var bytes = renderer.Render(dto.Value!, reprint);
+
+        // Look up the admin-configured TransactionLabel for this receipt so the PDF can show
+        // a fund-specific title (e.g. "Mohammedi Contribution" for SABEEL fund) instead of the
+        // generic "Donation receipt". Resolution order: per-fund label, system-wide label,
+        // built-in fallback - matches the spec's documented hierarchy.
+        var firstLineFundId = e.Lines.OrderBy(l => l.LineNo).FirstOrDefault()?.FundTypeId;
+        var labelType = e.IsReturnable ? TransactionLabelType.Contribution : TransactionLabelType.Contribution;
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        var perFund = firstLineFundId is Guid fid
+            ? await db.TransactionLabels.AsNoTracking()
+                .Where(t => t.FundTypeId == fid && t.LabelType == labelType && t.IsActive)
+                .Select(t => t.Label).FirstOrDefaultAsync(ct)
+            : null;
+        var systemLabel = perFund is null
+            ? await db.TransactionLabels.AsNoTracking()
+                .Where(t => t.FundTypeId == null && t.LabelType == labelType && t.IsActive)
+                .Select(t => t.Label).FirstOrDefaultAsync(ct)
+            : null;
+        var documentTitle = perFund ?? systemLabel; // null = renderer uses its built-in default
+
+        var bytes = renderer.Render(dto.Value!, reprint, documentTitle);
         if (reprint) await LogReprintAsync(id, new ReprintReceiptDto("Reprint via API"), ct);
         return bytes;
     }
@@ -578,7 +612,7 @@ public sealed class ReceiptService(
                     l.FundEnrollmentId, enrollCode,
                     l.QarzanHasanaLoanId, loanCode, l.QarzanHasanaInstallmentId, qhInstNo);
             }).ToList(),
-            e.Intention, e.NiyyathNote, e.MaturityDate, e.AgreementReference, e.AmountReturned);
+            e.Intention, e.NiyyathNote, e.MaturityDate, e.AgreementReference, e.AmountReturned, e.MaturityState);
     }
 }
 
@@ -604,5 +638,9 @@ public sealed class CreateReceiptValidator : AbstractValidator<CreateReceiptDto>
 
 public interface IReceiptPdfRenderer
 {
-    byte[] Render(ReceiptDto receipt, bool reprint);
+    /// <param name="documentTitle">The header subtitle to print under "JAMAAT". Allows
+    /// per-fund admin-configured labels (e.g. "Mohammedi Contribution") to override the
+    /// built-in default. When null, the renderer falls back to "Returnable contribution
+    /// receipt" / "Donation receipt" based on the receipt's intention.</param>
+    byte[] Render(ReceiptDto receipt, bool reprint, string? documentTitle = null);
 }

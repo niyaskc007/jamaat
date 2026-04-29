@@ -23,6 +23,9 @@ public interface IReportsService
 {
     Task<IReadOnlyList<ReportDailyCollectionDto>> DailyCollectionAsync(DateOnly from, DateOnly to, CancellationToken ct = default);
     Task<IReadOnlyList<ReportFundWiseDto>> FundWiseAsync(DateOnly from, DateOnly to, CancellationToken ct = default);
+    /// <summary>FundWise overload with event/category filters - lets the report scope to a single
+    /// function/event (Section 8 of the fund-management spec) or a category bucket.</summary>
+    Task<IReadOnlyList<ReportFundWiseDto>> FundWiseAsync(ReportFundWiseQuery q, CancellationToken ct = default);
     Task<IReadOnlyList<ReportDailyPaymentDto>> DailyPaymentsAsync(DateOnly from, DateOnly to, CancellationToken ct = default);
     Task<IReadOnlyList<ReportCashBookRow>> CashBookAsync(Guid accountId, DateOnly from, DateOnly to, CancellationToken ct = default);
     Task<IReadOnlyList<ReportMemberContributionRow>> MemberContributionAsync(Guid memberId, DateOnly from, DateOnly to, CancellationToken ct = default);
