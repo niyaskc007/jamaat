@@ -31,6 +31,12 @@ public interface IMemberProfileService
     Task<Result<MemberEducationDto>> AddEducationAsync(Guid memberId, AddMemberEducationDto dto, CancellationToken ct = default);
     Task<Result<MemberEducationDto>> UpdateEducationAsync(Guid memberId, Guid id, UpdateMemberEducationDto dto, CancellationToken ct = default);
     Task<Result> DeleteEducationAsync(Guid memberId, Guid id, CancellationToken ct = default);
+
+    // --- Wealth (item C) ---------------------------------------------------
+    Task<Result<IReadOnlyList<MemberAssetDto>>> ListAssetsAsync(Guid memberId, CancellationToken ct = default);
+    Task<Result<MemberAssetDto>> AddAssetAsync(Guid memberId, AddMemberAssetDto dto, CancellationToken ct = default);
+    Task<Result<MemberAssetDto>> UpdateAssetAsync(Guid memberId, Guid id, UpdateMemberAssetDto dto, CancellationToken ct = default);
+    Task<Result> DeleteAssetAsync(Guid memberId, Guid id, CancellationToken ct = default);
 }
 
 public sealed class MemberProfileService(
@@ -340,6 +346,51 @@ public sealed class MemberProfileService(
         var e = await db.MemberEducations.FirstOrDefaultAsync(x => x.Id == id && x.MemberId == memberId, ct);
         if (e is null) return Result.Failure(Error.NotFound("education.not_found", "Education entry not found for this member."));
         db.MemberEducations.Remove(e);
+        await uow.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
+    // --- Wealth methods ------------------------------------------------------
+
+    public async Task<Result<IReadOnlyList<MemberAssetDto>>> ListAssetsAsync(Guid memberId, CancellationToken ct = default)
+    {
+        if (!await db.Members.AsNoTracking().AnyAsync(m => m.Id == memberId, ct))
+            return Error.NotFound("member.not_found", "Member not found.");
+        var rows = await db.MemberAssets.AsNoTracking()
+            .Where(a => a.MemberId == memberId)
+            .OrderByDescending(a => a.EstimatedValue ?? 0)
+            .Select(a => new MemberAssetDto(a.Id, a.MemberId, a.Kind, a.Description,
+                a.EstimatedValue, a.Currency, a.Notes, a.DocumentUrl))
+            .ToListAsync(ct);
+        return rows;
+    }
+
+    public async Task<Result<MemberAssetDto>> AddAssetAsync(Guid memberId, AddMemberAssetDto dto, CancellationToken ct = default)
+    {
+        if (!await db.Members.AsNoTracking().AnyAsync(m => m.Id == memberId, ct))
+            return Error.NotFound("member.not_found", "Member not found.");
+        var a = new MemberAsset(Guid.NewGuid(), tenant.TenantId, memberId,
+            dto.Kind, dto.Description, dto.EstimatedValue, dto.Currency, dto.Notes, null);
+        db.MemberAssets.Add(a);
+        await uow.SaveChangesAsync(ct);
+        return new MemberAssetDto(a.Id, a.MemberId, a.Kind, a.Description, a.EstimatedValue, a.Currency, a.Notes, a.DocumentUrl);
+    }
+
+    public async Task<Result<MemberAssetDto>> UpdateAssetAsync(Guid memberId, Guid id, UpdateMemberAssetDto dto, CancellationToken ct = default)
+    {
+        var a = await db.MemberAssets.FirstOrDefaultAsync(x => x.Id == id && x.MemberId == memberId, ct);
+        if (a is null) return Error.NotFound("asset.not_found", "Asset not found for this member.");
+        a.Update(dto.Kind, dto.Description, dto.EstimatedValue, dto.Currency, dto.Notes);
+        db.MemberAssets.Update(a);
+        await uow.SaveChangesAsync(ct);
+        return new MemberAssetDto(a.Id, a.MemberId, a.Kind, a.Description, a.EstimatedValue, a.Currency, a.Notes, a.DocumentUrl);
+    }
+
+    public async Task<Result> DeleteAssetAsync(Guid memberId, Guid id, CancellationToken ct = default)
+    {
+        var a = await db.MemberAssets.FirstOrDefaultAsync(x => x.Id == id && x.MemberId == memberId, ct);
+        if (a is null) return Result.Failure(Error.NotFound("asset.not_found", "Asset not found for this member."));
+        db.MemberAssets.Remove(a);
         await uow.SaveChangesAsync(ct);
         return Result.Success();
     }

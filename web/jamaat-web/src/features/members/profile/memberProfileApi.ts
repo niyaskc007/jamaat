@@ -203,3 +203,39 @@ export const memberChangeRequestApi = {
   reject: async (id: string, note: string) =>
     (await api.post(`/api/v1/admin/member-change-requests/${id}/reject`, { note })).data as MemberChangeRequest,
 };
+
+// --- Wealth declaration (item C) ---
+export type MemberAssetKind = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 99;
+export const MemberAssetKindLabel: Record<number, string> = {
+  1: 'Real estate', 2: 'Vehicle', 3: 'Investment', 4: 'Share market',
+  5: 'Business', 6: 'Jewellery', 7: 'Cash', 99: 'Other',
+};
+export type MemberAsset = {
+  id: string;
+  memberId: string;
+  kind: MemberAssetKind;
+  description: string;
+  estimatedValue: number | null;
+  currency: string;
+  notes: string | null;
+  documentUrl: string | null;
+};
+export type AddMemberAssetInput = {
+  kind: MemberAssetKind;
+  description: string;
+  estimatedValue?: number | null;
+  currency: string;
+  notes?: string | null;
+};
+
+export const memberAssetsApi = {
+  list: async (memberId: string) =>
+    (await api.get(`/api/v1/members/${memberId}/profile/assets`)).data as MemberAsset[],
+  add: async (memberId: string, input: AddMemberAssetInput) =>
+    (await api.post(`/api/v1/members/${memberId}/profile/assets`, input)).data as MemberAsset,
+  update: async (memberId: string, assetId: string, input: AddMemberAssetInput) =>
+    (await api.put(`/api/v1/members/${memberId}/profile/assets/${assetId}`, input)).data as MemberAsset,
+  remove: async (memberId: string, assetId: string) => {
+    await api.delete(`/api/v1/members/${memberId}/profile/assets/${assetId}`);
+  },
+};

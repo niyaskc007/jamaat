@@ -57,6 +57,9 @@ public static class DatabaseSeeder
         }
 
         // --- Roles ----------------------------------------------------------
+        // Phase H additions: DataEditor / DataValidator / EventCoordinator / EventVolunteer.
+        // Per-role permission claims are seeded below in the persona section so the role -> claim
+        // mapping stays in one place; admins remain free to add / remove via the UsersPage.
         var roles = new[]
         {
             ("Administrator", "Full access"),
@@ -64,6 +67,10 @@ public static class DatabaseSeeder
             ("Counter", "Issues receipts at counter"),
             ("Approver", "Approves vouchers and reversals"),
             ("Auditor", "Read-only access"),
+            ("DataEditor", "Edits member data; submissions go through the verification queue"),
+            ("DataValidator", "Reviews and approves member change requests; verifies data + photos"),
+            ("EventCoordinator", "Plans and runs events; manages registrations and check-ins"),
+            ("EventVolunteer", "Scans and check-ins members at events"),
         };
         foreach (var (name, desc) in roles)
         {
@@ -82,6 +89,46 @@ public static class DatabaseSeeder
             {
                 if (!existingClaims.Contains(perm))
                     await roleMgr.AddClaimAsync(adminRole, new Claim("permission", perm));
+            }
+        }
+
+        // --- Permission claims on the new domain roles --------------------
+        // Each of these mappings is additive only - we never strip claims an admin has
+        // hand-added on top of the seed. So admins can extend a role and the next deploy
+        // won't reset their tweaks.
+        var rolePermissions = new (string Role, string[] Permissions)[]
+        {
+            ("DataEditor", new[]
+            {
+                "member.view", "family.view", "member.self.update", "member.changes.approve",
+            }),
+            ("DataValidator", new[]
+            {
+                "member.view", "family.view", "member.changes.approve", "member.verify",
+                "member.reliability.view",
+            }),
+            ("EventCoordinator", new[]
+            {
+                "member.view", "family.view", "event.view", "event.manage", "event.scan",
+                "reports.view",
+            }),
+            ("EventVolunteer", new[]
+            {
+                "member.view", "event.view", "event.scan",
+            }),
+        };
+        foreach (var (roleName, perms) in rolePermissions)
+        {
+            var role = await roleMgr.FindByNameAsync(roleName);
+            if (role is null) continue;
+            var existing = (await roleMgr.GetClaimsAsync(role))
+                .Where(c => c.Type == "permission")
+                .Select(c => c.Value)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in perms)
+            {
+                if (!existing.Contains(p))
+                    await roleMgr.AddClaimAsync(role, new Claim("permission", p));
             }
         }
 

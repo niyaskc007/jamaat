@@ -139,4 +139,29 @@ public sealed class MemberProfileController(
     [Authorize(Policy = "member.update")]
     public async Task<IActionResult> DeleteEducation(Guid id, Guid eduId, CancellationToken ct)
     { var r = await svc.DeleteEducationAsync(id, eduId, ct); return r.IsSuccess ? NoContent() : ErrorMapper.ToActionResult(this, r.Error); }
+
+    // --- Wealth declaration (item C) -----------------------------------------
+    // Read gated by member.wealth.view; edits use the standard member.update permission
+    // (admins manage all members; members editing their own go through the change-request
+    // queue, same as other tabs).
+
+    [HttpGet("assets")]
+    [Authorize(Policy = "member.wealth.view")]
+    public async Task<IActionResult> ListAssets(Guid id, CancellationToken ct)
+    { var r = await svc.ListAssetsAsync(id, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+
+    [HttpPost("assets")]
+    [Authorize(Policy = "member.update")]
+    public async Task<IActionResult> AddAsset(Guid id, [FromBody] AddMemberAssetDto dto, CancellationToken ct)
+    { var r = await svc.AddAssetAsync(id, dto, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+
+    [HttpPut("assets/{assetId:guid}")]
+    [Authorize(Policy = "member.update")]
+    public async Task<IActionResult> UpdateAsset(Guid id, Guid assetId, [FromBody] UpdateMemberAssetDto dto, CancellationToken ct)
+    { var r = await svc.UpdateAssetAsync(id, assetId, dto, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+
+    [HttpDelete("assets/{assetId:guid}")]
+    [Authorize(Policy = "member.update")]
+    public async Task<IActionResult> DeleteAsset(Guid id, Guid assetId, CancellationToken ct)
+    { var r = await svc.DeleteAssetAsync(id, assetId, ct); return r.IsSuccess ? NoContent() : ErrorMapper.ToActionResult(this, r.Error); }
 }

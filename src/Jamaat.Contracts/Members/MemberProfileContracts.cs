@@ -139,6 +139,24 @@ public sealed record MemberChangeRequestListQuery(
 
 public sealed record ReviewChangeRequestDto(string? Note);
 
+// --- Wealth declaration (item C) ----------------------------------------
+
+public sealed record MemberAssetDto(
+    Guid Id, Guid MemberId,
+    MemberAssetKind Kind, string Description,
+    decimal? EstimatedValue, string Currency,
+    string? Notes, string? DocumentUrl);
+
+public sealed record AddMemberAssetDto(
+    MemberAssetKind Kind, string Description,
+    decimal? EstimatedValue, string Currency,
+    string? Notes);
+
+public sealed record UpdateMemberAssetDto(
+    MemberAssetKind Kind, string Description,
+    decimal? EstimatedValue, string Currency,
+    string? Notes);
+
 public sealed record MemberContributionSummaryDto(
     Guid MemberId,
     decimal TotalReceipts,

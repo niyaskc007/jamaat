@@ -60,3 +60,15 @@ public enum VerificationStatus { NotStarted = 0, Pending = 1, Verified = 2, Reje
 public enum HajjStatus { NotPerformed = 0, Performed = 1, MultipleTimes = 2 }
 
 public enum MemberChangeRequestStatus { Pending = 1, Approved = 2, Rejected = 3 }
+
+public enum MemberAssetKind
+{
+    RealEstate = 1,
+    Vehicle = 2,
+    Investment = 3,
+    ShareMarket = 4,
+    Business = 5,
+    Jewellery = 6,
+    Cash = 7,
+    Other = 99,
+}

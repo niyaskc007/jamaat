@@ -5,7 +5,7 @@ import {
   Table, Drawer,
 } from 'antd';
 import { useAuth } from '../../../shared/auth/useAuth';
-import { UserOutlined, TeamOutlined, HomeOutlined, BookOutlined, IdcardOutlined, CheckCircleOutlined, PhoneOutlined, GlobalOutlined, HeartOutlined, SafetyCertificateOutlined, FileProtectOutlined, StarOutlined, UploadOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { UserOutlined, TeamOutlined, HomeOutlined, BookOutlined, IdcardOutlined, CheckCircleOutlined, PhoneOutlined, GlobalOutlined, HeartOutlined, SafetyCertificateOutlined, FileProtectOutlined, StarOutlined, UploadOutlined, ThunderboltOutlined, WalletOutlined } from '@ant-design/icons';
 import { ReliabilityTab } from '../reliability/ReliabilityTab';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -14,10 +14,13 @@ import { PageHeader } from '../../../shared/ui/PageHeader';
 import { formatDate, formatDateTime, money } from '../../../shared/format/format';
 import { extractProblem } from '../../../shared/api/client';
 import {
-  memberProfileApi, memberChangeRequestApi, type MemberProfile, type VerificationStatus,
+  memberProfileApi, memberChangeRequestApi, memberAssetsApi,
+  type MemberProfile, type VerificationStatus,
   type MemberEducationEntry, type AddMemberEducationInput, type Qualification,
+  type MemberAsset, type AddMemberAssetInput,
   GenderLabel, MaritalStatusLabel, BloodGroupLabel, WarakatLabel, MisaqStatusLabel,
   QualificationLabel, HousingOwnershipLabel, TypeOfHouseLabel, VerificationStatusLabel, VerificationStatusColor,
+  MemberAssetKindLabel,
 } from './memberProfileApi';
 import { sectorsApi, subSectorsApi } from '../../sectors/sectorsApi';
 import { membersApi } from '../membersApi';
@@ -152,6 +155,11 @@ export function MemberProfilePage() {
             { key: 'verification', label: <span><CheckCircleOutlined /> Verification</span>, children: <VerificationTab profile={profile} onSaved={onSaved} onErr={onErr} /> },
             ...(hasPermission('member.reliability.view')
               ? [{ key: 'reliability', label: <span><ThunderboltOutlined /> Reliability</span>, children: <ReliabilityTab memberId={profile.id} /> }]
+              : []),
+            // Wealth declaration tab - only visible to those who can read it. Hidden
+            // entirely (not just disabled) for everyone else, since this is sensitive data.
+            ...(hasPermission('member.wealth.view')
+              ? [{ key: 'wealth', label: <span><WalletOutlined /> Wealth</span>, children: <WealthTab memberId={profile.id} /> }]
               : []),
           ]}
         />
@@ -959,5 +967,133 @@ function ItsLookupTag({ its }: { its?: string | null }) {
     <Tag color="orange" style={{ marginBlockStart: 4 }}>
       Not in roll - free-text only
     </Tag>
+  );
+}
+
+/// Wealth declaration tab - sensitive, gated by member.wealth.view in the parent. Lists
+/// the member's self-declared assets with add / edit / remove. Optional document upload
+/// is left for v2 (storage abstraction is in place but not yet wired).
+function WealthTab({ memberId }: { memberId: string }) {
+  const qc = useQueryClient();
+  const { hasPermission } = useAuth();
+  const { message, modal } = AntdApp.useApp();
+  const canEdit = hasPermission('member.update');
+  const q = useQuery({
+    queryKey: ['member-assets', memberId],
+    queryFn: () => memberAssetsApi.list(memberId),
+  });
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editing, setEditing] = useState<MemberAsset | null>(null);
+  const delMut = useMutation({
+    mutationFn: (assetId: string) => memberAssetsApi.remove(memberId, assetId),
+    onSuccess: () => { message.success('Removed.'); void qc.invalidateQueries({ queryKey: ['member-assets', memberId] }); },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed'),
+  });
+  const rows = q.data ?? [];
+  const total = rows.reduce((s, a) => s + (a.estimatedValue ?? 0), 0);
+  const currency = rows[0]?.currency ?? 'AED';
+
+  return (
+    <div style={{ padding: 24 }}>
+      <Alert
+        type="info" showIcon style={{ marginBlockEnd: 16 }}
+        message="Self-declared wealth"
+        description="Members declare what they own; values aren't appraised. Visible only to admins, QH approvers, counters and accountants. Used as context for loan + zakat decisions; never shared in aggregate exports."
+      />
+      <Card size="small" title="Assets" style={{ border: '1px solid var(--jm-border)' }}
+        extra={
+          <Space>
+            <span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
+              Declared total: <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(total, currency)}</span>
+            </span>
+            {canEdit && <Button size="small" type="primary" onClick={() => { setEditing(null); setDrawerOpen(true); }}>Add asset</Button>}
+          </Space>
+        }>
+        <Table<MemberAsset>
+          rowKey="id" size="small" pagination={false} dataSource={rows} loading={q.isLoading}
+          locale={{ emptyText: 'No declared assets yet.' }}
+          columns={[
+            { title: 'Kind', dataIndex: 'kind', width: 130,
+              render: (k: number) => <Tag>{MemberAssetKindLabel[k] ?? '-'}</Tag> },
+            { title: 'Description', dataIndex: 'description' },
+            { title: 'Value', dataIndex: 'estimatedValue', width: 160, align: 'end',
+              render: (v: number | null, row) => v != null ? <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, row.currency)}</span> : '-' },
+            { title: 'Notes', dataIndex: 'notes', render: (v: string | null) => v ?? '-' },
+            ...(canEdit ? [{
+              title: '', width: 120, align: 'end' as const,
+              render: (_: unknown, row: MemberAsset) => (
+                <Space>
+                  <Button size="small" type="link" onClick={() => { setEditing(row); setDrawerOpen(true); }}>Edit</Button>
+                  <Button size="small" type="link" danger
+                    onClick={() => modal.confirm({ title: 'Remove this asset?', okButtonProps: { danger: true }, onOk: () => delMut.mutateAsync(row.id) })}>
+                    Remove
+                  </Button>
+                </Space>
+              ),
+            }] : []),
+          ]}
+        />
+      </Card>
+      {drawerOpen && (
+        <AssetDrawer memberId={memberId} editing={editing} onClose={() => setDrawerOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+function AssetDrawer({ memberId, editing, onClose }: {
+  memberId: string;
+  editing: MemberAsset | null;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const { message } = AntdApp.useApp();
+  const [form] = Form.useForm();
+  const isEdit = !!editing;
+  const mut = useMutation({
+    mutationFn: async (input: AddMemberAssetInput) =>
+      isEdit ? memberAssetsApi.update(memberId, editing!.id, input) : memberAssetsApi.add(memberId, input),
+    onSuccess: () => {
+      message.success(isEdit ? 'Updated.' : 'Added.');
+      void qc.invalidateQueries({ queryKey: ['member-assets', memberId] });
+      onClose();
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed'),
+  });
+  return (
+    <Drawer open onClose={onClose} title={isEdit ? 'Edit asset' : 'Add asset'} width={520}
+      footer={
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button onClick={onClose} style={{ marginInlineEnd: 8 }}>Cancel</Button>
+          <Button type="primary" loading={mut.isPending}
+            onClick={() => mut.mutate(form.getFieldsValue() as AddMemberAssetInput)}>
+            {isEdit ? 'Save' : 'Add'}
+          </Button>
+        </div>
+      }>
+      <Form layout="vertical" form={form} initialValues={editing ?? { kind: 1, currency: 'AED' }} requiredMark={false}>
+        <Form.Item label="Kind" name="kind" rules={[{ required: true }]}>
+          <Select options={Object.entries(MemberAssetKindLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
+        </Form.Item>
+        <Form.Item label="Description" name="description" rules={[{ required: true, max: 500 }]}>
+          <Input placeholder="e.g., 3-bedroom flat, Sharjah" />
+        </Form.Item>
+        <Row gutter={12}>
+          <Col span={16}>
+            <Form.Item label="Estimated value" name="estimatedValue">
+              <InputNumber min={0} step={1000} style={{ inlineSize: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Currency" name="currency">
+              <Select options={['AED', 'USD', 'INR', 'SAR'].map((c) => ({ value: c, label: c }))} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Form.Item label="Notes" name="notes">
+          <Input.TextArea rows={3} maxLength={1000} showCount placeholder="Optional - acquired, leasehold/freehold, partner share, etc." />
+        </Form.Item>
+      </Form>
+    </Drawer>
   );
 }
