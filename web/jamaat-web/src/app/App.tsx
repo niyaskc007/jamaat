@@ -35,6 +35,7 @@ import { ErrorLogsPage } from '../features/admin/error-logs/ErrorLogsPage';
 import { NotificationLogPage } from '../features/admin/notifications/NotificationLogPage';
 import { AdministrationPage } from '../features/admin/AdministrationPage';
 import { ReliabilityDashboard } from '../features/admin/reliability/ReliabilityDashboard';
+import { ChangeRequestsPage } from '../features/admin/change-requests/ChangeRequestsPage';
 import { AccountingPage } from '../features/accounting/AccountingPage';
 import { HelpPage } from '../features/help/HelpPage';
 import { MePage } from '../features/me/MePage';
@@ -96,6 +97,7 @@ export function App() {
         <Route path="admin/error-logs" element={<Gate anyOf={['admin.errorlogs']}><ErrorLogsPage /></Gate>} />
         <Route path="admin/notifications" element={<Gate anyOf={['admin.audit']}><NotificationLogPage /></Gate>} />
         <Route path="admin/reliability" element={<Gate anyOf={['admin.reliability']}><ReliabilityDashboard /></Gate>} />
+        <Route path="admin/change-requests" element={<Gate anyOf={['member.changes.approve']}><ChangeRequestsPage /></Gate>} />
         <Route path="help" element={<HelpPage />} />
         <Route path="me" element={<MePage />} />
       </Route>

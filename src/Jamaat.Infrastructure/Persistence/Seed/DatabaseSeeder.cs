@@ -667,5 +667,10 @@ Accepted on {{today}}.
         // .recompute is admin-only - regular users see the lazy-cached score and shouldn't be churning compute.
         // admin.reliability gates the cross-member distribution dashboard.
         "member.reliability.view", "member.reliability.recompute", "admin.reliability",
+        // Self-edit + verification queue (Phase F). Members get .self.update by default
+        // (it's their own data); approvers / data-validators get .changes.approve.
+        "member.self.update", "member.changes.approve",
+        // Self-declared wealth (Phase G). Sensitive - kept tighter than member.view.
+        "member.wealth.view",
     ];
 }

@@ -161,3 +161,45 @@ export type AddMemberEducationInput = {
   specialization?: string | null;
   isHighest?: boolean;
 };
+
+// --- Member change request (verification queue) ---
+export type MemberChangeRequestStatus = 1 | 2 | 3;
+export const MemberChangeRequestStatusLabel: Record<number, string> = {
+  1: 'Pending', 2: 'Approved', 3: 'Rejected',
+};
+export const MemberChangeRequestStatusColor: Record<number, string> = {
+  1: 'gold', 2: 'green', 3: 'red',
+};
+export type MemberChangeRequest = {
+  id: string;
+  memberId: string;
+  memberName: string;
+  section: string;
+  payloadJson: string;
+  status: MemberChangeRequestStatus;
+  requestedByUserId: string;
+  requestedByUserName: string;
+  requestedAtUtc: string;
+  reviewedByUserId?: string | null;
+  reviewedByUserName?: string | null;
+  reviewedAtUtc?: string | null;
+  reviewerNote?: string | null;
+};
+
+export const memberChangeRequestApi = {
+  /// Submit a change request for one section. Used by self-edit when the user has
+  /// member.self.update but not member.update.
+  submit: async (memberId: string, section: 'identity' | 'personal' | 'contact' | 'address' | 'origin' | 'education-work' | 'religious' | 'family-refs', payload: unknown) =>
+    (await api.post(`/api/v1/members/${memberId}/profile/${section}/request-update`, payload)).data as MemberChangeRequest,
+  listForMember: async (memberId: string) =>
+    (await api.get(`/api/v1/members/${memberId}/profile/change-requests`)).data as MemberChangeRequest[],
+  // Admin queue
+  list: async (q: { page?: number; pageSize?: number; status?: MemberChangeRequestStatus; memberId?: string }) =>
+    (await api.get('/api/v1/admin/member-change-requests', { params: q })).data as { items: MemberChangeRequest[]; total: number; page: number; pageSize: number },
+  pendingCount: async () =>
+    ((await api.get('/api/v1/admin/member-change-requests/pending-count')).data as { count: number }).count,
+  approve: async (id: string, note?: string) =>
+    (await api.post(`/api/v1/admin/member-change-requests/${id}/approve`, { note })).data as MemberChangeRequest,
+  reject: async (id: string, note: string) =>
+    (await api.post(`/api/v1/admin/member-change-requests/${id}/reject`, { note })).data as MemberChangeRequest,
+};

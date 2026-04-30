@@ -50,6 +50,7 @@ public abstract class JamaatDbContextFacade
     public abstract DbSet<MemberBehaviorSnapshot> MemberBehaviorSnapshots { get; }
     public abstract DbSet<QarzanHasanaGuarantorConsent> QarzanHasanaGuarantorConsents { get; }
     public abstract DbSet<MemberEducation> MemberEducations { get; }
+    public abstract DbSet<MemberChangeRequest> MemberChangeRequests { get; }
     public abstract DatabaseFacade Database { get; }
 
     // Aliases used by some helpers

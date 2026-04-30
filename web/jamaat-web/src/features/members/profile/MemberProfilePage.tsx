@@ -7,14 +7,14 @@ import {
 import { useAuth } from '../../../shared/auth/useAuth';
 import { UserOutlined, TeamOutlined, HomeOutlined, BookOutlined, IdcardOutlined, CheckCircleOutlined, PhoneOutlined, GlobalOutlined, HeartOutlined, SafetyCertificateOutlined, FileProtectOutlined, StarOutlined, UploadOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { ReliabilityTab } from '../reliability/ReliabilityTab';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { PageHeader } from '../../../shared/ui/PageHeader';
 import { formatDate, formatDateTime, money } from '../../../shared/format/format';
 import { extractProblem } from '../../../shared/api/client';
 import {
-  memberProfileApi, type MemberProfile, type VerificationStatus,
+  memberProfileApi, memberChangeRequestApi, type MemberProfile, type VerificationStatus,
   type MemberEducationEntry, type AddMemberEducationInput, type Qualification,
   GenderLabel, MaritalStatusLabel, BloodGroupLabel, WarakatLabel, MisaqStatusLabel,
   QualificationLabel, HousingOwnershipLabel, TypeOfHouseLabel, VerificationStatusLabel, VerificationStatusColor,
@@ -54,6 +54,15 @@ export function MemberProfilePage() {
   };
   const onErr = (e: unknown) => message.error(extractProblem(e).detail ?? 'Save failed');
 
+  // Pending change-request count for this member - surfaced as a banner so admins
+  // immediately see "this profile has unverified edits sitting in the queue".
+  const pendingQ = useQuery({
+    queryKey: ['member-pending-changes', id],
+    queryFn: () => memberChangeRequestApi.listForMember(id),
+    enabled: !!id && (hasPermission('member.view')),
+  });
+  const pendingCount = (pendingQ.data ?? []).filter((r) => r.status === 1).length;
+
   if (isLoading) return <div style={{ textAlign: 'center', padding: 60 }}><Spin /></div>;
   if (!profile) return <Result status="404" title="Member not found" extra={<Button onClick={() => navigate('/members')}>Back to members</Button>} />;
 
@@ -68,6 +77,17 @@ export function MemberProfilePage() {
       />
 
       {/* Header card */}
+      {pendingCount > 0 && (
+        <Alert
+          type="warning" showIcon style={{ marginBlockEnd: 16 }}
+          message={`${pendingCount} profile change${pendingCount === 1 ? '' : 's'} pending verification`}
+          description={
+            hasPermission('member.changes.approve')
+              ? <span>An admin needs to review them. <Link to="/admin/change-requests">Open the queue</Link>.</span>
+              : 'These will appear once an admin approves them. The reviewer note will be shown if anything is rejected.'
+          }
+        />
+      )}
       <Card style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)', marginBlockEnd: 16 }}>
         <Row gutter={16} align="middle">
           <Col>
@@ -150,20 +170,78 @@ function StatPill({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-function SectionSaveBar({ loading, onSave }: { loading: boolean; onSave: () => void }) {
+function SectionSaveBar({ loading, onSave, mode }: { loading: boolean; onSave: () => void; mode?: ProfileSubmitMode }) {
+  // When the active user holds member.self.update only, edits go through the verification
+  // queue. Re-label the button to make the consequence clear.
+  const isQueued = mode === 'request';
   return (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBlock: 16, borderBlockStart: '1px solid var(--jm-border)', marginBlockStart: 16 }}>
-      <Button type="primary" loading={loading} onClick={onSave}>Save changes</Button>
+    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12,
+      paddingBlock: 16, borderBlockStart: '1px solid var(--jm-border)', marginBlockStart: 16 }}>
+      {isQueued && (
+        <span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
+          Changes go to admin verification before they take effect.
+        </span>
+      )}
+      <Button type="primary" loading={loading} onClick={onSave}>
+        {isQueued ? 'Submit for verification' : 'Save changes'}
+      </Button>
     </div>
   );
 }
 
+/// Decides how a tab's save should route. When the user has member.update we apply the
+/// change directly; when they only have member.self.update the change goes to the admin
+/// verification queue; otherwise the form is read-only.
+type ProfileSubmitMode = 'direct' | 'request' | 'readonly';
+
+function useProfileSubmitMode(): ProfileSubmitMode {
+  const { hasPermission } = useAuth();
+  if (hasPermission('member.update')) return 'direct';
+  if (hasPermission('member.self.update')) return 'request';
+  return 'readonly';
+}
+
+/// Section-level save dispatcher. Every tab passes its section name + the ready DTO; this
+/// routes to the direct update endpoint or the queue depending on permission. Returns a
+/// react-query mutation so the tab keeps its existing isPending / loading semantics.
+function useSectionSubmit(
+  profile: MemberProfile,
+  section: 'identity' | 'personal' | 'contact' | 'address' | 'origin' | 'education-work' | 'religious' | 'family-refs',
+  directApi: (id: string, dto: Record<string, unknown>) => Promise<MemberProfile>,
+  onSaved: (p: MemberProfile) => void,
+  onErr: (e: unknown) => void,
+) {
+  const { message } = AntdApp.useApp();
+  const mode = useProfileSubmitMode();
+  return useMutation({
+    mutationFn: async (dto: Record<string, unknown>) => {
+      if (mode === 'direct') return directApi(profile.id, dto);
+      if (mode === 'request') {
+        const r = await memberChangeRequestApi.submit(profile.id, section, dto);
+        // Translate the queue submission to the same shape the tab expects so its onSuccess
+        // works without a special case. We just return the unchanged profile.
+        message.success('Submitted for verification.');
+        // Suppress onSaved so the form keeps the user's typed values; the queue holds them
+        // until an admin reviews. The notification doubles as the success cue.
+        // Using a thrown sentinel would be ugly; returning the profile signals "no change".
+        void r;
+        return profile;
+      }
+      throw new Error('You do not have permission to edit this profile.');
+    },
+    onSuccess: (next) => {
+      // In direct mode, this is the freshly-updated profile. In request mode it's the
+      // unchanged profile (the change is pending review).
+      if (mode === 'direct') onSaved(next);
+    },
+    onError: onErr,
+  });
+}
+
 function IdentityTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSaved: (p: MemberProfile) => void; onErr: (e: unknown) => void }) {
   const [form] = Form.useForm();
-  const mut = useMutation({
-    mutationFn: (v: Record<string, unknown>) => memberProfileApi.updateIdentity(profile.id, v),
-    onSuccess: onSaved, onError: onErr,
-  });
+  const mode = useProfileSubmitMode();
+  const mut = useSectionSubmit(profile, 'identity', memberProfileApi.updateIdentity, onSaved, onErr);
   return (
     <div style={{ padding: 24 }}>
       <Form layout="vertical" form={form} initialValues={profile} requiredMark={false}>
@@ -205,112 +283,118 @@ function IdentityTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSa
           <Col span={12}><Form.Item label="Full name (Urdu)" name="fullNameUrdu"><Input dir="rtl" /></Form.Item></Col>
         </Row>
       </Form>
-      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} />
+      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} mode={mode} />
     </div>
   );
 }
 
-function FamilyTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSaved: (p: MemberProfile) => void; onErr: (e: unknown) => void }) {
-  const [form] = Form.useForm();
+function FamilyTab({ profile }: { profile: MemberProfile; onSaved: (p: MemberProfile) => void; onErr: (e: unknown) => void }) {
   const navigate = useNavigate();
-  // Drawer-open state: when set, the FamilyDetailDrawer below shows the family in-place
-  // so the member context is preserved. We import FamilyDetailDrawer dynamically to avoid
-  // a circular module load.
+  // Read-only family information surface. Per user direction (item 12 / phase E), all
+  // family edits live in the /families page (or the FamilyDetailDrawer launched from
+  // here); this tab just shows what's on file and links into the proper management UI.
   const [familyDrawerOpen, setFamilyDrawerOpen] = useState(false);
-  const mut = useMutation({
-    mutationFn: (v: Record<string, unknown>) => memberProfileApi.updateFamilyRefs(profile.id, v),
-    onSuccess: onSaved, onError: onErr,
-  });
-  const nikahMut = useMutation({
-    mutationFn: (v: Record<string, unknown>) => memberProfileApi.updatePersonal(profile.id, v),
-    onSuccess: onSaved, onError: onErr,
-  });
-  const onSave = () => {
-    const v = form.getFieldsValue();
-    mut.mutate({
-      fatherItsNumber: v.fatherItsNumber || null,
-      motherItsNumber: v.motherItsNumber || null,
-      spouseItsNumber: v.spouseItsNumber || null,
-    });
-    // Nikah stays on the Personal side; separate call only if changed
-    nikahMut.mutate({
-      dateOfBirth: profile.dateOfBirth,
-      ageSnapshot: profile.ageSnapshot,
-      gender: profile.gender, maritalStatus: profile.maritalStatus, bloodGroup: profile.bloodGroup,
-      warakatulTarkhisStatus: profile.warakatulTarkhisStatus,
-      misaqStatus: profile.misaqStatus, misaqDate: profile.misaqDate,
-      dateOfNikah: v.dateOfNikah ? dayjs(v.dateOfNikah).format('YYYY-MM-DD') : null,
-      dateOfNikahHijri: v.dateOfNikahHijri || null,
-    });
-  };
   return (
     <div style={{ padding: 24 }}>
-      <Descriptions size="small" bordered column={2} style={{ marginBlockEnd: 16 }}
-        items={[
-          { key: 'fam', label: 'Family', children: profile.familyName
-            ? <Space>
-                <span>{profile.familyName} ({profile.familyCode})</span>
-                <Button size="small" type="link" onClick={() => setFamilyDrawerOpen(true)}>Open family</Button>
-              </Space>
-            : <Space>
-                <span style={{ color: 'var(--jm-gray-500)' }}>Not in a family</span>
-                <Button size="small" type="link" onClick={() => navigate('/families')}>Manage families</Button>
-              </Space>
-          },
-          { key: 'role', label: 'Role', children: profile.familyRole ? String(profile.familyRole) : '-' },
-        ]}
+      <Alert
+        type="info" showIcon style={{ marginBlockEnd: 16 }}
+        message="Family information is managed in the Families page"
+        description={
+          <span>
+            Father / Mother / Spouse links, family roles, headship and family-tree updates all
+            happen in the family detail drawer. This tab shows the current state, read-only.
+          </span>
+        }
       />
+
+      <Card style={{ border: '1px solid var(--jm-border)', marginBlockEnd: 16 }}>
+        <Descriptions size="small" column={2} colon={false} labelStyle={{ color: 'var(--jm-gray-500)', fontSize: 12 }}
+          items={[
+            { key: 'fam', label: 'Family',
+              children: profile.familyName ? (
+                <Space>
+                  <span style={{ fontWeight: 500 }}>{profile.familyName} ({profile.familyCode})</span>
+                  <Button size="small" type="primary" icon={<TeamOutlined />} onClick={() => setFamilyDrawerOpen(true)}>
+                    Open family page
+                  </Button>
+                </Space>
+              ) : (
+                <Space>
+                  <span style={{ color: 'var(--jm-gray-500)' }}>Not in a family</span>
+                  <Button size="small" type="link" onClick={() => navigate('/families')}>Manage families</Button>
+                </Space>
+              ),
+            },
+            { key: 'role', label: 'Role in family', children: profile.familyRole ? String(profile.familyRole) : '-' },
+          ]}
+        />
+      </Card>
+
+      <Card title="Linked relatives" size="small" style={{ border: '1px solid var(--jm-border)', marginBlockEnd: 16 }}>
+        <Descriptions size="small" column={1} colon={false} labelStyle={{ color: 'var(--jm-gray-500)', fontSize: 12 }}
+          items={[
+            { key: 'father', label: 'Father', children: <RelativeRow its={profile.fatherItsNumber} /> },
+            { key: 'mother', label: 'Mother', children: <RelativeRow its={profile.motherItsNumber} /> },
+            { key: 'spouse', label: 'Spouse', children: <RelativeRow its={profile.spouseItsNumber} /> },
+          ]}
+        />
+      </Card>
+
+      <Card title="Marriage" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+        <Descriptions size="small" column={2} colon={false} labelStyle={{ color: 'var(--jm-gray-500)', fontSize: 12 }}
+          items={[
+            { key: 'nikah', label: 'Date of Nikah', children: profile.dateOfNikah ? dayjs(profile.dateOfNikah).format('DD MMM YYYY') : '-' },
+            { key: 'nikahH', label: 'Date of Nikah (Hijri)', children: profile.dateOfNikahHijri || '-' },
+          ]}
+        />
+        <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 8 }}>
+          Edit dates on the Personal tab.
+        </div>
+      </Card>
+
       {familyDrawerOpen && profile.familyId && (
         <FamilyDetailDrawer familyId={profile.familyId} onClose={() => setFamilyDrawerOpen(false)} />
       )}
-      <Form layout="vertical" form={form} requiredMark={false}
-        initialValues={{
-          fatherItsNumber: profile.fatherItsNumber,
-          motherItsNumber: profile.motherItsNumber,
-          spouseItsNumber: profile.spouseItsNumber,
-          dateOfNikah: profile.dateOfNikah ? dayjs(profile.dateOfNikah) : null,
-          dateOfNikahHijri: profile.dateOfNikahHijri,
-        }}>
-        <Row gutter={16}>
-          {/* ITS pickers with live lookup. As soon as the user types an 8-digit ITS, we
-              search /api/v1/members and show the resolved name if found. The free-text
-              input remains editable (so relatives not on our rolls can still be captured),
-              but a green tag confirms when the ITS resolves to an existing member. */}
-          <Col span={8}>
-            <Form.Item label="Father ITS" name="fatherItsNumber" tooltip="Enter the 8-digit ITS. We'll auto-link to the existing member if found.">
-              <Input maxLength={8} className="jm-tnum" />
-            </Form.Item>
-            <Form.Item noStyle shouldUpdate={(p, c) => p.fatherItsNumber !== c.fatherItsNumber}>
-              {({ getFieldValue }) => <ItsLookupTag its={getFieldValue('fatherItsNumber')} />}
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item label="Mother ITS" name="motherItsNumber"><Input maxLength={8} className="jm-tnum" /></Form.Item>
-            <Form.Item noStyle shouldUpdate={(p, c) => p.motherItsNumber !== c.motherItsNumber}>
-              {({ getFieldValue }) => <ItsLookupTag its={getFieldValue('motherItsNumber')} />}
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item label="Spouse ITS" name="spouseItsNumber"><Input maxLength={8} className="jm-tnum" /></Form.Item>
-            <Form.Item noStyle shouldUpdate={(p, c) => p.spouseItsNumber !== c.spouseItsNumber}>
-              {({ getFieldValue }) => <ItsLookupTag its={getFieldValue('spouseItsNumber')} />}
-            </Form.Item>
-          </Col>
-          <Col span={8}><Form.Item label="Date of Nikah" name="dateOfNikah"><DatePicker style={{ inlineSize: '100%' }} /></Form.Item></Col>
-          <Col span={16}><Form.Item label="Date of Nikah (Hijri)" name="dateOfNikahHijri"><Input placeholder="e.g., 15 Rabiul Akhar 1431H." /></Form.Item></Col>
-        </Row>
-      </Form>
-      <SectionSaveBar loading={mut.isPending || nikahMut.isPending} onSave={onSave} />
     </div>
+  );
+}
+
+/// Compact display of one relative reference. When the ITS resolves to a member on our rolls,
+/// show their name + a click-through to that member's profile. Otherwise show the raw ITS.
+function RelativeRow({ its }: { its?: string | null }) {
+  const valid = !!its && /^\d{8}$/.test(its.trim());
+  const navigate = useNavigate();
+  const q = useQuery({
+    queryKey: ['its-lookup', its],
+    queryFn: async () => {
+      const res = await membersApi.list({ search: (its ?? '').trim(), pageSize: 5 });
+      return res.items?.find((m) => m.itsNumber === (its ?? '').trim()) ?? null;
+    },
+    enabled: valid,
+    staleTime: 60_000,
+  });
+  if (!its) return <span style={{ color: 'var(--jm-gray-400)' }}>Not on file</span>;
+  if (q.data) {
+    return (
+      <Space>
+        <a onClick={() => navigate(`/members/${q.data!.id}`)} style={{ fontWeight: 500 }}>{q.data.fullName}</a>
+        <span className="jm-tnum" style={{ color: 'var(--jm-gray-500)' }}>ITS {q.data.itsNumber}</span>
+        <Tag color="green">Linked</Tag>
+      </Space>
+    );
+  }
+  return (
+    <Space>
+      <span className="jm-tnum">{its}</span>
+      <Tag color="orange">Not in roll</Tag>
+    </Space>
   );
 }
 
 function ContactTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSaved: (p: MemberProfile) => void; onErr: (e: unknown) => void }) {
   const [form] = Form.useForm();
-  const mut = useMutation({
-    mutationFn: (v: Record<string, unknown>) => memberProfileApi.updateContact(profile.id, v),
-    onSuccess: onSaved, onError: onErr,
-  });
+  const mode = useProfileSubmitMode();
+  const mut = useSectionSubmit(profile, 'contact', memberProfileApi.updateContact, onSaved, onErr);
   return (
     <div style={{ padding: 24 }}>
       <Form layout="vertical" form={form} requiredMark={false}
@@ -336,17 +420,15 @@ function ContactTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSav
           <Col span={24}><Form.Item label="Personal website" name="websiteUrl"><Input placeholder="https://..." /></Form.Item></Col>
         </Row>
       </Form>
-      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} />
+      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} mode={mode} />
     </div>
   );
 }
 
 function AddressTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSaved: (p: MemberProfile) => void; onErr: (e: unknown) => void }) {
   const [form] = Form.useForm();
-  const mut = useMutation({
-    mutationFn: (v: Record<string, unknown>) => memberProfileApi.updateAddress(profile.id, v),
-    onSuccess: onSaved, onError: onErr,
-  });
+  const mode = useProfileSubmitMode();
+  const mut = useSectionSubmit(profile, 'address', memberProfileApi.updateAddress, onSaved, onErr);
   return (
     <div style={{ padding: 24 }}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={profile}>
@@ -394,7 +476,7 @@ function AddressTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSav
           <Col span={24}><Form.Item label="Property notes" name="propertyNotes"><Input.TextArea rows={2} placeholder="Anything else worth noting (renovations, distinctive features, etc.)" maxLength={1000} showCount /></Form.Item></Col>
         </Row>
       </Form>
-      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} />
+      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} mode={mode} />
     </div>
   );
 }
@@ -408,10 +490,8 @@ function OriginTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSave
     queryFn: () => subSectorsApi.list({ sectorId: sectorId!, active: true, pageSize: 200 }),
     enabled: !!sectorId,
   });
-  const mut = useMutation({
-    mutationFn: (v: Record<string, unknown>) => memberProfileApi.updateOrigin(profile.id, v),
-    onSuccess: onSaved, onError: onErr,
-  });
+  const mode = useProfileSubmitMode();
+  const mut = useSectionSubmit(profile, 'origin', memberProfileApi.updateOrigin, onSaved, onErr);
   return (
     <div style={{ padding: 24 }}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={profile}>
@@ -436,7 +516,7 @@ function OriginTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSave
           Existing free-text values are preserved as "(legacy)" entries in the dropdowns until they're remapped to a master value.
         </div>
       </Form>
-      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} />
+      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} mode={mode} />
     </div>
   );
 }
@@ -471,10 +551,8 @@ function LookupSelect({ category, name, label, current }: {
 
 function EducationTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSaved: (p: MemberProfile) => void; onErr: (e: unknown) => void }) {
   const [form] = Form.useForm();
-  const mut = useMutation({
-    mutationFn: (v: Record<string, unknown>) => memberProfileApi.updateEducationWork(profile.id, v),
-    onSuccess: onSaved, onError: onErr,
-  });
+  const mode = useProfileSubmitMode();
+  const mut = useSectionSubmit(profile, 'education-work', memberProfileApi.updateEducationWork, onSaved, onErr);
   return (
     <div style={{ padding: 24 }}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={profile}>
@@ -490,7 +568,7 @@ function EducationTab({ profile, onSaved, onErr }: { profile: MemberProfile; onS
           <Col span={8}><Form.Item label="Sub-occupation 2" name="subOccupation2"><Input /></Form.Item></Col>
         </Row>
       </Form>
-      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} />
+      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} mode={mode} />
 
       {/* Multi-row education history (item 6). Independent CRUD - the headline above is a
           snapshot; this section is the truth. Each row carries level + degree + institution
@@ -615,10 +693,8 @@ function EducationDrawer({ memberId, editing, onClose }: {
 
 function ReligiousTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSaved: (p: MemberProfile) => void; onErr: (e: unknown) => void }) {
   const [form] = Form.useForm();
-  const mut = useMutation({
-    mutationFn: (v: Record<string, unknown>) => memberProfileApi.updateReligious(profile.id, v),
-    onSuccess: onSaved, onError: onErr,
-  });
+  const mode = useProfileSubmitMode();
+  const mut = useSectionSubmit(profile, 'religious', memberProfileApi.updateReligious, onSaved, onErr);
   return (
     <div style={{ padding: 24 }}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={profile}>
@@ -658,24 +734,24 @@ function ReligiousTab({ profile, onSaved, onErr }: { profile: MemberProfile; onS
           </Col>
         </Row>
       </Form>
-      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} />
+      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} mode={mode} />
     </div>
   );
 }
 
 function PersonalTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSaved: (p: MemberProfile) => void; onErr: (e: unknown) => void }) {
   const [form] = Form.useForm();
-  const mut = useMutation({
-    mutationFn: (v: Record<string, unknown>) => {
-      return memberProfileApi.updatePersonal(profile.id, {
-        ...v,
-        dateOfBirth: v.dateOfBirth ? dayjs(v.dateOfBirth as string | Date).format('YYYY-MM-DD') : null,
-        misaqDate: v.misaqDate ? dayjs(v.misaqDate as string | Date).format('YYYY-MM-DD') : null,
-        dateOfNikah: v.dateOfNikah ? dayjs(v.dateOfNikah as string | Date).format('YYYY-MM-DD') : null,
-      });
-    },
-    onSuccess: onSaved, onError: onErr,
-  });
+  const mode = useProfileSubmitMode();
+  // Personal has Date pickers that need formatting before the DTO leaves; we adapt the
+  // direct API call to do that, then route everything through useSectionSubmit.
+  const mut = useSectionSubmit(profile, 'personal',
+    (id, v) => memberProfileApi.updatePersonal(id, {
+      ...v,
+      dateOfBirth: v.dateOfBirth ? dayjs(v.dateOfBirth as string | Date).format('YYYY-MM-DD') : null,
+      misaqDate: v.misaqDate ? dayjs(v.misaqDate as string | Date).format('YYYY-MM-DD') : null,
+      dateOfNikah: v.dateOfNikah ? dayjs(v.dateOfNikah as string | Date).format('YYYY-MM-DD') : null,
+    }),
+    onSaved, onErr);
   return (
     <div style={{ padding: 24 }}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={{
@@ -714,7 +790,7 @@ function PersonalTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSa
           <Col span={24}><Form.Item label="Date of Nikah (Hijri)" name="dateOfNikahHijri"><Input /></Form.Item></Col>
         </Row>
       </Form>
-      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} />
+      <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} mode={mode} />
     </div>
   );
 }

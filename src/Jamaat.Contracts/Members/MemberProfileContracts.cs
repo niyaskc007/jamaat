@@ -122,6 +122,23 @@ public sealed record UpdateMemberEducationDto(
     string? Degree, string? Institution, int? YearCompleted,
     string? Specialization, bool IsHighest);
 
+// --- Member change request (verification queue, item B) -------------------
+
+public sealed record MemberChangeRequestDto(
+    Guid Id, Guid MemberId, string MemberName,
+    string Section, string PayloadJson,
+    MemberChangeRequestStatus Status,
+    Guid RequestedByUserId, string RequestedByUserName, DateTimeOffset RequestedAtUtc,
+    Guid? ReviewedByUserId, string? ReviewedByUserName, DateTimeOffset? ReviewedAtUtc,
+    string? ReviewerNote);
+
+public sealed record MemberChangeRequestListQuery(
+    int Page = 1, int PageSize = 25,
+    MemberChangeRequestStatus? Status = null,
+    Guid? MemberId = null);
+
+public sealed record ReviewChangeRequestDto(string? Note);
+
 public sealed record MemberContributionSummaryDto(
     Guid MemberId,
     decimal TotalReceipts,

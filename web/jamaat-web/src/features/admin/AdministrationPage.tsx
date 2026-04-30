@@ -1,7 +1,7 @@
 import { Card, Row, Col } from 'antd';
 import {
   UserSwitchOutlined, DatabaseOutlined, ApiOutlined, SafetyOutlined,
-  BugOutlined, BellOutlined, ThunderboltOutlined,
+  BugOutlined, BellOutlined, ThunderboltOutlined, FileSearchOutlined,
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -68,6 +68,13 @@ const TOOLS: AdminTool[] = [
     description: 'Cross-member behavior overview - grade distribution + top performers + members needing outreach. Advisory only.',
     icon: <ThunderboltOutlined />, color: '#0B6E63',
     permissions: ['admin.reliability'],
+  },
+  {
+    path: '/admin/change-requests',
+    title: 'Change requests',
+    description: 'Member profile edits awaiting verification. Approve to apply or reject with a note - the member sees the reviewer note.',
+    icon: <FileSearchOutlined />, color: '#1E40AF',
+    permissions: ['member.changes.approve'],
   },
 ];
 

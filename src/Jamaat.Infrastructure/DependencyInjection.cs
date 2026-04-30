@@ -128,6 +128,7 @@ public static class DependencyInjection
         services.AddScoped<IMembershipService, MembershipService>();
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IMemberProfileService, MemberProfileService>();
+        services.AddScoped<IMemberChangeRequestService, MemberChangeRequestService>();
         services.AddScoped<IReliabilityService, ReliabilityService>();
         services.AddScoped<IFundEnrollmentService, FundEnrollmentService>();
         services.AddScoped<IQarzanHasanaService, QarzanHasanaService>();
