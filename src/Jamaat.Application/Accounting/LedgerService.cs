@@ -621,6 +621,138 @@ public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domai
         return new DashboardInsightsDto(trend, outstandingLoans, outstandingReturnable, pendingCommitments,
             overdueReturns, pipeline, currency);
     }
+
+    public async Task<IReadOnlyList<IncomeExpensePoint>> IncomeExpenseTrendAsync(int months, CancellationToken ct = default)
+    {
+        if (months <= 0) months = 12;
+        var today = clock.Today;
+        var startMonth = today.AddMonths(-(months - 1));
+        var startDate = new DateOnly(startMonth.Year, startMonth.Month, 1);
+
+        // Pull just the columns we aggregate, server-side. GroupBy in memory because EF can't
+        // translate the Year+Month grouping cleanly across Receipt + Voucher unions.
+        var receipts = await db.Receipts.AsNoTracking()
+            .Where(r => r.Status == ReceiptStatus.Confirmed && r.ReceiptDate >= startDate)
+            .Select(r => new { r.ReceiptDate, r.AmountTotal, r.Currency })
+            .ToListAsync(ct);
+        var vouchers = await db.Vouchers.AsNoTracking()
+            .Where(v => v.Status == VoucherStatus.Paid && v.VoucherDate >= startDate)
+            .Select(v => new { Date = v.VoucherDate, v.AmountTotal, v.Currency })
+            .ToListAsync(ct);
+
+        var currency = receipts.Select(r => r.Currency).FirstOrDefault()
+            ?? vouchers.Select(v => v.Currency).FirstOrDefault()
+            ?? "AED";
+
+        var points = new List<IncomeExpensePoint>(months);
+        for (int i = 0; i < months; i++)
+        {
+            var m = startMonth.AddMonths(i);
+            var income = receipts.Where(r => r.ReceiptDate.Year == m.Year && r.ReceiptDate.Month == m.Month).Sum(r => r.AmountTotal);
+            var expense = vouchers.Where(v => v.Date.Year == m.Year && v.Date.Month == m.Month).Sum(v => v.AmountTotal);
+            points.Add(new IncomeExpensePoint(m.Year, m.Month, income, expense, currency));
+        }
+        return points;
+    }
+
+    public async Task<IReadOnlyList<TopContributorPoint>> TopContributorsAsync(int days, int take, CancellationToken ct = default)
+    {
+        if (days <= 0) days = 30;
+        if (take <= 0) take = 5;
+        var since = clock.Today.AddDays(-days);
+
+        var rows = await (from r in db.Receipts.AsNoTracking()
+                          where r.Status == ReceiptStatus.Confirmed && r.ReceiptDate >= since
+                          group r by new { r.MemberId, r.Currency } into g
+                          select new
+                          {
+                              g.Key.MemberId,
+                              g.Key.Currency,
+                              Amount = g.Sum(x => x.AmountTotal),
+                              Count = g.Count(),
+                          })
+                          .OrderByDescending(x => x.Amount)
+                          .Take(take)
+                          .ToListAsync(ct);
+
+        var memberIds = rows.Select(r => r.MemberId).Distinct().ToList();
+        var members = await db.Members.AsNoTracking()
+            .Where(m => memberIds.Contains(m.Id))
+            .Select(m => new { m.Id, m.ItsNumber, m.FullName })
+            .ToListAsync(ct);
+
+        return rows.Select(r =>
+        {
+            var m = members.FirstOrDefault(x => x.Id == r.MemberId);
+            return new TopContributorPoint(
+                r.MemberId,
+                m?.ItsNumber.Value ?? "",
+                m?.FullName ?? "(unknown)",
+                r.Amount, r.Count, r.Currency);
+        }).ToList();
+    }
+
+    public async Task<IReadOnlyList<OutflowByCategoryPoint>> OutflowByCategoryAsync(int days, int take, CancellationToken ct = default)
+    {
+        if (days <= 0) days = 30;
+        if (take <= 0) take = 5;
+        var since = clock.Today.AddDays(-days);
+
+        // Group by Voucher.Purpose - free-text, but in practice users type a small set of repeated
+        // strings. Bucket the rest into "Other" so the chart stays readable.
+        var rows = await db.Vouchers.AsNoTracking()
+            .Where(v => v.Status == VoucherStatus.Paid && v.VoucherDate >= since)
+            .Select(v => new { v.Purpose, v.AmountTotal, v.Currency })
+            .ToListAsync(ct);
+
+        var currency = rows.Select(r => r.Currency).FirstOrDefault() ?? "AED";
+
+        var grouped = rows
+            .GroupBy(r => string.IsNullOrWhiteSpace(r.Purpose) ? "Uncategorized" : r.Purpose.Trim())
+            .Select(g => new { Category = g.Key, Amount = g.Sum(x => x.AmountTotal), Count = g.Count() })
+            .OrderByDescending(x => x.Amount)
+            .ToList();
+
+        var top = grouped.Take(take).ToList();
+        var others = grouped.Skip(take).ToList();
+        var result = top.Select(g => new OutflowByCategoryPoint(g.Category, g.Amount, g.Count, currency)).ToList();
+        if (others.Count > 0)
+        {
+            result.Add(new OutflowByCategoryPoint("Other", others.Sum(o => o.Amount), others.Sum(o => o.Count), currency));
+        }
+        return result;
+    }
+
+    public async Task<IReadOnlyList<UpcomingChequePoint>> UpcomingChequesAsync(int days, CancellationToken ct = default)
+    {
+        if (days <= 0) days = 30;
+        var today = clock.Today;
+        var horizon = today.AddDays(days);
+
+        // "Upcoming" = Pledged or Deposited (not yet cleared/bounced/cancelled). Capped at 50 to
+        // keep the calendar list tractable; admins who need more should use the cheques workbench.
+        var rows = await (from p in db.PostDatedCheques.AsNoTracking()
+                          where (p.Status == PostDatedChequeStatus.Pledged || p.Status == PostDatedChequeStatus.Deposited)
+                                && p.ChequeDate >= today && p.ChequeDate <= horizon
+                          orderby p.ChequeDate
+                          select new
+                          {
+                              p.Id, p.ChequeNumber, p.ChequeDate, p.Amount, p.Currency, p.MemberId,
+                              Status = (int)p.Status,
+                          })
+                          .Take(50)
+                          .ToListAsync(ct);
+
+        var memberIds = rows.Select(r => r.MemberId).Distinct().ToList();
+        var memberNames = await db.Members.AsNoTracking()
+            .Where(m => memberIds.Contains(m.Id))
+            .ToDictionaryAsync(m => m.Id, m => m.FullName, ct);
+
+        return rows.Select(r => new UpcomingChequePoint(
+            r.Id, r.ChequeNumber, r.ChequeDate, r.Amount,
+            memberNames.GetValueOrDefault(r.MemberId, "(unknown)"),
+            r.Status, r.Currency)).ToList();
+    }
 }
 
 public sealed class PeriodService(Persistence.JamaatDbContextFacade db, Domain.Abstractions.IUnitOfWork uow,

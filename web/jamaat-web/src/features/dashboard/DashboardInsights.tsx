@@ -1,4 +1,5 @@
-import { Card, Row, Col, Empty, Tag } from 'antd';
+import { Card, Row, Col, Empty, Tag, List } from 'antd';
+import { Link } from 'react-router-dom';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area,
   PieChart, Pie, Cell, BarChart, Bar, Legend,
@@ -26,6 +27,21 @@ export function DashboardInsights() {
   const sliceQ = useQuery({
     queryKey: ['dashboard', 'fund-slice-30d', sliceFrom, sliceTo],
     queryFn: () => dashboardApi.fundSlice(sliceFrom, sliceTo),
+    refetchInterval: 60_000,
+  });
+  const topQ = useQuery({
+    queryKey: ['dashboard', 'top-contributors', 30],
+    queryFn: () => dashboardApi.topContributors(30, 5),
+    refetchInterval: 5 * 60_000,
+  });
+  const outflowQ = useQuery({
+    queryKey: ['dashboard', 'outflow-by-cat', 30],
+    queryFn: () => dashboardApi.outflowByCategory(30, 5),
+    refetchInterval: 5 * 60_000,
+  });
+  const upcomingQ = useQuery({
+    queryKey: ['dashboard', 'upcoming-cheques', 30],
+    queryFn: () => dashboardApi.upcomingCheques(30),
     refetchInterval: 60_000,
   });
 
@@ -158,6 +174,71 @@ export function DashboardInsights() {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+            )}
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Phase 7 additions: top contributors / voucher outflow / upcoming cheques.
+          These are read-mostly summaries the dashboard previously didn't surface; each
+          tile clicks through to the appropriate page so the cashier / accountant can drill in. */}
+      <Row gutter={[12, 12]}>
+        <Col xs={24} md={8}>
+          <Card size="small" title="Top contributors (30d)" style={{ border: '1px solid var(--jm-border)' }}>
+            {(topQ.data?.length ?? 0) === 0 ? <Empty description="No contributors in window" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
+              <List size="small" dataSource={topQ.data ?? []}
+                renderItem={(c, i) => (
+                  <List.Item style={{ paddingInline: 0 }}>
+                    <List.Item.Meta
+                      avatar={<span style={{ inlineSize: 24, blockSize: 24, borderRadius: 6, background: 'var(--jm-surface-muted)', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600 }}>{i + 1}</span>}
+                      title={<Link to={`/members/${c.memberId}`} style={{ fontSize: 13 }}>{c.fullName}</Link>}
+                      description={<span className="jm-tnum" style={{ fontSize: 11 }}>ITS {c.itsNumber} · {c.receiptCount} receipts</span>}
+                    />
+                    <span className="jm-tnum" style={{ fontWeight: 600, fontSize: 13 }}>{money(c.amount, c.currency)}</span>
+                  </List.Item>
+                )}
+              />
+            )}
+          </Card>
+        </Col>
+
+        <Col xs={24} md={8}>
+          <Card size="small" title="Voucher outflow (30d)" style={{ border: '1px solid var(--jm-border)' }}>
+            {(outflowQ.data?.length ?? 0) === 0 ? <Empty description="No vouchers in window" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={outflowQ.data ?? []} layout="vertical" margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke="#E5E9EF" strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="category" tick={{ fontSize: 11, fill: '#475569' }} axisLine={false} tickLine={false} width={80} />
+                  <Tooltip
+                    formatter={(v: number) => money(v, outflowQ.data?.[0]?.currency ?? baseCurrency)}
+                    contentStyle={{ fontSize: 12, borderRadius: 6, border: '1px solid var(--jm-border)' }} />
+                  <Bar dataKey="amount" fill="#D97706" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+        </Col>
+
+        <Col xs={24} md={8}>
+          <Card size="small" title="Cheques due in next 30 days" style={{ border: '1px solid var(--jm-border)' }}
+            extra={<Link to="/cheques" style={{ fontSize: 12 }}>Workbench</Link>}>
+            {(upcomingQ.data?.length ?? 0) === 0 ? <Empty description="No cheques in window" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
+              <List size="small" dataSource={(upcomingQ.data ?? []).slice(0, 8)}
+                renderItem={(c) => (
+                  <List.Item style={{ paddingInline: 0 }}>
+                    <div style={{ flex: 1, minInlineSize: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                        <span className="jm-tnum">{dayjs(c.chequeDate).format('DD MMM')}</span>
+                        <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(c.amount, c.currency)}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {c.memberName} · #{c.chequeNumber}
+                      </div>
+                    </div>
+                  </List.Item>
+                )}
+              />
             )}
           </Card>
         </Col>

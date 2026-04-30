@@ -1,15 +1,20 @@
 import { Card, Row, Col, Statistic, Tag, Empty } from 'antd';
 import {
   BookOutlined, BarChartOutlined, CalendarOutlined,
-  ArrowUpOutlined, ArrowDownOutlined, BankOutlined,
+  ArrowUpOutlined, ArrowDownOutlined, BankOutlined, LineChartOutlined, PieChartOutlined,
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { useAuth } from '../../shared/auth/useAuth';
-import { ledgerApi, periodsApi } from '../ledger/ledgerApi';
+import { ledgerApi, periodsApi, dashboardApi } from '../ledger/ledgerApi';
 import { money } from '../../shared/format/format';
 import { useBaseCurrency } from '../../shared/hooks/useBaseCurrency';
+import dayjs from 'dayjs';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, Legend,
+  PieChart, Pie, Cell, BarChart, Bar,
+} from 'recharts';
 
 /// Accounting overview / landing. Pulls aggregate balances from the existing
 /// /api/v1/ledger/balances endpoint and displays:
@@ -29,6 +34,16 @@ export function AccountingPage() {
   const periodsQ = useQuery({
     queryKey: ['periods', 'all'],
     queryFn: () => periodsApi.list(),
+    enabled: hasPermission('accounting.view'),
+  });
+  const trendQ = useQuery({
+    queryKey: ['accounting', 'income-expense', 12],
+    queryFn: () => dashboardApi.incomeExpense(12),
+    enabled: hasPermission('accounting.view'),
+  });
+  const outflowQ = useQuery({
+    queryKey: ['accounting', 'outflow-by-category', 30],
+    queryFn: () => dashboardApi.outflowByCategory(30, 5),
     enabled: hasPermission('accounting.view'),
   });
 
@@ -135,6 +150,74 @@ export function AccountingPage() {
             </Col>
           </Row>
 
+          {/* Income vs Expense (last 12 months) - the headline trend a treasurer wants. Both
+              series on the same Y-axis so the cashflow gap is visually obvious. */}
+          <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
+            <Col xs={24} md={16}>
+              <Card size="small" title={<span><LineChartOutlined /> Income vs Expense (last 12 months)</span>}
+                style={{ border: '1px solid var(--jm-border)' }}>
+                {(trendQ.data?.length ?? 0) === 0 ? <Empty description="No data" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart data={(trendQ.data ?? []).map((p) => ({
+                      ...p,
+                      label: dayjs(`${p.year}-${String(p.month).padStart(2, '0')}-01`).format("MMM 'YY"),
+                    }))} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid stroke="#E5E9EF" strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} width={70} />
+                      <RTooltip formatter={(v: number) => money(v, baseCurrency)} contentStyle={{ fontSize: 12, borderRadius: 6, border: '1px solid var(--jm-border)' }} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} iconSize={10} />
+                      <Line type="monotone" dataKey="income" name="Income" stroke="#0E5C40" strokeWidth={2} dot={{ r: 2 }} />
+                      <Line type="monotone" dataKey="expense" name="Expense" stroke="#DC2626" strokeWidth={2} dot={{ r: 2 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </Card>
+            </Col>
+            {/* Top expense categories - bar chart of voucher purposes (last 30 days). Free-text
+                "purpose" gets bucketed in the backend; chart truncates at 5 + Other so it stays readable. */}
+            <Col xs={24} md={8}>
+              <Card size="small" title={<span><PieChartOutlined /> Top expense categories (30d)</span>}
+                style={{ border: '1px solid var(--jm-border)' }}>
+                {(outflowQ.data?.length ?? 0) === 0 ? <Empty description="No vouchers in window" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={outflowQ.data ?? []} layout="vertical" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid stroke="#E5E9EF" strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                      <YAxis type="category" dataKey="category" tick={{ fontSize: 11, fill: '#475569' }} axisLine={false} tickLine={false} width={90} />
+                      <RTooltip formatter={(v: number) => money(v, baseCurrency)} contentStyle={{ fontSize: 12, borderRadius: 6, border: '1px solid var(--jm-border)' }} />
+                      <Bar dataKey="amount" fill="#D97706" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </Card>
+            </Col>
+          </Row>
+
+          {/* Asset composition - pie of balances grouped by accountCode prefix. Cash (1100), bank
+              (1200-1299), receivable (1300-1499), other (everything else under 1xxx). Gives a
+              treasurer a "where is the money sitting" snapshot at a glance. */}
+          <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
+            <Col xs={24} md={12}>
+              <Card size="small" title={<span><PieChartOutlined /> Asset composition</span>}
+                style={{ border: '1px solid var(--jm-border)' }}>
+                <AssetCompositionPie balances={balances} currency={baseCurrency} />
+              </Card>
+            </Col>
+            <Col xs={24} md={12}>
+              <Card size="small" title="What you'll see here next" style={{ border: '1px dashed var(--jm-border)', background: 'var(--jm-surface-muted)' }}>
+                <ul style={{ fontSize: 13, color: 'var(--jm-gray-700)', paddingInlineStart: 18, marginBlockStart: 4, marginBlockEnd: 0, lineHeight: 1.7 }}>
+                  <li>Cash position by bank account (Phase 7)</li>
+                  <li>Period-by-period closing balances</li>
+                  <li>Returnable obligations aging buckets</li>
+                </ul>
+                <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 6 }}>
+                  We surface gaps here rather than silently omit them, so you know what's coming.
+                </div>
+              </Card>
+            </Col>
+          </Row>
+
           {/* Drill-in cards */}
           <Row gutter={[12, 12]}>
             <Col xs={24} sm={12}>
@@ -181,5 +264,40 @@ export function AccountingPage() {
         </>
       )}
     </div>
+  );
+}
+
+/// Asset composition pie. Buckets balances under 1xxx (assets) into Cash / Bank / Receivable /
+/// Other based on the accountCode prefix. Loan-receivable typically lives at 1500-1999 in our
+/// chart of accounts, so we lean on a wider Receivable bucket.
+function AssetCompositionPie({ balances, currency }: { balances: { accountId: string; accountCode: string; accountName: string; balance: number }[]; currency: string }) {
+  const buckets = balances
+    .filter((b) => b.accountCode.startsWith('1') && b.balance > 0)
+    .reduce<Record<string, number>>((acc, b) => {
+      const code = b.accountCode;
+      const key = code.startsWith('11') ? 'Cash'
+        : code.startsWith('12') ? 'Bank'
+        : (code.startsWith('13') || code.startsWith('14') || code.startsWith('15') || code.startsWith('16') || code.startsWith('17') || code.startsWith('18')) ? 'Receivable'
+        : 'Other';
+      acc[key] = (acc[key] ?? 0) + b.balance;
+      return acc;
+    }, {});
+  const data = Object.entries(buckets).map(([name, value]) => ({ name, value }));
+  if (data.length === 0) {
+    return <Empty description="No asset balances yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
+  const colors: Record<string, string> = {
+    Cash: '#0E5C40', Bank: '#1E40AF', Receivable: '#7C3AED', Other: '#94A3B8',
+  };
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <PieChart>
+        <Pie data={data} dataKey="value" nameKey="name" innerRadius={50} outerRadius={88} paddingAngle={2}>
+          {data.map((entry, i) => <Cell key={i} fill={colors[entry.name] ?? '#94A3B8'} />)}
+        </Pie>
+        <RTooltip formatter={(v: number) => money(v, currency)} contentStyle={{ fontSize: 12, borderRadius: 6, border: '1px solid var(--jm-border)' }} />
+        <Legend wrapperStyle={{ fontSize: 12 }} iconSize={10} />
+      </PieChart>
+    </ResponsiveContainer>
   );
 }

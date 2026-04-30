@@ -437,4 +437,27 @@ public sealed class DashboardController(IDashboardService svc) : ControllerBase
     /// pipeline. Replaces the 4-5 separate calls a chart-heavy dashboard would otherwise need.</summary>
     [HttpGet("insights")]
     public async Task<IActionResult> Insights(CancellationToken ct) => Ok(await svc.InsightsAsync(ct));
+
+    /// <summary>Monthly income vs expense for the last N months. Drives the Accounting page's
+    /// headline trend chart.</summary>
+    [HttpGet("income-expense-trend")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> IncomeExpense([FromQuery] int months = 12, CancellationToken ct = default)
+        => Ok(await svc.IncomeExpenseTrendAsync(months, ct));
+
+    /// <summary>Top contributors by amount in the last N days.</summary>
+    [HttpGet("top-contributors")]
+    public async Task<IActionResult> TopContributors([FromQuery] int days = 30, [FromQuery] int take = 5, CancellationToken ct = default)
+        => Ok(await svc.TopContributorsAsync(days, take, ct));
+
+    /// <summary>Voucher outflow grouped by Purpose (top N + Other).</summary>
+    [HttpGet("outflow-by-category")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> OutflowByCategory([FromQuery] int days = 30, [FromQuery] int take = 5, CancellationToken ct = default)
+        => Ok(await svc.OutflowByCategoryAsync(days, take, ct));
+
+    /// <summary>Cheques maturing in the next N days.</summary>
+    [HttpGet("upcoming-cheques")]
+    public async Task<IActionResult> UpcomingCheques([FromQuery] int days = 30, CancellationToken ct = default)
+        => Ok(await svc.UpcomingChequesAsync(days, ct));
 }

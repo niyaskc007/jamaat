@@ -52,7 +52,25 @@ public interface IDashboardService
     /// pending obligations strip, cheque pipeline by status. One call for the whole panel
     /// so the page doesn't fan out into 4-5 round-trips on every load.</summary>
     Task<DashboardInsightsDto> InsightsAsync(CancellationToken ct = default);
+
+    /// <summary>Monthly income (receipts) vs expense (vouchers) for the last N months.
+    /// Drives the Accounting page's headline trend chart.</summary>
+    Task<IReadOnlyList<IncomeExpensePoint>> IncomeExpenseTrendAsync(int months, CancellationToken ct = default);
+
+    /// <summary>Top contributors by total receipt amount in the last N days.</summary>
+    Task<IReadOnlyList<TopContributorPoint>> TopContributorsAsync(int days, int take, CancellationToken ct = default);
+
+    /// <summary>Voucher outflow grouped by Voucher.Purpose text. Top N + Other bucket.</summary>
+    Task<IReadOnlyList<OutflowByCategoryPoint>> OutflowByCategoryAsync(int days, int take, CancellationToken ct = default);
+
+    /// <summary>Cheques maturing in the next N days (Pledged or Deposited only).</summary>
+    Task<IReadOnlyList<UpcomingChequePoint>> UpcomingChequesAsync(int days, CancellationToken ct = default);
 }
+
+public sealed record IncomeExpensePoint(int Year, int Month, decimal Income, decimal Expense, string Currency);
+public sealed record TopContributorPoint(Guid MemberId, string ItsNumber, string FullName, decimal Amount, int ReceiptCount, string Currency);
+public sealed record OutflowByCategoryPoint(string Category, decimal Amount, int VoucherCount, string Currency);
+public sealed record UpcomingChequePoint(Guid Id, string ChequeNumber, DateOnly ChequeDate, decimal Amount, string MemberName, int Status, string Currency);
 
 public sealed record DashboardInsightsDto(
     IReadOnlyList<DailyCollectionPoint> CollectionTrend,

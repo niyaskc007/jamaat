@@ -144,4 +144,18 @@ export const dashboardApi = {
   }>('/api/v1/dashboard/insights')).data,
   fundSlice: async (from: string, to: string) =>
     (await api.get<{ fundTypeId: string; name: string; code: string; amount: number }[]>('/api/v1/dashboard/fund-slice', { params: { from, to } })).data,
+
+  // Phase 6/7 BI additions
+  incomeExpense: async (months = 12) =>
+    (await api.get<{ year: number; month: number; income: number; expense: number; currency: string }[]>(
+      '/api/v1/dashboard/income-expense-trend', { params: { months } })).data,
+  topContributors: async (days = 30, take = 5) =>
+    (await api.get<{ memberId: string; itsNumber: string; fullName: string; amount: number; receiptCount: number; currency: string }[]>(
+      '/api/v1/dashboard/top-contributors', { params: { days, take } })).data,
+  outflowByCategory: async (days = 30, take = 5) =>
+    (await api.get<{ category: string; amount: number; voucherCount: number; currency: string }[]>(
+      '/api/v1/dashboard/outflow-by-category', { params: { days, take } })).data,
+  upcomingCheques: async (days = 30) =>
+    (await api.get<{ id: string; chequeNumber: string; chequeDate: string; amount: number; memberName: string; status: number; currency: string }[]>(
+      '/api/v1/dashboard/upcoming-cheques', { params: { days } })).data,
 };
