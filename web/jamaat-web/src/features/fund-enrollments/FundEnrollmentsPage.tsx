@@ -84,7 +84,9 @@ export function FundEnrollmentsPage() {
   });
 
   const cols: TableProps<FundEnrollment>['columns'] = [
-    { title: 'Code', dataIndex: 'code', width: 110, render: (v: string) => <span className="jm-tnum">{v}</span> },
+    { title: 'Code', dataIndex: 'code', width: 110,
+      render: (v: string, row) => <a onClick={(e) => { e.stopPropagation(); navigate(`/fund-enrollments/${row.id}`); }}
+        className="jm-tnum" style={{ fontWeight: 600 }}>{v}</a> },
     { title: 'Member', dataIndex: 'memberName', render: (v: string, row) => <div><div style={{ fontWeight: 500 }}>{v}</div><div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>ITS {row.memberItsNumber}</div></div> },
     { title: 'Fund', dataIndex: 'fundTypeName', width: 160, render: (v: string, row) => `${row.fundTypeCode} - ${v}` },
     { title: 'Sub-type', dataIndex: 'subType', width: 140, render: (v: string | null) => v ?? '-' },

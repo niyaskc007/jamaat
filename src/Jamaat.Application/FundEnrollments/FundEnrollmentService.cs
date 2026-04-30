@@ -20,7 +20,22 @@ public interface IFundEnrollmentService
     Task<Result<FundEnrollmentDto>> PauseAsync(Guid id, CancellationToken ct = default);
     Task<Result<FundEnrollmentDto>> ResumeAsync(Guid id, CancellationToken ct = default);
     Task<Result> CancelAsync(Guid id, CancellationToken ct = default);
+    /// <summary>List receipts that contributed to this patronage. Matches by direct
+    /// FundEnrollmentId on a receipt line first; falls back to member+fund match for
+    /// older receipts created before the FK was wired up.</summary>
+    Task<Result<IReadOnlyList<PatronageReceiptDto>>> ListReceiptsAsync(Guid id, CancellationToken ct = default);
 }
+
+/// <summary>Slim receipt projection for the patronage detail page payment-history table.</summary>
+public sealed record PatronageReceiptDto(
+    Guid ReceiptId,
+    string? ReceiptNumber,
+    DateOnly ReceiptDate,
+    decimal Amount,
+    string Currency,
+    int Status,
+    int PaymentMode,
+    string? ChequeNumber);
 
 public sealed class FundEnrollmentService(
     JamaatDbContextFacade db, IUnitOfWork uow, ITenantContext tenant,
@@ -132,6 +147,47 @@ public sealed class FundEnrollmentService(
         db.FundEnrollments.Update(e);
         await uow.SaveChangesAsync(ct);
         return Result.Success();
+    }
+
+    public async Task<Result<IReadOnlyList<PatronageReceiptDto>>> ListReceiptsAsync(Guid id, CancellationToken ct = default)
+    {
+        var enrollment = await db.FundEnrollments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (enrollment is null) return Error.NotFound("enrollment.not_found", "Enrollment not found.");
+
+        // Direct FK match - any receipt with a line carrying this FundEnrollmentId.
+        // Then UNION with member+fund match for legacy receipts that pre-date the FK,
+        // de-duplicated by ReceiptId. We only show Confirmed receipts here - drafts and
+        // cancelled rows would clutter the patronage history.
+        var directIds = await db.Receipts.AsNoTracking()
+            .Where(r => r.Lines.Any(l => l.FundEnrollmentId == id))
+            .Select(r => r.Id)
+            .ToListAsync(ct);
+
+        var fallbackIds = await db.Receipts.AsNoTracking()
+            .Where(r => r.MemberId == enrollment.MemberId
+                && r.Status == ReceiptStatus.Confirmed
+                && r.Lines.Any(l => l.FundTypeId == enrollment.FundTypeId)
+                && !directIds.Contains(r.Id))
+            .Select(r => r.Id)
+            .ToListAsync(ct);
+
+        var allIds = directIds.Concat(fallbackIds).ToList();
+        if (allIds.Count == 0) return new List<PatronageReceiptDto>();
+
+        var rows = await db.Receipts.AsNoTracking()
+            .Where(r => allIds.Contains(r.Id))
+            .OrderByDescending(r => r.ReceiptDate)
+            .Select(r => new PatronageReceiptDto(
+                r.Id, r.ReceiptNumber, r.ReceiptDate,
+                // Sum only the lines that belong to this enrollment / fund - not the whole receipt total.
+                r.Lines.Where(l => l.FundEnrollmentId == id || l.FundTypeId == enrollment.FundTypeId)
+                    .Sum(l => l.Amount),
+                r.Currency,
+                (int)r.Status,
+                (int)r.PaymentMode,
+                r.ChequeNumber))
+            .ToListAsync(ct);
+        return rows;
     }
 
     private async Task<string> NextCodeAsync(CancellationToken ct)

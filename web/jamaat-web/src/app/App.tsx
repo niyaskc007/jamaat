@@ -9,6 +9,7 @@ import { CommitmentsPage } from '../features/commitments/CommitmentsPage';
 import { NewCommitmentPage } from '../features/commitments/NewCommitmentPage';
 import { CommitmentDetailPage } from '../features/commitments/CommitmentDetailPage';
 import { FundEnrollmentsPage } from '../features/fund-enrollments/FundEnrollmentsPage';
+import { PatronageDetailPage } from '../features/fund-enrollments/PatronageDetailPage';
 import { QarzanHasanaPage } from '../features/qarzan-hasana/QarzanHasanaPage';
 import { NewQarzanHasanaPage } from '../features/qarzan-hasana/NewQarzanHasanaPage';
 import { QarzanHasanaDetailPage } from '../features/qarzan-hasana/QarzanHasanaDetailPage';
@@ -68,6 +69,7 @@ export function App() {
         <Route path="commitments/new" element={<Gate anyOf={['commitment.create']}><NewCommitmentPage /></Gate>} />
         <Route path="commitments/:id" element={<Gate anyOf={['commitment.view']}><CommitmentDetailPage /></Gate>} />
         <Route path="fund-enrollments" element={<Gate anyOf={['enrollment.view']}><FundEnrollmentsPage /></Gate>} />
+        <Route path="fund-enrollments/:id" element={<Gate anyOf={['enrollment.view']}><PatronageDetailPage /></Gate>} />
         <Route path="qarzan-hasana" element={<Gate anyOf={['qh.view']}><QarzanHasanaPage /></Gate>} />
         <Route path="qarzan-hasana/new" element={<Gate anyOf={['qh.create']}><NewQarzanHasanaPage /></Gate>} />
         <Route path="qarzan-hasana/:id" element={<Gate anyOf={['qh.view']}><QarzanHasanaDetailPage /></Gate>} />

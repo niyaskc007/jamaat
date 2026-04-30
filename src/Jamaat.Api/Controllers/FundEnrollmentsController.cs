@@ -53,6 +53,13 @@ public sealed class FundEnrollmentsController(IFundEnrollmentService svc, IExcel
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)
     { var r = await svc.GetAsync(id, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
 
+    /// <summary>Receipts that contributed to this patronage. Direct FK match preferred; legacy
+    /// receipts also surface via member+fund fallback so the history is complete.</summary>
+    [HttpGet("{id:guid}/receipts")]
+    [Authorize(Policy = "enrollment.view")]
+    public async Task<IActionResult> Receipts(Guid id, CancellationToken ct)
+    { var r = await svc.ListReceiptsAsync(id, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+
     [HttpPost]
     [Authorize(Policy = "enrollment.create")]
     public async Task<IActionResult> Create([FromBody] CreateFundEnrollmentDto dto, CancellationToken ct)

@@ -52,10 +52,23 @@ export type UpdateFundEnrollmentInput = {
   familyId?: string | null;
 };
 
+export type PatronageReceipt = {
+  receiptId: string;
+  receiptNumber: string | null;
+  receiptDate: string;
+  amount: number;
+  currency: string;
+  status: number;
+  paymentMode: number;
+  chequeNumber: string | null;
+};
+
 export const fundEnrollmentsApi = {
   list: async (q: { page?: number; pageSize?: number; search?: string; status?: EnrollmentStatus; memberId?: string; fundTypeId?: string; subType?: string }): Promise<PagedResult<FundEnrollment>> =>
     (await api.get('/api/v1/fund-enrollments', { params: q })).data,
   get: async (id: string): Promise<FundEnrollment> => (await api.get(`/api/v1/fund-enrollments/${id}`)).data,
+  receipts: async (id: string): Promise<PatronageReceipt[]> =>
+    (await api.get(`/api/v1/fund-enrollments/${id}/receipts`)).data,
   create: async (input: CreateFundEnrollmentInput): Promise<FundEnrollment> => (await api.post('/api/v1/fund-enrollments', input)).data,
   update: async (id: string, input: UpdateFundEnrollmentInput): Promise<FundEnrollment> => (await api.put(`/api/v1/fund-enrollments/${id}`, input)).data,
   approve: async (id: string): Promise<FundEnrollment> => (await api.post(`/api/v1/fund-enrollments/${id}/approve`)).data,
