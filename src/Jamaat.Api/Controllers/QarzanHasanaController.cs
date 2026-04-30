@@ -1,15 +1,21 @@
 using Jamaat.Application.Common;
 using Jamaat.Application.QarzanHasana;
 using Jamaat.Contracts.QarzanHasana;
+using Jamaat.Domain.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace Jamaat.Api.Controllers;
 
 [ApiController]
 [Authorize]
 [Route("api/v1/qarzan-hasana")]
-public sealed class QarzanHasanaController(IQarzanHasanaService svc, IExcelExporter excel) : ControllerBase
+public sealed class QarzanHasanaController(
+    IQarzanHasanaService svc,
+    IExcelExporter excel,
+    IQarzanHasanaDocumentStorage docStorage,
+    IOptions<QarzanHasanaDocumentStorageOptions> docOptions) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "qh.view")]
@@ -110,4 +116,104 @@ public sealed class QarzanHasanaController(IQarzanHasanaService svc, IExcelExpor
     [Authorize(Policy = "qh.view")]
     public async Task<IActionResult> DecisionSupport(Guid id, CancellationToken ct)
     { var r = await svc.DecisionSupportAsync(id, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+
+    /// <summary>Probe whether a member can act as a guarantor for a new loan. Used by the
+    /// new-loan form to give the borrower upfront feedback before submission. Hard failures
+    /// block submit; soft warnings allow but surface in yellow.</summary>
+    [HttpGet("check-guarantor/{memberId:guid}")]
+    [Authorize(Policy = "qh.create")]
+    public async Task<IActionResult> CheckGuarantor(Guid memberId,
+        [FromQuery] Guid borrowerId,
+        [FromQuery] Guid? otherGuarantorId,
+        [FromQuery] Guid? excludeLoanId,
+        CancellationToken ct)
+    {
+        var r = await svc.CheckGuarantorEligibilityAsync(memberId, borrowerId, otherGuarantorId, excludeLoanId, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
+    /// <summary>List per-guarantor consent records for a loan - tokens, statuses, response
+    /// timestamps. Used on the loan detail page so the operator can copy the portal link
+    /// to share with each guarantor (SMS / WhatsApp / email).</summary>
+    [HttpGet("{id:guid}/guarantor-consents")]
+    [Authorize(Policy = "qh.view")]
+    public async Task<IActionResult> ListGuarantorConsents(Guid id, CancellationToken ct)
+    {
+        var r = await svc.ListGuarantorConsentsAsync(id, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
+    // --- Supporting documents (cashflow + gold-slip) -----------------------------------
+    // Two slots per loan, each accepting PDF or image up to the configured limit (default 10 MB).
+    // Mirrors the receipts/agreement-document endpoints exactly so frontend uses the same flow.
+
+    [HttpPost("{id:guid}/cashflow-document")]
+    [Authorize(Policy = "qh.create")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public Task<IActionResult> UploadCashflow(Guid id, [FromForm] IFormFile file, CancellationToken ct)
+        => UploadDocAsync(id, file, QhDocumentKind.Cashflow, "cashflow", ct);
+
+    [HttpGet("{id:guid}/cashflow-document")]
+    [Authorize(Policy = "qh.view")]
+    public Task<IActionResult> GetCashflow(Guid id, CancellationToken ct)
+        => GetDocAsync(id, QhDocumentKind.Cashflow, ct);
+
+    [HttpDelete("{id:guid}/cashflow-document")]
+    [Authorize(Policy = "qh.create")]
+    public async Task<IActionResult> DeleteCashflow(Guid id, CancellationToken ct)
+    {
+        await docStorage.DeleteAsync(id, QhDocumentKind.Cashflow, ct);
+        var r = await svc.SetCashflowDocumentUrlAsync(id, null, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
+    [HttpPost("{id:guid}/gold-slip-document")]
+    [Authorize(Policy = "qh.create")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public Task<IActionResult> UploadGoldSlip(Guid id, [FromForm] IFormFile file, CancellationToken ct)
+        => UploadDocAsync(id, file, QhDocumentKind.GoldSlip, "gold slip", ct);
+
+    [HttpGet("{id:guid}/gold-slip-document")]
+    [Authorize(Policy = "qh.view")]
+    public Task<IActionResult> GetGoldSlip(Guid id, CancellationToken ct)
+        => GetDocAsync(id, QhDocumentKind.GoldSlip, ct);
+
+    [HttpDelete("{id:guid}/gold-slip-document")]
+    [Authorize(Policy = "qh.create")]
+    public async Task<IActionResult> DeleteGoldSlip(Guid id, CancellationToken ct)
+    {
+        await docStorage.DeleteAsync(id, QhDocumentKind.GoldSlip, ct);
+        var r = await svc.SetGoldSlipDocumentUrlAsync(id, null, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
+    // -- Helpers --------------------------------------------------------------------
+
+    private async Task<IActionResult> UploadDocAsync(Guid id, IFormFile? file, QhDocumentKind kind, string label, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return ErrorMapper.ToActionResult(this, Error.Validation($"qh.{kind.ToString().ToLowerInvariant()}.empty", $"{label} file is required."));
+        if (file.Length > docOptions.Value.MaxBytes)
+            return ErrorMapper.ToActionResult(this, Error.Validation($"qh.{kind.ToString().ToLowerInvariant()}.too_large",
+                $"Document exceeds the {docOptions.Value.MaxBytes / 1024 / 1024} MB limit."));
+        var ct2 = file.ContentType?.ToLowerInvariant() ?? "";
+        var allowed = ct2 == "application/pdf" || ct2.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+        if (!allowed)
+            return ErrorMapper.ToActionResult(this, Error.Validation($"qh.{kind.ToString().ToLowerInvariant()}.invalid_type",
+                "Only PDF or image uploads are accepted."));
+
+        await using var stream = file.OpenReadStream();
+        var url = await docStorage.StoreAsync(id, kind, stream, file.ContentType!, ct);
+        var result = kind == QhDocumentKind.Cashflow
+            ? await svc.SetCashflowDocumentUrlAsync(id, url, ct)
+            : await svc.SetGoldSlipDocumentUrlAsync(id, url, ct);
+        return result.IsSuccess ? Ok(result.Value) : ErrorMapper.ToActionResult(this, result.Error);
+    }
+
+    private async Task<IActionResult> GetDocAsync(Guid id, QhDocumentKind kind, CancellationToken ct)
+    {
+        var opened = await docStorage.OpenAsync(id, kind, ct);
+        if (opened is null) return NotFound();
+        return File(opened.Value.Content, opened.Value.ContentType);
+    }
 }

@@ -24,7 +24,11 @@ public sealed record QarzanHasanaLoanDto(
     DateTimeOffset CreatedAtUtc,
     // --- Borrower's case + guarantor acknowledgment (added v2) ---
     string? Purpose, string? RepaymentPlan, string? SourceOfIncome, string? OtherObligations,
-    bool GuarantorsAcknowledged, DateTimeOffset? GuarantorsAcknowledgedAtUtc, string? GuarantorsAcknowledgedByUserName);
+    bool GuarantorsAcknowledged, DateTimeOffset? GuarantorsAcknowledgedAtUtc, string? GuarantorsAcknowledgedByUserName,
+    // --- Structured cashflow / gold / income tags (added v2.1) ---
+    decimal? MonthlyIncome, decimal? MonthlyExpenses, decimal? MonthlyExistingEmis,
+    decimal? GoldWeightGrams, int? GoldPurityKarat, string? GoldHeldAt,
+    string? IncomeSources);
 
 public sealed record QarzanHasanaInstallmentDto(
     Guid Id, int InstallmentNo, DateOnly DueDate,
@@ -53,12 +57,22 @@ public sealed record CreateQarzanHasanaDto(
     string? Purpose = null,
     /// <summary>How the borrower plans to repay each instalment. Required.</summary>
     string? RepaymentPlan = null,
-    /// <summary>Primary source of income (salary / business / etc.). Optional.</summary>
+    /// <summary>Free-text elaboration of income sources. Optional.</summary>
     string? SourceOfIncome = null,
     /// <summary>Other current obligations outside this jamaat. Optional.</summary>
     string? OtherObligations = null,
     /// <summary>Operator confirms both guarantors are present and have agreed to act as kafil.</summary>
-    bool GuarantorsAcknowledged = false);
+    bool GuarantorsAcknowledged = false,
+    // Structured cashflow / gold / income source tags (v2)
+    decimal? MonthlyIncome = null,
+    decimal? MonthlyExpenses = null,
+    decimal? MonthlyExistingEmis = null,
+    decimal? GoldWeightGrams = null,
+    int? GoldPurityKarat = null,
+    string? GoldHeldAt = null,
+    /// <summary>Comma-separated tags from the income-source enum (SALARY, BUSINESS, INVESTMENT,
+    /// SHARE_MARKET, REAL_ESTATE, RENTAL, PENSION, FAMILY, AGRICULTURE, FREELANCE, OTHER).</summary>
+    string? IncomeSources = null);
 
 public sealed record UpdateQarzanHasanaDraftDto(
     decimal AmountRequested,
@@ -74,7 +88,14 @@ public sealed record UpdateQarzanHasanaDraftDto(
     string? RepaymentPlan = null,
     string? SourceOfIncome = null,
     string? OtherObligations = null,
-    bool GuarantorsAcknowledged = false);
+    bool GuarantorsAcknowledged = false,
+    decimal? MonthlyIncome = null,
+    decimal? MonthlyExpenses = null,
+    decimal? MonthlyExistingEmis = null,
+    decimal? GoldWeightGrams = null,
+    int? GoldPurityKarat = null,
+    string? GoldHeldAt = null,
+    string? IncomeSources = null);
 
 public sealed record ApproveL1Dto(decimal AmountApproved, int InstalmentsApproved, string? Comments);
 public sealed record ApproveL2Dto(string? Comments);
@@ -110,7 +131,9 @@ public sealed record LoanDecisionSupportDto(
     LoanCommitmentSummary Commitments,
     LoanDonationSummary Donations,
     LoanPastLoansSummary PastLoans,
-    LoanFundPosition FundPosition);
+    LoanFundPosition FundPosition,
+    /// <summary>Per-guarantor track record (reliability + load + history). Two entries per loan.</summary>
+    IReadOnlyList<GuarantorTrackRecord> Guarantors);
 
 public sealed record LoanReliabilitySummary(
     string Grade, decimal? TotalScore, bool LoanReady, string? LoanReadyReason,
@@ -144,3 +167,66 @@ public sealed record LoanFundPosition(
     decimal RequestedAmount,
     decimal ProjectedAfterDisbursement,
     decimal PercentRemainingAfter);
+
+/// <summary>Result of an upfront guarantor-eligibility probe. Each <see cref="EligibilityCheck"/>
+/// reports a specific rule's pass/fail with a human-readable detail. Hard checks (the ones that
+/// block submission) are flagged via <see cref="EligibilityCheck.Hard"/>.</summary>
+public sealed record GuarantorEligibilityDto(
+    Guid MemberId,
+    string FullName,
+    string ItsNumber,
+    bool Eligible,
+    bool HasSoftWarnings,
+    IReadOnlyList<EligibilityCheck> Checks);
+
+public sealed record EligibilityCheck(
+    string Key,
+    string Label,
+    bool Passed,
+    bool Hard,
+    string Detail);
+
+/// <summary>Compact track record for a guarantor, surfaced on the L1/L2 decision-support panel
+/// so an approver can verify the kafil's reliability + load + history at a glance.</summary>
+public sealed record GuarantorTrackRecord(
+    Guid MemberId,
+    string ItsNumber,
+    string FullName,
+    string Grade,
+    decimal? TotalScore,
+    int ActiveGuaranteesCount,
+    int PastLoansCount,
+    int DefaultedCount,
+    bool CurrentlyEligible,
+    string? IneligibilityReason);
+
+/// <summary>Per-guarantor consent record summary surfaced on the loan detail page so the
+/// operator can see who has accepted, copy the link, and resend if needed.</summary>
+public sealed record GuarantorConsentDto(
+    Guid Id,
+    Guid GuarantorMemberId,
+    string GuarantorName,
+    string GuarantorItsNumber,
+    string Token,
+    int Status,                                 // 1=Pending / 2=Accepted / 3=Declined
+    DateTimeOffset? RespondedAtUtc,
+    string? ResponderIpAddress,
+    DateTimeOffset? NotificationSentAtUtc);
+
+/// <summary>Public-facing loan summary served from the consent portal. No sensitive numbers
+/// (no fund balance / commitments / etc.) - just enough for the guarantor to recognise the
+/// loan they're being asked to back.</summary>
+public sealed record GuarantorConsentPortalDto(
+    Guid LoanId,
+    string LoanCode,
+    string BorrowerName,
+    string BorrowerItsNumber,
+    decimal AmountRequested,
+    string Currency,
+    int InstalmentsRequested,
+    string? Purpose,
+    int Status,                                 // 1=Pending / 2=Accepted / 3=Declined
+    DateTimeOffset? RespondedAtUtc,
+    string GuarantorName);
+
+public sealed record RecordConsentResponseDto(string? IpAddress, string? UserAgent);

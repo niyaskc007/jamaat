@@ -20,14 +20,18 @@ test.describe('QH new-loan form - uplift', () => {
     await expect(page.getByText(/Borrower & loan terms/i)).toBeVisible();
     // The Divider's section heading - "Borrower's case" with a leading icon. Plain substring is enough.
     await expect(page.getByText("Borrower's case", { exact: false }).first()).toBeVisible();
-    await expect(page.getByText(/Guarantors & documents/i)).toBeVisible();
+    // After v2 rename, the guarantors section dropped "documents" from its heading.
+    await expect(page.getByText(/Guarantors \(kafil\)/i).first()).toBeVisible();
   });
 
   test('New free-text fields render with required markers', async ({ page }) => {
     await page.goto('/qarzan-hasana/new');
     await expect(page.getByText(/Purpose of the loan/i)).toBeVisible();
     await expect(page.getByText(/Repayment plan/i).first()).toBeVisible();
-    await expect(page.getByText(/Source of income/i)).toBeVisible();
+    // v2 renamed "Source of income" to "Income details" (the multi-select sits separately
+    // labelled "Income sources"); both appear on the form.
+    await expect(page.getByText(/Income sources/i)).toBeVisible();
+    await expect(page.getByText(/Income details/i)).toBeVisible();
     await expect(page.getByText(/Other current obligations/i)).toBeVisible();
   });
 

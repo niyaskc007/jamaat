@@ -17,8 +17,10 @@ import { extractProblem } from '../../shared/api/client';
 import {
   qarzanHasanaApi, type QhInstallment,
   QhStatusLabel, QhStatusColor, QhSchemeLabel, QhInstallmentStatusLabel,
+  IncomeSourceLabel,
 } from './qarzanHasanaApi';
 import { LoanDecisionSupport } from './LoanDecisionSupport';
+import { GuarantorConsentPanel } from './GuarantorConsentPanel';
 
 export function QarzanHasanaDetailPage() {
   const { id = '' } = useParams();
@@ -201,6 +203,11 @@ export function QarzanHasanaDetailPage() {
         </Col>
       </Row>
 
+      {/* Remote guarantor-consent links - only meaningful while the loan is in Draft (status=1).
+          Once submitted to L1, the consent flag is locked in; the records persist for audit but
+          the operator no longer needs to send the links. */}
+      {isDraft && <GuarantorConsentPanel loanId={loan.id} />}
+
       {/* Layout strategy:
           - In approval states (PendingL1 / PendingL2 / Approved-not-yet-disbursed) - render the
             decision-support panel full-width up front so the approver sees the whole picture.
@@ -264,6 +271,73 @@ export function QarzanHasanaDetailPage() {
                   Other current obligations
                 </div>
                 <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{loan.otherObligations}</div>
+              </Col>
+            )}
+            {loan.incomeSources && (
+              <Col xs={24}>
+                <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 6 }}>
+                  Income sources
+                </div>
+                <div>
+                  {loan.incomeSources.split(',').map((s) => s.trim()).filter(Boolean).map((s) => (
+                    <Tag key={s} style={{ marginInlineEnd: 6 }}>{IncomeSourceLabel[s] ?? s}</Tag>
+                  ))}
+                </div>
+              </Col>
+            )}
+            {(loan.monthlyIncome !== null && loan.monthlyIncome !== undefined) && (
+              <Col xs={24}>
+                <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 6, marginBlockStart: 6 }}>
+                  Monthly cashflow
+                </div>
+                <Row gutter={8}>
+                  <Col xs={12} md={6}>
+                    <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Income</div>
+                    <div className="jm-tnum" style={{ fontWeight: 600 }}>{money(loan.monthlyIncome ?? 0, loan.currency)}</div>
+                  </Col>
+                  <Col xs={12} md={6}>
+                    <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Expenses</div>
+                    <div className="jm-tnum">{money(loan.monthlyExpenses ?? 0, loan.currency)}</div>
+                  </Col>
+                  <Col xs={12} md={6}>
+                    <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Other EMIs</div>
+                    <div className="jm-tnum">{money(loan.monthlyExistingEmis ?? 0, loan.currency)}</div>
+                  </Col>
+                  <Col xs={12} md={6}>
+                    {(() => {
+                      const net = (loan.monthlyIncome ?? 0) - (loan.monthlyExpenses ?? 0) - (loan.monthlyExistingEmis ?? 0);
+                      return (
+                        <>
+                          <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Net surplus</div>
+                          <div className="jm-tnum" style={{ fontWeight: 700, color: net >= 0 ? '#0E5C40' : '#DC2626' }}>
+                            {money(net, loan.currency)}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </Col>
+                </Row>
+              </Col>
+            )}
+            {loan.goldWeightGrams && (
+              <Col xs={24}>
+                <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 6, marginBlockStart: 6 }}>
+                  Gold collateral details
+                </div>
+                <Row gutter={8}>
+                  <Col xs={12} md={6}>
+                    <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Weight</div>
+                    <div className="jm-tnum">{loan.goldWeightGrams} g</div>
+                  </Col>
+                  <Col xs={12} md={6}>
+                    <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Purity</div>
+                    <div className="jm-tnum">{loan.goldPurityKarat ? `${loan.goldPurityKarat} K` : '-'}</div>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Held at</div>
+                    <div>{loan.goldHeldAt ?? '-'}</div>
+                  </Col>
+                </Row>
               </Col>
             )}
           </Row>

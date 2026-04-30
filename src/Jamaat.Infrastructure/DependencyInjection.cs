@@ -148,6 +148,10 @@ public static class DependencyInjection
             config.GetSection(Application.Receipts.ReceiptDocumentStorageOptions.SectionName));
         services.AddSingleton<Application.Receipts.IReceiptDocumentStorage, Storage.LocalFileSystemReceiptDocumentStorage>();
 
+        services.Configure<Application.QarzanHasana.QarzanHasanaDocumentStorageOptions>(
+            config.GetSection(Application.QarzanHasana.QarzanHasanaDocumentStorageOptions.SectionName));
+        services.AddSingleton<Application.QarzanHasana.IQarzanHasanaDocumentStorage, Storage.LocalFileSystemQarzanHasanaDocumentStorage>();
+
         // Notifications - one sender that adapts based on config. Default behaviour (Notifications:Enabled=false
         // or no SMTP host) is log-only: every notification is written to NotificationLog without delivery.
         // Audit trail is captured from day one; admins flip the switch when SMTP is ready.

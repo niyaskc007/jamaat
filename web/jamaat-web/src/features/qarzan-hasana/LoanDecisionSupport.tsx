@@ -1,7 +1,8 @@
 import { Card, Tag, Empty, Alert, Tooltip, Progress, Statistic, Row, Col } from 'antd';
-import { ThunderboltOutlined, CheckCircleOutlined, WarningOutlined, BankOutlined, GiftOutlined, HistoryOutlined } from '@ant-design/icons';
+import { ThunderboltOutlined, CheckCircleOutlined, WarningOutlined, BankOutlined, GiftOutlined, HistoryOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { qarzanHasanaApi, type LoanDecisionSupport as DS } from './qarzanHasanaApi';
+import { qarzanHasanaApi, type LoanDecisionSupport as DS, type GuarantorTrackRecord } from './qarzanHasanaApi';
 import { GradeColor, GradeLabel } from '../members/reliability/reliabilityApi';
 import { money } from '../../shared/format/format';
 
@@ -29,10 +30,56 @@ export function LoanDecisionSupport({ loanId }: { loanId: string }) {
 
       <ReliabilityCard r={d.reliability} />
       <FundPositionCard f={d.fundPosition} />
+      <GuarantorTrackRecordsCard guarantors={d.guarantors ?? []} />
       <CommitmentsCard c={d.commitments} currency={d.fundPosition.currency} />
       <DonationsCard donations={d.donations} currency={d.fundPosition.currency} />
       <PastLoansCard p={d.pastLoans} currency={d.fundPosition.currency} />
     </div>
+  );
+}
+
+function GuarantorTrackRecordsCard({ guarantors }: { guarantors: GuarantorTrackRecord[] }) {
+  if (guarantors.length === 0) return null;
+  return (
+    <Card size="small" title={<span><SafetyCertificateOutlined /> Guarantor track records</span>}
+      extra={<span style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Per kafil</span>}
+      style={{ border: '1px solid var(--jm-border)' }}>
+      {guarantors.map((g, idx) => (
+        <div key={g.memberId} style={{
+          paddingBlock: 10,
+          borderBlockEnd: idx < guarantors.length - 1 ? '1px solid var(--jm-border)' : 'none',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBlockEnd: 6 }}>
+            <Link to={`/members/${g.memberId}`} style={{ fontWeight: 600, fontSize: 13 }}>{g.fullName}</Link>
+            <span style={{ fontSize: 11, color: 'var(--jm-gray-500)' }} className="jm-tnum">ITS {g.itsNumber}</span>
+            <Tag color={GradeColor[g.grade] ?? 'default'} style={{ marginInlineStart: 'auto', fontWeight: 600 }}>
+              {g.grade} - {GradeLabel[g.grade] ?? g.grade}
+            </Tag>
+          </div>
+          <Row gutter={[8, 4]} style={{ fontSize: 12 }}>
+            <Col xs={8}>
+              <div style={{ color: 'var(--jm-gray-500)' }}>Active guarantees</div>
+              <div className="jm-tnum" style={{ fontWeight: 600 }}>{g.activeGuaranteesCount}</div>
+            </Col>
+            <Col xs={8}>
+              <div style={{ color: 'var(--jm-gray-500)' }}>Past loans (own)</div>
+              <div className="jm-tnum" style={{ fontWeight: 600 }}>{g.pastLoansCount}</div>
+            </Col>
+            <Col xs={8}>
+              <div style={{ color: 'var(--jm-gray-500)' }}>Defaulted (own)</div>
+              <div className="jm-tnum" style={{ fontWeight: 600, color: g.defaultedCount > 0 ? '#DC2626' : 'inherit' }}>
+                {g.defaultedCount}
+              </div>
+            </Col>
+          </Row>
+          <div style={{ marginBlockStart: 6 }}>
+            {g.currentlyEligible
+              ? <Tag color="green"><CheckCircleOutlined /> Currently eligible</Tag>
+              : <Tag color="red" icon={<WarningOutlined />}>{g.ineligibilityReason ?? 'Not eligible'}</Tag>}
+          </div>
+        </div>
+      ))}
+    </Card>
   );
 }
 

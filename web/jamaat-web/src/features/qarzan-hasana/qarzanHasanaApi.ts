@@ -48,6 +48,14 @@ export type QhLoan = {
   guarantorsAcknowledged: boolean;
   guarantorsAcknowledgedAtUtc?: string | null;
   guarantorsAcknowledgedByUserName?: string | null;
+  // Structured cashflow / gold / income tags (v2)
+  monthlyIncome?: number | null;
+  monthlyExpenses?: number | null;
+  monthlyExistingEmis?: number | null;
+  goldWeightGrams?: number | null;
+  goldPurityKarat?: number | null;
+  goldHeldAt?: string | null;
+  incomeSources?: string | null;
 };
 
 export type QhInstallment = {
@@ -80,6 +88,62 @@ export type CreateQhInput = {
   sourceOfIncome?: string;
   otherObligations?: string;
   guarantorsAcknowledged?: boolean;
+  monthlyIncome?: number;
+  monthlyExpenses?: number;
+  monthlyExistingEmis?: number;
+  goldWeightGrams?: number;
+  goldPurityKarat?: number;
+  goldHeldAt?: string;
+  incomeSources?: string;
+};
+
+// --- Income source enum ---
+/// Fixed list shown as a multi-select on the new-loan form. Values match the backend
+/// IncomeSources string column (comma-separated codes).
+export const IncomeSourceOptions: { value: string; label: string }[] = [
+  { value: 'SALARY', label: 'Salary / Employment' },
+  { value: 'BUSINESS', label: 'Business / Self-employed' },
+  { value: 'INVESTMENT', label: 'Investment returns' },
+  { value: 'SHARE_MARKET', label: 'Share market / Stocks' },
+  { value: 'REAL_ESTATE', label: 'Real estate' },
+  { value: 'RENTAL', label: 'Rental income' },
+  { value: 'PENSION', label: 'Pension / Retirement' },
+  { value: 'FAMILY', label: 'Family support' },
+  { value: 'AGRICULTURE', label: 'Agriculture' },
+  { value: 'FREELANCE', label: 'Freelance / Consulting' },
+  { value: 'OTHER', label: 'Other' },
+];
+export const IncomeSourceLabel = Object.fromEntries(
+  IncomeSourceOptions.map((o) => [o.value, o.label]),
+) as Record<string, string>;
+
+// --- Guarantor eligibility ---
+export type EligibilityCheck = {
+  key: string;
+  label: string;
+  passed: boolean;
+  hard: boolean;
+  detail: string;
+};
+export type GuarantorEligibility = {
+  memberId: string;
+  fullName: string;
+  itsNumber: string;
+  eligible: boolean;
+  hasSoftWarnings: boolean;
+  checks: EligibilityCheck[];
+};
+export type GuarantorTrackRecord = {
+  memberId: string;
+  itsNumber: string;
+  fullName: string;
+  grade: string;
+  totalScore: number | null;
+  activeGuaranteesCount: number;
+  pastLoansCount: number;
+  defaultedCount: number;
+  currentlyEligible: boolean;
+  ineligibilityReason: string | null;
 };
 
 export const qarzanHasanaApi = {
@@ -113,6 +177,75 @@ export const qarzanHasanaApi = {
   },
   decisionSupport: async (id: string): Promise<LoanDecisionSupport> =>
     (await api.get(`/api/v1/qarzan-hasana/${id}/decision-support`)).data,
+
+  /// Probe whether a member is eligible to guarantee a new loan. Used inline on the new-loan form.
+  checkGuarantor: async (params: { memberId: string; borrowerId: string; otherGuarantorId?: string; excludeLoanId?: string }): Promise<GuarantorEligibility> => {
+    const { memberId, borrowerId, otherGuarantorId, excludeLoanId } = params;
+    const q: Record<string, string> = { borrowerId };
+    if (otherGuarantorId) q.otherGuarantorId = otherGuarantorId;
+    if (excludeLoanId) q.excludeLoanId = excludeLoanId;
+    return (await api.get(`/api/v1/qarzan-hasana/check-guarantor/${memberId}`, { params: q })).data;
+  },
+
+  /// Upload a cashflow document for an existing draft loan. Returns the updated loan.
+  uploadCashflow: async (id: string, file: File): Promise<QhLoan> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return (await api.post(`/api/v1/qarzan-hasana/${id}/cashflow-document`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
+  },
+  /// Upload a gold-slip document for an existing draft loan.
+  uploadGoldSlip: async (id: string, file: File): Promise<QhLoan> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return (await api.post(`/api/v1/qarzan-hasana/${id}/gold-slip-document`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
+  },
+
+  /// Per-guarantor consent rows (token + status + timestamps). Used on the detail page
+  /// so the operator can copy the public consent link and resend it.
+  guarantorConsents: async (id: string): Promise<GuarantorConsent[]> =>
+    (await api.get(`/api/v1/qarzan-hasana/${id}/guarantor-consents`)).data,
+};
+
+// --- Guarantor consent (remote portal flow) ---
+export type GuarantorConsent = {
+  id: string;
+  guarantorMemberId: string;
+  guarantorName: string;
+  guarantorItsNumber: string;
+  token: string;
+  status: 1 | 2 | 3; // Pending / Accepted / Declined
+  respondedAtUtc: string | null;
+  responderIpAddress: string | null;
+  notificationSentAtUtc: string | null;
+};
+export const GuarantorConsentStatusLabel: Record<number, string> = {
+  1: 'Pending', 2: 'Accepted', 3: 'Declined',
+};
+export const GuarantorConsentStatusColor: Record<number, string> = {
+  1: 'orange', 2: 'green', 3: 'red',
+};
+
+export type GuarantorConsentPortal = {
+  loanId: string;
+  loanCode: string;
+  borrowerName: string;
+  borrowerItsNumber: string;
+  amountRequested: number;
+  currency: string;
+  instalmentsRequested: number;
+  purpose: string | null;
+  status: 1 | 2 | 3;
+  respondedAtUtc: string | null;
+  guarantorName: string;
+};
+
+export const guarantorConsentPortalApi = {
+  get: async (token: string): Promise<GuarantorConsentPortal> =>
+    (await api.get(`/api/v1/portal/qh-consent/${token}`)).data,
+  accept: async (token: string): Promise<GuarantorConsentPortal> =>
+    (await api.post(`/api/v1/portal/qh-consent/${token}/accept`)).data,
+  decline: async (token: string): Promise<GuarantorConsentPortal> =>
+    (await api.post(`/api/v1/portal/qh-consent/${token}/decline`)).data,
 };
 
 // --- Decision-support DTOs ---
@@ -158,4 +291,5 @@ export type LoanDecisionSupport = {
   donations: LoanDonationSummary;
   pastLoans: LoanPastLoansSummary;
   fundPosition: LoanFundPosition;
+  guarantors: GuarantorTrackRecord[];
 };

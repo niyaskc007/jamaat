@@ -43,6 +43,14 @@ public sealed class QarzanHasanaLoanConfiguration : IEntityTypeConfiguration<Qar
         b.Property(x => x.GuarantorsAcknowledged).HasDefaultValue(false);
         b.Property(x => x.GuarantorsAcknowledgedByUserName).HasMaxLength(200);
 
+        // Structured cashflow / gold / income (v2).
+        b.Property(x => x.MonthlyIncome).HasColumnType("decimal(18,2)");
+        b.Property(x => x.MonthlyExpenses).HasColumnType("decimal(18,2)");
+        b.Property(x => x.MonthlyExistingEmis).HasColumnType("decimal(18,2)");
+        b.Property(x => x.GoldWeightGrams).HasColumnType("decimal(10,3)");
+        b.Property(x => x.GoldHeldAt).HasMaxLength(200);
+        b.Property(x => x.IncomeSources).HasMaxLength(500);
+
         b.HasIndex(x => new { x.TenantId, x.Code }).IsUnique();
         b.HasIndex(x => new { x.TenantId, x.MemberId });
         b.HasIndex(x => new { x.TenantId, x.Status });

@@ -1,23 +1,27 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Card, Form, Input, InputNumber, Select, DatePicker, Button, Space, App as AntdApp,
-  Alert, Row, Col, Tooltip, Checkbox, Collapse, Typography, Divider,
+  Alert, Row, Col, Tooltip, Checkbox, Collapse, Typography, Divider, Tag, Upload, Statistic,
 } from 'antd';
+import type { UploadFile, RcFile } from 'antd/es/upload/interface';
 import {
   InfoCircleOutlined, SafetyCertificateOutlined, FileTextOutlined, TeamOutlined,
-  BankOutlined, ArrowRightOutlined,
+  BankOutlined, ArrowRightOutlined, CheckCircleOutlined, WarningOutlined, CloseCircleOutlined,
+  UploadOutlined, GoldOutlined, DollarOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { MemberPicker } from '../families/FamilyFormDrawer';
 import { extractProblem } from '../../shared/api/client';
-import { qarzanHasanaApi, QhSchemeLabel, type QhScheme } from './qarzanHasanaApi';
+import {
+  qarzanHasanaApi, QhSchemeLabel, IncomeSourceOptions,
+  type QhScheme,
+} from './qarzanHasanaApi';
 
 /// Tooltip-rendered label. Pulls a label string + a help string into one component so the
-/// new-loan form stays scannable. The InfoCircle icon is the discoverable hint that the
-/// label has more context behind it.
+/// new-loan form stays scannable.
 function LabelWithHelp({ children, help }: { children: React.ReactNode; help: string }) {
   return (
     <span>
@@ -29,45 +33,172 @@ function LabelWithHelp({ children, help }: { children: React.ReactNode; help: st
   );
 }
 
+/// Inline panel that fires the eligibility probe when a guarantor is picked. Hard failures
+/// turn the panel red and feed back to the parent via `onEligibilityChange` so submit can
+/// be gated. Soft warnings show in yellow but allow.
+function GuarantorEligibility({
+  memberId, borrowerId, otherGuarantorId, onEligibilityChange,
+}: {
+  memberId: string;
+  borrowerId: string;
+  otherGuarantorId: string;
+  onEligibilityChange: (eligible: boolean) => void;
+}) {
+  const enabled = !!memberId && !!borrowerId;
+  const q = useQuery({
+    queryKey: ['qh-guarantor-elig', memberId, borrowerId, otherGuarantorId],
+    queryFn: () => qarzanHasanaApi.checkGuarantor({ memberId, borrowerId, otherGuarantorId: otherGuarantorId || undefined }),
+    enabled,
+    staleTime: 30_000,
+  });
+
+  // Push eligibility upward to the parent so it can gate submission.
+  useEffect(() => {
+    if (!enabled) { onEligibilityChange(false); return; }
+    if (q.isLoading) { onEligibilityChange(false); return; }
+    onEligibilityChange(q.data?.eligible ?? false);
+  }, [enabled, q.isLoading, q.data?.eligible, onEligibilityChange]);
+
+  if (!enabled) return null;
+  if (q.isLoading) return <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>Checking eligibility...</div>;
+  if (q.isError || !q.data) return <Alert type="error" showIcon message="Could not verify guarantor" style={{ marginBlockStart: 8 }} />;
+
+  const d = q.data;
+  const failingHard = d.checks.filter((c) => c.hard && !c.passed);
+  const failingSoft = d.checks.filter((c) => !c.hard && !c.passed);
+
+  return (
+    <div style={{ marginBlockStart: 8 }}>
+      {d.eligible && !d.hasSoftWarnings && (
+        <Tag color="green" icon={<CheckCircleOutlined />}>Eligible to act as kafil</Tag>
+      )}
+      {d.eligible && d.hasSoftWarnings && (
+        <Alert
+          type="warning" showIcon
+          message="Eligible with warnings"
+          description={
+            <ul style={{ paddingInlineStart: 18, marginBlock: 4, fontSize: 12 }}>
+              {failingSoft.map((c) => <li key={c.key}>{c.detail}</li>)}
+            </ul>
+          }
+        />
+      )}
+      {!d.eligible && (
+        <Alert
+          type="error" showIcon icon={<CloseCircleOutlined />}
+          message="Not eligible to act as kafil"
+          description={
+            <ul style={{ paddingInlineStart: 18, marginBlock: 4, fontSize: 12 }}>
+              {failingHard.map((c) => <li key={c.key}>{c.detail}</li>)}
+            </ul>
+          }
+        />
+      )}
+    </div>
+  );
+}
+
 export function NewQarzanHasanaPage() {
   const navigate = useNavigate();
   const { message } = AntdApp.useApp();
 
-  // Form state. Default values match the existing behavior - first-of-next-month start,
-  // 12-month repayment, AED currency. The new free-text fields default to empty strings.
+  // Identity + terms
   const [memberId, setMemberId] = useState('');
   const [scheme, setScheme] = useState<QhScheme>(1);
   const [amount, setAmount] = useState<number>(0);
   const [installments, setInstallments] = useState<number>(12);
   const [currency, setCurrency] = useState('AED');
   const [startDate, setStartDate] = useState<Dayjs>(dayjs().add(1, 'month').startOf('month'));
+
+  // Guarantors + acknowledgment
   const [g1, setG1] = useState('');
   const [g2, setG2] = useState('');
-  const [gold, setGold] = useState<number | null>(null);
-  const [cashflowUrl, setCashflowUrl] = useState('');
-  const [goldSlipUrl, setGoldSlipUrl] = useState('');
-  // New: borrower's case
+  const [g1Eligible, setG1Eligible] = useState(false);
+  const [g2Eligible, setG2Eligible] = useState(false);
+  const [guarantorsAcknowledged, setGuarantorsAcknowledged] = useState(false);
+
+  // Borrower's case
   const [purpose, setPurpose] = useState('');
   const [repaymentPlan, setRepaymentPlan] = useState('');
   const [sourceOfIncome, setSourceOfIncome] = useState('');
   const [otherObligations, setOtherObligations] = useState('');
-  // New: operator-witnessed guarantor consent
-  const [guarantorsAcknowledged, setGuarantorsAcknowledged] = useState(false);
+
+  // Structured cashflow
+  const [monthlyIncome, setMonthlyIncome] = useState<number | null>(null);
+  const [monthlyExpenses, setMonthlyExpenses] = useState<number | null>(null);
+  const [monthlyEmis, setMonthlyEmis] = useState<number | null>(null);
+
+  // Gold (structured)
+  const [goldAmount, setGoldAmount] = useState<number | null>(null);
+  const [goldWeight, setGoldWeight] = useState<number | null>(null);
+  const [goldPurity, setGoldPurity] = useState<number | null>(null);
+  const [goldHeldAt, setGoldHeldAt] = useState('');
+
+  // Income sources (multi-select)
+  const [incomeSources, setIncomeSources] = useState<string[]>([]);
+
+  // Pending file uploads (deferred until after the loan is created)
+  const [cashflowFile, setCashflowFile] = useState<File | null>(null);
+  const [goldSlipFile, setGoldSlipFile] = useState<File | null>(null);
+
+  const guarantorsPicked = !!g1 && !!g2;
+  const guarantorsValid = guarantorsPicked && g1 !== g2 && g1 !== memberId && g2 !== memberId && g1Eligible && g2Eligible;
+  const goldRequired = (goldAmount ?? 0) > 0;
+  const goldStructValid = !goldRequired || (
+    !!goldWeight && goldWeight > 0
+    && !!goldPurity && goldPurity > 0 && goldPurity <= 24
+    && goldHeldAt.trim().length > 0
+  );
+  const netSurplus = (monthlyIncome ?? 0) - (monthlyExpenses ?? 0) - (monthlyEmis ?? 0);
+
+  const canSubmit = !!memberId
+    && guarantorsValid
+    && amount > 0
+    && installments > 0
+    && purpose.trim().length > 0
+    && repaymentPlan.trim().length > 0
+    && incomeSources.length > 0
+    && goldStructValid
+    && guarantorsAcknowledged;
 
   const mut = useMutation({
-    mutationFn: () => qarzanHasanaApi.create({
-      memberId, scheme, amountRequested: amount, instalmentsRequested: installments,
-      currency, startDate: startDate.format('YYYY-MM-DD'),
-      guarantor1MemberId: g1, guarantor2MemberId: g2,
-      goldAmount: gold ?? undefined,
-      cashflowDocumentUrl: cashflowUrl || undefined,
-      goldSlipDocumentUrl: goldSlipUrl || undefined,
-      purpose: purpose.trim() || undefined,
-      repaymentPlan: repaymentPlan.trim() || undefined,
-      sourceOfIncome: sourceOfIncome.trim() || undefined,
-      otherObligations: otherObligations.trim() || undefined,
-      guarantorsAcknowledged,
-    }),
+    mutationFn: async () => {
+      // Create the draft first; documents need a loan id, so they upload after.
+      const loan = await qarzanHasanaApi.create({
+        memberId, scheme,
+        amountRequested: amount, instalmentsRequested: installments,
+        currency, startDate: startDate.format('YYYY-MM-DD'),
+        guarantor1MemberId: g1, guarantor2MemberId: g2,
+        goldAmount: goldAmount ?? undefined,
+        // Document URLs come from the upload-after-create chain; not from the user's input here.
+        purpose: purpose.trim() || undefined,
+        repaymentPlan: repaymentPlan.trim() || undefined,
+        sourceOfIncome: sourceOfIncome.trim() || undefined,
+        otherObligations: otherObligations.trim() || undefined,
+        guarantorsAcknowledged,
+        monthlyIncome: monthlyIncome ?? undefined,
+        monthlyExpenses: monthlyExpenses ?? undefined,
+        monthlyExistingEmis: monthlyEmis ?? undefined,
+        goldWeightGrams: goldRequired ? (goldWeight ?? undefined) : undefined,
+        goldPurityKarat: goldRequired ? (goldPurity ?? undefined) : undefined,
+        goldHeldAt: goldRequired ? (goldHeldAt.trim() || undefined) : undefined,
+        incomeSources: incomeSources.join(','),
+      });
+
+      // Best-effort upload chain. If either upload fails the loan is still saved; the user
+      // can retry from the detail page. We surface the failure but don't roll the loan back.
+      try {
+        if (cashflowFile) await qarzanHasanaApi.uploadCashflow(loan.id, cashflowFile);
+      } catch (e) {
+        message.warning('Loan saved but cashflow document upload failed - retry from the detail page.');
+      }
+      try {
+        if (goldSlipFile) await qarzanHasanaApi.uploadGoldSlip(loan.id, goldSlipFile);
+      } catch (e) {
+        message.warning('Loan saved but gold-slip upload failed - retry from the detail page.');
+      }
+      return loan;
+    },
     onSuccess: (loan) => {
       message.success(`Loan ${loan.code} created as Draft.`);
       navigate(`/qarzan-hasana/${loan.id}`);
@@ -75,27 +206,12 @@ export function NewQarzanHasanaPage() {
     onError: (e) => message.error(extractProblem(e).detail ?? 'Failed'),
   });
 
-  const guarantorsPicked = !!g1 && !!g2;
-  // Submission gate: identity + amounts + new required free-text + acknowledgment.
-  // The acknowledgment checkbox only matters once both guarantors are picked.
-  const canSubmit = !!memberId
-    && guarantorsPicked
-    && g1 !== g2
-    && g1 !== memberId && g2 !== memberId
-    && amount > 0
-    && installments > 0
-    && purpose.trim().length > 0
-    && repaymentPlan.trim().length > 0
-    && guarantorsAcknowledged;
-
   return (
     <div className="jm-stack" style={{ gap: 16 }}>
       <PageHeader title="New Qarzan Hasana application"
         subtitle="Interest-free loan request. Drafted at the counter, then routed for two-level approval."
         actions={<Button onClick={() => navigate('/qarzan-hasana')}>Cancel</Button>} />
 
-      {/* Documentation card - collapsible, default open. Walks the borrower (and the operator
-          assisting them at the counter) through the process so there are no surprises. */}
       <ProcessDocCard />
 
       <Card style={{ border: '1px solid var(--jm-border)' }}>
@@ -106,11 +222,11 @@ export function NewQarzanHasanaPage() {
           <Row gutter={16}>
             <Col xs={24} md={12}>
               <Form.Item label={<LabelWithHelp help="The member taking the loan. Must be in good standing.">Borrower</LabelWithHelp>} required>
-                <MemberPicker value={memberId} onChange={setMemberId} />
+                <MemberPicker value={memberId} onChange={(v) => { setMemberId(v); setG1Eligible(false); setG2Eligible(false); }} />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label={<LabelWithHelp help="Different schemes have specific eligibility (e.g., Education for school/college, Medical for treatment, Business for trade). Pick the closest match - the approver can adjust.">Scheme</LabelWithHelp>}>
+              <Form.Item label={<LabelWithHelp help="Different schemes have specific eligibility - pick the closest match; the approver can adjust.">Scheme</LabelWithHelp>}>
                 <Select value={scheme} onChange={(v) => setScheme(v as QhScheme)}
                   options={Object.entries(QhSchemeLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
               </Form.Item>
@@ -127,7 +243,7 @@ export function NewQarzanHasanaPage() {
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item label={<LabelWithHelp help="How many monthly payments you'd like to spread the repayment over. Up to 240 (20 years).">Instalments</LabelWithHelp>}>
+              <Form.Item label={<LabelWithHelp help="How many monthly payments you'd like to spread the repayment over. Up to 240.">Instalments</LabelWithHelp>}>
                 <InputNumber value={installments} onChange={(v) => setInstallments(Number(v ?? 1))} min={1} max={240} style={{ inlineSize: '100%' }} />
               </Form.Item>
             </Col>
@@ -136,89 +252,196 @@ export function NewQarzanHasanaPage() {
                 <DatePicker value={startDate} onChange={(v) => v && setStartDate(v)} style={{ inlineSize: '100%' }} />
               </Form.Item>
             </Col>
-            <Col xs={24} md={12}>
-              <Form.Item label={<LabelWithHelp help="If pledging gold as security, enter its assessed value. Optional but strengthens the application.">Gold amount (optional)</LabelWithHelp>}>
-                <InputNumber value={gold ?? undefined} onChange={(v) => setGold(v === null || v === undefined ? null : Number(v))}
-                  min={0} style={{ inlineSize: '100%' }} placeholder="Value of gold collateral" />
-              </Form.Item>
-            </Col>
           </Row>
 
-          {/* Borrower's case - the key qualitative inputs the L1 approver reads to decide. */}
-          <Divider orientation="left" plain style={{ marginBlockStart: 8 }}>
+          {/* Borrower's case */}
+          <Divider orientation="left" plain>
             <Typography.Title level={5} style={{ margin: 0 }}>
               <FileTextOutlined /> Borrower's case
             </Typography.Title>
           </Divider>
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item label={<LabelWithHelp help="Describe what the funds will be used for. The clearer the purpose, the faster the approval.">Purpose of the loan</LabelWithHelp>} required>
+              <Form.Item label={<LabelWithHelp help="What will the funds be used for? The clearer the purpose, the faster the approval.">Purpose of the loan</LabelWithHelp>} required>
                 <Input.TextArea value={purpose} onChange={(e) => setPurpose(e.target.value)} rows={4}
                   placeholder="e.g., To cover hospital bills for my mother's surgery scheduled next month..."
                   maxLength={2000} showCount />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label={<LabelWithHelp help="How will you pay each instalment? Salary, business income, family support - be concrete.">Repayment plan</LabelWithHelp>} required>
+              <Form.Item label={<LabelWithHelp help="Be concrete about how you'll pay each instalment - salary, business income, bonus etc.">Repayment plan</LabelWithHelp>} required>
                 <Input.TextArea value={repaymentPlan} onChange={(e) => setRepaymentPlan(e.target.value)} rows={4}
                   placeholder="e.g., AED 1,500 monthly from my salary. Bonus in March will reduce the balance further..."
                   maxLength={2000} showCount />
               </Form.Item>
             </Col>
+          </Row>
+
+          {/* Income sources (multi-select) + free-text details */}
+          <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item label={<LabelWithHelp help="Your primary income source. Helps the approver assess feasibility.">Source of income (optional)</LabelWithHelp>}>
+              <Form.Item label={<LabelWithHelp help="Tick every category that applies. Pick at least one.">Income sources</LabelWithHelp>} required>
+                <Select mode="multiple" value={incomeSources} onChange={setIncomeSources}
+                  placeholder="Select all that apply"
+                  options={IncomeSourceOptions}
+                  style={{ inlineSize: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label={<LabelWithHelp help="Optional - elaborate on the selected income categories (employer name, business type, monthly net etc.).">Income details</LabelWithHelp>}>
                 <Input.TextArea value={sourceOfIncome} onChange={(e) => setSourceOfIncome(e.target.value)} rows={2}
                   placeholder="e.g., Salaried at ABC Co. since 2018, monthly net AED 8,000."
                   maxLength={1000} showCount />
               </Form.Item>
             </Col>
+          </Row>
+
+          {/* Cashflow - structured + optional document upload */}
+          <Divider orientation="left" plain>
+            <Typography.Title level={5} style={{ margin: 0 }}>
+              <DollarOutlined /> Monthly cashflow
+            </Typography.Title>
+          </Divider>
+          <Row gutter={16}>
+            <Col xs={24} md={6}>
+              <Form.Item label={<LabelWithHelp help="Total monthly income across all sources, in your loan currency.">Monthly income</LabelWithHelp>}>
+                <InputNumber value={monthlyIncome ?? undefined} onChange={(v) => setMonthlyIncome(v === null || v === undefined ? null : Number(v))}
+                  min={0} style={{ inlineSize: '100%' }} placeholder="e.g., 8000" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={6}>
+              <Form.Item label={<LabelWithHelp help="Rent, utilities, household, school fees etc.">Monthly expenses</LabelWithHelp>}>
+                <InputNumber value={monthlyExpenses ?? undefined} onChange={(v) => setMonthlyExpenses(v === null || v === undefined ? null : Number(v))}
+                  min={0} style={{ inlineSize: '100%' }} placeholder="e.g., 4500" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={6}>
+              <Form.Item label={<LabelWithHelp help="Other loans / EMIs you're already paying outside this jamaat.">Other monthly EMIs</LabelWithHelp>}>
+                <InputNumber value={monthlyEmis ?? undefined} onChange={(v) => setMonthlyEmis(v === null || v === undefined ? null : Number(v))}
+                  min={0} style={{ inlineSize: '100%' }} placeholder="e.g., 1200" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={6}>
+              <Form.Item label="Net monthly surplus">
+                <Card size="small" style={{ background: netSurplus >= 0 ? 'rgba(11,110,99,0.08)' : 'rgba(220,38,38,0.08)', border: '1px solid var(--jm-border)' }}>
+                  <Statistic value={netSurplus} precision={2} suffix={currency}
+                    valueStyle={{ fontSize: 16, color: netSurplus >= 0 ? '#0E5C40' : '#DC2626', fontWeight: 700 }} />
+                  <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Income - Expenses - EMIs</div>
+                </Card>
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item label={<LabelWithHelp help="Any other active loans or major commitments outside this jamaat. Disclosing strengthens trust.">Other current obligations (optional)</LabelWithHelp>}>
+              <Form.Item label={<LabelWithHelp help="Optional - upload a supporting document (PDF or image, up to 10 MB). Speeds approval for amounts above your usual range.">Cashflow document (optional)</LabelWithHelp>}>
+                <Upload
+                  accept="application/pdf,image/*"
+                  maxCount={1}
+                  beforeUpload={(file: RcFile) => { setCashflowFile(file); return false; }}
+                  onRemove={() => { setCashflowFile(null); return true; }}
+                  fileList={cashflowFile ? [{ uid: '-1', name: cashflowFile.name, status: 'done' } as UploadFile] : []}
+                >
+                  <Button icon={<UploadOutlined />}>Choose file</Button>
+                </Upload>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* Gold - structured (only when amount > 0) + optional slip upload */}
+          <Divider orientation="left" plain>
+            <Typography.Title level={5} style={{ margin: 0 }}>
+              <GoldOutlined /> Gold collateral (optional)
+            </Typography.Title>
+          </Divider>
+          <Row gutter={16}>
+            <Col xs={24} md={6}>
+              <Form.Item label={<LabelWithHelp help="Assessed monetary value of the gold being pledged. Leave blank if none.">Gold amount</LabelWithHelp>}>
+                <InputNumber value={goldAmount ?? undefined} onChange={(v) => setGoldAmount(v === null || v === undefined ? null : Number(v))}
+                  min={0} style={{ inlineSize: '100%' }} placeholder="e.g., 12000" />
+              </Form.Item>
+            </Col>
+            {goldRequired && (
+              <>
+                <Col xs={24} md={6}>
+                  <Form.Item label={<LabelWithHelp help="Total weight in grams.">Weight (g)</LabelWithHelp>} required>
+                    <InputNumber value={goldWeight ?? undefined} onChange={(v) => setGoldWeight(v === null || v === undefined ? null : Number(v))}
+                      min={0} step={0.1} style={{ inlineSize: '100%' }} placeholder="e.g., 22.5" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Form.Item label={<LabelWithHelp help="Purity in karat - 18 / 22 / 24 etc.">Purity (karat)</LabelWithHelp>} required>
+                    <Select value={goldPurity ?? undefined} onChange={(v) => setGoldPurity(v ?? null)}
+                      placeholder="Select"
+                      options={[18, 20, 22, 24].map((k) => ({ value: k, label: `${k} K` }))} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Form.Item label={<LabelWithHelp help="Where is the gold currently held? Borrower / locker / vault / etc.">Held at</LabelWithHelp>} required>
+                    <Input value={goldHeldAt} onChange={(e) => setGoldHeldAt(e.target.value)}
+                      placeholder="e.g., ABC Jewellers vault, Dubai" maxLength={200} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item label={<LabelWithHelp help="Optional - assessor's slip / certificate (PDF or image, up to 10 MB).">Gold slip (optional)</LabelWithHelp>}>
+                    <Upload
+                      accept="application/pdf,image/*"
+                      maxCount={1}
+                      beforeUpload={(file: RcFile) => { setGoldSlipFile(file); return false; }}
+                      onRemove={() => { setGoldSlipFile(null); return true; }}
+                      fileList={goldSlipFile ? [{ uid: '-1', name: goldSlipFile.name, status: 'done' } as UploadFile] : []}
+                    >
+                      <Button icon={<UploadOutlined />}>Choose file</Button>
+                    </Upload>
+                  </Form.Item>
+                </Col>
+              </>
+            )}
+          </Row>
+
+          {/* Other obligations (free text) */}
+          <Row gutter={16}>
+            <Col xs={24}>
+              <Form.Item label={<LabelWithHelp help="Any other active loans / commitments outside this jamaat. Disclosing strengthens trust.">Other current obligations (optional)</LabelWithHelp>}>
                 <Input.TextArea value={otherObligations} onChange={(e) => setOtherObligations(e.target.value)} rows={2}
-                  placeholder="e.g., Car loan with HSBC - AED 1,200/mo, ends Dec 2026. No other loans."
+                  placeholder="e.g., Car loan with HSBC - AED 1,200/mo, ends Dec 2026."
                   maxLength={1000} showCount />
               </Form.Item>
             </Col>
           </Row>
 
-          {/* Guarantors + supporting documents. */}
-          <Divider orientation="left" plain style={{ marginBlockStart: 8 }}>
+          {/* Guarantors */}
+          <Divider orientation="left" plain>
             <Typography.Title level={5} style={{ margin: 0 }}>
-              <SafetyCertificateOutlined /> Guarantors &amp; documents
+              <SafetyCertificateOutlined /> Guarantors (kafil)
             </Typography.Title>
           </Divider>
           <Alert type="info" showIcon style={{ marginBlockEnd: 16 }}
-            message="Two guarantors are required. Each must be a member, not the borrower, and not currently in default on another QH loan." />
+            message="Two guarantors are required. Each must be a member, not the borrower, and not currently in default. Eligibility is checked the moment you pick a member." />
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item label={<LabelWithHelp help="The first kafil. Must be present when this draft is created so they can consent (see below).">Guarantor 1</LabelWithHelp>} required>
+              <Form.Item label={<LabelWithHelp help="The first kafil. Eligibility is checked live the moment you pick a member.">Guarantor 1</LabelWithHelp>} required>
                 <MemberPicker value={g1} onChange={(v) => { setG1(v); setGuarantorsAcknowledged(false); }} />
+                {!!memberId && !!g1 && (
+                  <GuarantorEligibility memberId={g1} borrowerId={memberId} otherGuarantorId={g2}
+                    onEligibilityChange={setG1Eligible} />
+                )}
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label={<LabelWithHelp help="The second kafil. Must be a different person from Guarantor 1, and also present at the counter.">Guarantor 2</LabelWithHelp>} required>
+              <Form.Item label={<LabelWithHelp help="The second kafil. Different from Guarantor 1 and from the borrower.">Guarantor 2</LabelWithHelp>} required>
                 <MemberPicker value={g2} onChange={(v) => { setG2(v); setGuarantorsAcknowledged(false); }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item label={<LabelWithHelp help="Optional - link to a document showing your monthly income and expenses. Strongly recommended for amounts above your usual range.">Cashflow document URL</LabelWithHelp>}>
-                <Input value={cashflowUrl} onChange={(e) => setCashflowUrl(e.target.value)} placeholder="https://..." />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item label={<LabelWithHelp help="Optional - if pledging gold, link to the assessor's slip.">Gold slip URL</LabelWithHelp>}>
-                <Input value={goldSlipUrl} onChange={(e) => setGoldSlipUrl(e.target.value)} placeholder="https://..." />
+                {!!memberId && !!g2 && (
+                  <GuarantorEligibility memberId={g2} borrowerId={memberId} otherGuarantorId={g1}
+                    onEligibilityChange={setG2Eligible} />
+                )}
               </Form.Item>
             </Col>
           </Row>
 
-          {/* Guarantor consent block - operator-witnessed acknowledgment. Only meaningful once
-              both guarantors are picked; if either is changed, the acknowledgment resets so the
-              new guarantor's consent is captured fresh. The Submit button is gated on this. */}
-          {guarantorsPicked && (
+          {/* Guarantor consent block */}
+          {guarantorsValid && (
             <Alert
-              type="warning"
-              showIcon
+              type="warning" showIcon
               style={{ marginBlockEnd: 16, background: '#FFFBEB', border: '1px solid #FDE68A' }}
               message={<strong>Guarantor consent (required)</strong>}
               description={
@@ -235,10 +458,6 @@ export function NewQarzanHasanaPage() {
                   >
                     <strong>I confirm that both guarantors are present and have agreed to act as kafil for this loan.</strong>
                   </Checkbox>
-                  <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', marginBlockStart: 6 }}>
-                    Notification-based remote consent (each guarantor confirms via SMS / email link)
-                    is on the roadmap; for now this is the operator-witnessed consent flow.
-                  </div>
                 </div>
               }
             />
@@ -246,7 +465,7 @@ export function NewQarzanHasanaPage() {
 
           <Space style={{ display: 'flex', justifyContent: 'flex-end', marginBlockStart: 16 }}>
             <Button onClick={() => navigate('/qarzan-hasana')}>Cancel</Button>
-            <Tooltip title={!canSubmit ? 'Fill in all required fields and tick the guarantor consent checkbox.' : ''}>
+            <Tooltip title={!canSubmit ? 'Fill in all required fields, ensure both guarantors are eligible, and tick the consent checkbox.' : ''}>
               <Button type="primary" loading={mut.isPending} disabled={!canSubmit}
                 icon={<ArrowRightOutlined />} onClick={() => mut.mutate()}>
                 Create as Draft
@@ -259,9 +478,6 @@ export function NewQarzanHasanaPage() {
   );
 }
 
-/// Standalone documentation card explaining the QH process. Collapsible (default open) so
-/// returning users can fold it once they know the flow. The content is intentionally short
-/// so it doesn't push the form below the fold; long-form policy goes in /help.
 function ProcessDocCard() {
   return (
     <Collapse defaultActiveKey={['about']} ghost

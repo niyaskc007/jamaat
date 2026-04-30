@@ -71,10 +71,29 @@ public sealed class QarzanHasanaLoan : AggregateRoot<Guid>, ITenantScoped, IAudi
     public string? Purpose { get; private set; }
     /// <summary>How the borrower plans to repay each instalment. Required for new submissions.</summary>
     public string? RepaymentPlan { get; private set; }
-    /// <summary>Primary source of income (salary / business / etc.). Optional context for approvers.</summary>
+    /// <summary>Free-text "income details" elaborating on the selected income sources. Optional.</summary>
     public string? SourceOfIncome { get; private set; }
     /// <summary>Other active obligations outside this jamaat. Optional context for approvers.</summary>
     public string? OtherObligations { get; private set; }
+
+    // --- Structured cashflow (added v2) -----------------------------------
+    /// <summary>Declared monthly income across all sources.</summary>
+    public decimal? MonthlyIncome { get; private set; }
+    /// <summary>Declared monthly expenses (rent / utilities / household).</summary>
+    public decimal? MonthlyExpenses { get; private set; }
+    /// <summary>Other monthly EMIs / loan instalments outside this jamaat.</summary>
+    public decimal? MonthlyExistingEmis { get; private set; }
+
+    // --- Structured gold details (added v2) -------------------------------
+    public decimal? GoldWeightGrams { get; private set; }
+    public int? GoldPurityKarat { get; private set; }
+    public string? GoldHeldAt { get; private set; }
+
+    // --- Income sources tag list (added v2) -------------------------------
+    /// <summary>Comma-separated list of source codes (SALARY / BUSINESS / INVESTMENT /
+    /// SHARE_MARKET / REAL_ESTATE / RENTAL / PENSION / FAMILY / AGRICULTURE / FREELANCE / OTHER).
+    /// At least one is expected on new submissions; legacy rows may be empty.</summary>
+    public string? IncomeSources { get; private set; }
 
     // --- Guarantor acknowledgment (kafalah consent, witnessed at the counter) ---
     /// <summary>
@@ -118,7 +137,10 @@ public sealed class QarzanHasanaLoan : AggregateRoot<Guid>, ITenantScoped, IAudi
 
     public void UpdateDraft(decimal amountRequested, int installmentsRequested, string? cashflowUrl, string? goldSlipUrl,
         decimal? goldAmount, DateOnly startDate, Guid guarantor1, Guid guarantor2, Guid? familyId,
-        string? purpose, string? repaymentPlan, string? sourceOfIncome, string? otherObligations)
+        string? purpose, string? repaymentPlan, string? sourceOfIncome, string? otherObligations,
+        decimal? monthlyIncome, decimal? monthlyExpenses, decimal? monthlyExistingEmis,
+        decimal? goldWeightGrams, int? goldPurityKarat, string? goldHeldAt,
+        string? incomeSources)
     {
         if (Status != QarzanHasanaStatus.Draft) throw new InvalidOperationException("Only drafts may be edited.");
         if (amountRequested <= 0) throw new ArgumentException("Amount must be > 0.");
@@ -138,6 +160,31 @@ public sealed class QarzanHasanaLoan : AggregateRoot<Guid>, ITenantScoped, IAudi
         RepaymentPlan = repaymentPlan;
         SourceOfIncome = sourceOfIncome;
         OtherObligations = otherObligations;
+        MonthlyIncome = monthlyIncome;
+        MonthlyExpenses = monthlyExpenses;
+        MonthlyExistingEmis = monthlyExistingEmis;
+        GoldWeightGrams = goldWeightGrams;
+        GoldPurityKarat = goldPurityKarat;
+        GoldHeldAt = goldHeldAt;
+        IncomeSources = incomeSources;
+    }
+
+    /// <summary>Set or clear the cashflow document URL. Allowed in Draft only - once submitted,
+    /// supporting docs are frozen alongside the rest of the application. The actual file lives
+    /// in IQarzanHasanaDocumentStorage; this just persists the addressable URL.</summary>
+    public void SetCashflowDocumentUrl(string? url)
+    {
+        if (Status != QarzanHasanaStatus.Draft)
+            throw new InvalidOperationException("Documents can only be modified while the loan is in Draft.");
+        CashflowDocumentUrl = string.IsNullOrWhiteSpace(url) ? null : url;
+    }
+
+    /// <summary>Set or clear the gold-slip document URL. Same rules as cashflow.</summary>
+    public void SetGoldSlipDocumentUrl(string? url)
+    {
+        if (Status != QarzanHasanaStatus.Draft)
+            throw new InvalidOperationException("Documents can only be modified while the loan is in Draft.");
+        GoldSlipDocumentUrl = string.IsNullOrWhiteSpace(url) ? null : url;
     }
 
     /// <summary>Record that the operator has witnessed both guarantors agreeing to act as kafil.
@@ -160,11 +207,15 @@ public sealed class QarzanHasanaLoan : AggregateRoot<Guid>, ITenantScoped, IAudi
         GuarantorsAcknowledgedByUserName = null;
     }
 
-    public void Submit()
+    /// <summary>Move a draft into the L1 approval queue.</summary>
+    /// <param name="bothGuarantorsRemoteAccepted">True iff every guarantor has independently
+    /// accepted via the public consent portal. Either this OR the operator-witnessed flag is
+    /// sufficient for submission - both are equally trustworthy proofs of kafalah.</param>
+    public void Submit(bool bothGuarantorsRemoteAccepted = false)
     {
         if (Status != QarzanHasanaStatus.Draft) throw new InvalidOperationException("Only drafts can be submitted.");
-        if (!GuarantorsAcknowledged)
-            throw new InvalidOperationException("Both guarantors must acknowledge their kafalah before the loan can be submitted for approval.");
+        if (!GuarantorsAcknowledged && !bothGuarantorsRemoteAccepted)
+            throw new InvalidOperationException("Either the operator must witness the guarantors' kafalah, or both guarantors must accept their kafalah via the consent portal, before the loan can be submitted.");
         Status = QarzanHasanaStatus.PendingLevel1;
     }
 

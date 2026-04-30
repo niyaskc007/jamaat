@@ -25,6 +25,33 @@ public interface IQarzanHasanaService
     Task<Result<QarzanHasanaLoanDto>> DisburseAsync(Guid id, DisburseQhDto dto, CancellationToken ct = default);
     Task<Result> WaiveInstallmentAsync(Guid id, WaiveQhInstallmentDto dto, CancellationToken ct = default);
     Task<Result<LoanDecisionSupportDto>> DecisionSupportAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>Probe whether a member is eligible to act as a guarantor on a new loan. Used
+    /// by the new-loan form to give the borrower upfront feedback before the request hits
+    /// the approval queue. Hard failures block submission; soft warnings surface but allow.</summary>
+    /// <param name="excludeLoanId">Existing draft to exclude from "active guarantee count" check;
+    /// useful when editing a draft (the in-flight loan shouldn't count against the kafil's load).</param>
+    Task<Result<GuarantorEligibilityDto>> CheckGuarantorEligibilityAsync(
+        Guid memberId, Guid borrowerId, Guid? otherGuarantorId, Guid? excludeLoanId, CancellationToken ct = default);
+
+    /// <summary>Persist (or clear, with null) the URL of an uploaded supporting document.
+    /// Mirrors ReceiptService's SetAgreementDocumentUrlAsync. Two slots per loan: cashflow
+    /// + gold-slip. Loan must be in Draft to accept changes.</summary>
+    Task<Result<QarzanHasanaLoanDto>> SetCashflowDocumentUrlAsync(Guid id, string? url, CancellationToken ct = default);
+    Task<Result<QarzanHasanaLoanDto>> SetGoldSlipDocumentUrlAsync(Guid id, string? url, CancellationToken ct = default);
+
+    /// <summary>Per-guarantor consent records for this loan - tokens + statuses. Used on the
+    /// loan detail page so the operator can copy the public consent link and resend it.</summary>
+    Task<Result<IReadOnlyList<GuarantorConsentDto>>> ListGuarantorConsentsAsync(Guid loanId, CancellationToken ct = default);
+
+    /// <summary>Resolve a public consent token. No auth required; the token IS the credential.</summary>
+    Task<Result<GuarantorConsentPortalDto>> GetConsentPortalAsync(string token, CancellationToken ct = default);
+
+    /// <summary>Record an Accepted response on a consent token. Idempotent within Pending state.</summary>
+    Task<Result<GuarantorConsentPortalDto>> AcceptConsentAsync(string token, RecordConsentResponseDto meta, CancellationToken ct = default);
+
+    /// <summary>Record a Declined response on a consent token. Idempotent within Pending state.</summary>
+    Task<Result<GuarantorConsentPortalDto>> DeclineConsentAsync(string token, RecordConsentResponseDto meta, CancellationToken ct = default);
 }
 
 public sealed class QarzanHasanaService(
@@ -106,7 +133,10 @@ public sealed class QarzanHasanaService(
             dto.StartDate, dto.Guarantor1MemberId, dto.Guarantor2MemberId);
         loan.UpdateDraft(dto.AmountRequested, dto.InstalmentsRequested, dto.CashflowDocumentUrl, dto.GoldSlipDocumentUrl,
             dto.GoldAmount, dto.StartDate, dto.Guarantor1MemberId, dto.Guarantor2MemberId, dto.FamilyId,
-            dto.Purpose, dto.RepaymentPlan, dto.SourceOfIncome, dto.OtherObligations);
+            dto.Purpose, dto.RepaymentPlan, dto.SourceOfIncome, dto.OtherObligations,
+            dto.MonthlyIncome, dto.MonthlyExpenses, dto.MonthlyExistingEmis,
+            dto.GoldWeightGrams, dto.GoldPurityKarat, dto.GoldHeldAt,
+            dto.IncomeSources);
         // Operator-witnessed kafalah consent. Captured here at draft time; the consent flag stays
         // true through edits unless the borrower changes a guarantor (UpdateDraft path).
         if (dto.GuarantorsAcknowledged)
@@ -114,6 +144,17 @@ public sealed class QarzanHasanaService(
             loan.AcknowledgeGuarantors(currentUser.UserName ?? "system", clock.UtcNow);
         }
         db.QarzanHasanaLoans.Add(loan);
+
+        // Per-guarantor consent rows for the public portal flow. The token is the credential -
+        // anyone holding it can record an accept / decline; we store IP + UA at response time
+        // for evidentiary value. Two rows are generated per loan.
+        foreach (var gid in new[] { dto.Guarantor1MemberId, dto.Guarantor2MemberId })
+        {
+            var consent = new QarzanHasanaGuarantorConsent(
+                Guid.NewGuid(), tenant.TenantId, loan.Id, gid, GenerateConsentToken(), clock.UtcNow);
+            db.QarzanHasanaGuarantorConsents.Add(consent);
+        }
+
         await uow.SaveChangesAsync(ct);
         return await LoadAsync(loan.Id, ct);
     }
@@ -129,22 +170,71 @@ public sealed class QarzanHasanaService(
             || loan.Guarantor2MemberId != dto.Guarantor2MemberId;
         loan.UpdateDraft(dto.AmountRequested, dto.InstalmentsRequested, dto.CashflowDocumentUrl, dto.GoldSlipDocumentUrl,
             dto.GoldAmount, dto.StartDate, dto.Guarantor1MemberId, dto.Guarantor2MemberId, dto.FamilyId,
-            dto.Purpose, dto.RepaymentPlan, dto.SourceOfIncome, dto.OtherObligations);
+            dto.Purpose, dto.RepaymentPlan, dto.SourceOfIncome, dto.OtherObligations,
+            dto.MonthlyIncome, dto.MonthlyExpenses, dto.MonthlyExistingEmis,
+            dto.GoldWeightGrams, dto.GoldPurityKarat, dto.GoldHeldAt,
+            dto.IncomeSources);
         if (guarantorChanged) loan.ClearGuarantorAcknowledgment();
         if (dto.GuarantorsAcknowledged && !loan.GuarantorsAcknowledged)
         {
             loan.AcknowledgeGuarantors(currentUser.UserName ?? "system", clock.UtcNow);
         }
         db.QarzanHasanaLoans.Update(loan);
+
+        // If a guarantor was swapped, the previous person's consent is no longer relevant.
+        // Drop their consent rows and regenerate the missing one(s) so the new guarantor has a
+        // fresh token to respond to.
+        if (guarantorChanged)
+        {
+            var existing = await db.QarzanHasanaGuarantorConsents
+                .Where(c => c.LoanId == id)
+                .ToListAsync(ct);
+            var keepIds = new[] { dto.Guarantor1MemberId, dto.Guarantor2MemberId };
+            var stale = existing.Where(c => !keepIds.Contains(c.GuarantorMemberId)).ToList();
+            foreach (var s in stale) db.QarzanHasanaGuarantorConsents.Remove(s);
+            foreach (var gid in keepIds)
+            {
+                if (!existing.Any(c => c.GuarantorMemberId == gid))
+                {
+                    db.QarzanHasanaGuarantorConsents.Add(new QarzanHasanaGuarantorConsent(
+                        Guid.NewGuid(), tenant.TenantId, id, gid, GenerateConsentToken(), clock.UtcNow));
+                }
+            }
+        }
+
         await uow.SaveChangesAsync(ct);
         return await LoadAsync(id, ct);
+    }
+
+    /// <summary>Cryptographically random URL-safe token. 32 random bytes -> ~43-char base64
+    /// after stripping padding; collisions are negligible. Uniqueness guaranteed by the unique
+    /// index on QarzanHasanaGuarantorConsent.Token.</summary>
+    private static string GenerateConsentToken()
+    {
+        Span<byte> bytes = stackalloc byte[32];
+        System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
+        return Convert.ToBase64String(bytes)
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
     }
 
     public async Task<Result<QarzanHasanaLoanDto>> SubmitAsync(Guid id, CancellationToken ct = default)
     {
         var loan = await db.QarzanHasanaLoans.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (loan is null) return Error.NotFound("qh.not_found", "Loan not found.");
-        loan.Submit();
+
+        // Compute the second consent path: every guarantor's portal record is Accepted.
+        var consents = await db.QarzanHasanaGuarantorConsents.AsNoTracking()
+            .Where(c => c.LoanId == loan.Id)
+            .ToListAsync(ct);
+        var guarantorIds = new[] { loan.Guarantor1MemberId, loan.Guarantor2MemberId };
+        var allRemoteAccepted = guarantorIds.All(gid =>
+            consents.Any(c => c.GuarantorMemberId == gid && c.Status == QhGuarantorConsentStatus.Accepted));
+
+        try { loan.Submit(allRemoteAccepted); }
+        catch (InvalidOperationException ex) { return Error.Business("qh.consent_required", ex.Message); }
+
         db.QarzanHasanaLoans.Update(loan);
         await uow.SaveChangesAsync(ct);
         return await LoadAsync(id, ct);
@@ -460,7 +550,259 @@ public sealed class QarzanHasanaService(
         var pctRemaining = currentNet <= 0 ? 0m : Math.Round(100m * projected / currentNet, 1);
         var fundPosition = new LoanFundPosition(loan.Currency, currentNet, requested, projected, pctRemaining);
 
-        return new LoanDecisionSupportDto(loan.Id, reliability, commitmentSummary, donationSummary, pastSummary, fundPosition);
+        // Per-guarantor track records. Two passes; the helper does its own work in isolation
+        // so a missing reliability service for one guarantor doesn't taint the other.
+        var guarantorRecords = new List<GuarantorTrackRecord>(2);
+        guarantorRecords.Add(await BuildGuarantorTrackRecordAsync(loan.Guarantor1MemberId, loan.MemberId, loan.Guarantor2MemberId, loan.Id, ct));
+        guarantorRecords.Add(await BuildGuarantorTrackRecordAsync(loan.Guarantor2MemberId, loan.MemberId, loan.Guarantor1MemberId, loan.Id, ct));
+
+        return new LoanDecisionSupportDto(loan.Id, reliability, commitmentSummary, donationSummary, pastSummary, fundPosition, guarantorRecords);
+    }
+
+    public async Task<Result<GuarantorEligibilityDto>> CheckGuarantorEligibilityAsync(
+        Guid memberId, Guid borrowerId, Guid? otherGuarantorId, Guid? excludeLoanId, CancellationToken ct = default)
+    {
+        var member = await db.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == memberId, ct);
+        if (member is null)
+            return Error.NotFound("guarantor.not_found", "Member not found.");
+
+        var checks = new List<EligibilityCheck>();
+
+        // Hard checks
+        checks.Add(new EligibilityCheck("not_self", "Not the borrower",
+            memberId != borrowerId, true,
+            memberId == borrowerId ? "Borrower cannot guarantee their own loan." : "OK."));
+
+        if (otherGuarantorId.HasValue)
+        {
+            checks.Add(new EligibilityCheck("not_other", "Not the same as the other guarantor",
+                memberId != otherGuarantorId.Value, true,
+                memberId == otherGuarantorId.Value ? "Both guarantors must be different members." : "OK."));
+        }
+
+        checks.Add(new EligibilityCheck("not_deleted", "Member is on file",
+            !member.IsDeleted, true,
+            member.IsDeleted ? "This member has been removed from the rolls." : "OK."));
+
+        var statusOk = member.Status == Domain.Enums.MemberStatus.Active;
+        checks.Add(new EligibilityCheck("status_active", "Member status is Active",
+            statusOk, true,
+            statusOk ? "OK." : $"Member status is {member.Status}, not Active."));
+
+        // Member must not currently be in default on their own active QH loan.
+        var hasDefault = await db.QarzanHasanaLoans.AsNoTracking()
+            .AnyAsync(l => l.MemberId == memberId && l.Status == QarzanHasanaStatus.Defaulted, ct);
+        checks.Add(new EligibilityCheck("no_active_default", "No active defaulted loan as borrower",
+            !hasDefault, true,
+            hasDefault ? "Member is currently in default on their own QH loan." : "OK."));
+
+        // Cap simultaneous guarantees at 2 - sanity bound; configurable per-tenant in v3.
+        const int maxActiveGuarantees = 2;
+        var activeGuarantees = await db.QarzanHasanaLoans.AsNoTracking()
+            .Where(l => (l.Guarantor1MemberId == memberId || l.Guarantor2MemberId == memberId)
+                && (l.Status == QarzanHasanaStatus.PendingLevel1
+                    || l.Status == QarzanHasanaStatus.PendingLevel2
+                    || l.Status == QarzanHasanaStatus.Approved
+                    || l.Status == QarzanHasanaStatus.Disbursed
+                    || l.Status == QarzanHasanaStatus.Active)
+                && (excludeLoanId == null || l.Id != excludeLoanId))
+            .CountAsync(ct);
+        var loadOk = activeGuarantees < maxActiveGuarantees;
+        checks.Add(new EligibilityCheck("guarantee_load", $"Currently guaranteeing fewer than {maxActiveGuarantees} active loans",
+            loadOk, true,
+            $"Currently guaranteeing {activeGuarantees} active loan(s). Limit is {maxActiveGuarantees}."));
+
+        // Soft checks - tenure + reliability. The form surfaces these but allows submission.
+        var tenureDays = (clock.Today.DayNumber - DateOnly.FromDateTime(member.CreatedAtUtc.UtcDateTime).DayNumber);
+        var tenureOk = tenureDays >= 90;
+        checks.Add(new EligibilityCheck("tenure", "Tenure is at least 90 days",
+            tenureOk, false,
+            $"On the rolls for {tenureDays} day(s)." + (tenureOk ? "" : " Below the 90-day soft floor.")));
+
+        // Reliability check - resolved late through service provider so the eligibility probe
+        // doesn't fail when the reliability module is missing. Soft warning only.
+        try
+        {
+            var rel = services.GetService(typeof(Members.Reliability.IReliabilityService))
+                as Members.Reliability.IReliabilityService;
+            if (rel is not null)
+            {
+                var profile = await rel.GetAsync(memberId, ct);
+                if (profile.IsSuccess)
+                {
+                    var grade = profile.Value.Grade;
+                    var gradeOk = grade != "C" && grade != "D";
+                    checks.Add(new EligibilityCheck("reliability", "Reliability grade is A, B, or Unrated",
+                        gradeOk, false,
+                        gradeOk ? $"Grade {grade}." : $"Grade {grade} - approver should review."));
+                }
+            }
+        }
+        catch
+        {
+            // Swallow - reliability is advisory; absence shouldn't fail eligibility.
+        }
+
+        var hardPassed = checks.Where(c => c.Hard).All(c => c.Passed);
+        var softWarnings = checks.Any(c => !c.Hard && !c.Passed);
+
+        return new GuarantorEligibilityDto(
+            member.Id, member.FullName, member.ItsNumber.Value,
+            hardPassed, softWarnings, checks);
+    }
+
+    /// <summary>Compact track-record snapshot for one guarantor; used by the decision-support panel.</summary>
+    private async Task<GuarantorTrackRecord> BuildGuarantorTrackRecordAsync(Guid guarantorId, Guid borrowerId, Guid otherGuarantorId, Guid loanId, CancellationToken ct)
+    {
+        var member = await db.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == guarantorId, ct);
+        if (member is null)
+        {
+            return new GuarantorTrackRecord(guarantorId, "", "(unknown)", "Unrated", null, 0, 0, 0, false, "Member not on file.");
+        }
+
+        // Reliability via service provider; tolerate absence (returns Unrated stub).
+        string grade = "Unrated";
+        decimal? totalScore = null;
+        try
+        {
+            var rel = services.GetService(typeof(Members.Reliability.IReliabilityService))
+                as Members.Reliability.IReliabilityService;
+            if (rel is not null)
+            {
+                var profile = await rel.GetAsync(guarantorId, ct);
+                if (profile.IsSuccess)
+                {
+                    grade = profile.Value.Grade;
+                    totalScore = profile.Value.TotalScore;
+                }
+            }
+        }
+        catch { /* advisory only */ }
+
+        // Active guarantees - exclude the current loan so the count reflects "other" load.
+        var activeGuarantees = await db.QarzanHasanaLoans.AsNoTracking()
+            .CountAsync(l => (l.Guarantor1MemberId == guarantorId || l.Guarantor2MemberId == guarantorId)
+                && l.Id != loanId
+                && (l.Status == QarzanHasanaStatus.PendingLevel1
+                    || l.Status == QarzanHasanaStatus.PendingLevel2
+                    || l.Status == QarzanHasanaStatus.Approved
+                    || l.Status == QarzanHasanaStatus.Disbursed
+                    || l.Status == QarzanHasanaStatus.Active), ct);
+
+        // Past loans as borrower (any non-cancelled, non-rejected).
+        var pastLoans = await db.QarzanHasanaLoans.AsNoTracking()
+            .Where(l => l.MemberId == guarantorId
+                && l.Status != QarzanHasanaStatus.Cancelled
+                && l.Status != QarzanHasanaStatus.Rejected)
+            .Select(l => l.Status)
+            .ToListAsync(ct);
+        var pastCount = pastLoans.Count;
+        var defaultedCount = pastLoans.Count(s => s == QarzanHasanaStatus.Defaulted);
+
+        // Currently eligible re-check (cheap re-use).
+        var elig = await CheckGuarantorEligibilityAsync(guarantorId, borrowerId, otherGuarantorId, loanId, ct);
+        var eligible = elig.IsSuccess && elig.Value.Eligible;
+        var failingHard = elig.IsSuccess
+            ? elig.Value.Checks.Where(c => c.Hard && !c.Passed).Select(c => c.Detail).FirstOrDefault()
+            : "Eligibility lookup failed.";
+
+        return new GuarantorTrackRecord(
+            guarantorId, member.ItsNumber.Value, member.FullName,
+            grade, totalScore,
+            activeGuarantees, pastCount, defaultedCount,
+            eligible, eligible ? null : failingHard);
+    }
+
+    public async Task<Result<QarzanHasanaLoanDto>> SetCashflowDocumentUrlAsync(Guid id, string? url, CancellationToken ct = default)
+    {
+        var loan = await db.QarzanHasanaLoans.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (loan is null) return Error.NotFound("qh.not_found", "Loan not found.");
+        try { loan.SetCashflowDocumentUrl(url); }
+        catch (InvalidOperationException ex) { return Error.Business("qh.docs_frozen", ex.Message); }
+        db.QarzanHasanaLoans.Update(loan);
+        await uow.SaveChangesAsync(ct);
+        return await LoadAsync(id, ct);
+    }
+
+    public async Task<Result<QarzanHasanaLoanDto>> SetGoldSlipDocumentUrlAsync(Guid id, string? url, CancellationToken ct = default)
+    {
+        var loan = await db.QarzanHasanaLoans.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (loan is null) return Error.NotFound("qh.not_found", "Loan not found.");
+        try { loan.SetGoldSlipDocumentUrl(url); }
+        catch (InvalidOperationException ex) { return Error.Business("qh.docs_frozen", ex.Message); }
+        db.QarzanHasanaLoans.Update(loan);
+        await uow.SaveChangesAsync(ct);
+        return await LoadAsync(id, ct);
+    }
+
+    public async Task<Result<IReadOnlyList<GuarantorConsentDto>>> ListGuarantorConsentsAsync(Guid loanId, CancellationToken ct = default)
+    {
+        if (!await db.QarzanHasanaLoans.AsNoTracking().AnyAsync(l => l.Id == loanId, ct))
+            return Error.NotFound("qh.not_found", "Loan not found.");
+        var rows = await (from c in db.QarzanHasanaGuarantorConsents.AsNoTracking()
+                          where c.LoanId == loanId
+                          join m in db.Members.AsNoTracking() on c.GuarantorMemberId equals m.Id
+                          select new GuarantorConsentDto(
+                              c.Id, c.GuarantorMemberId, m.FullName, m.ItsNumber.Value,
+                              c.Token, (int)c.Status, c.RespondedAtUtc,
+                              c.ResponderIpAddress, c.NotificationSentAtUtc))
+                         .ToListAsync(ct);
+        return rows;
+    }
+
+    public async Task<Result<GuarantorConsentPortalDto>> GetConsentPortalAsync(string token, CancellationToken ct = default)
+    {
+        // No tenant filter - the token is the credential and EF query filters expect a tenant
+        // context. We bypass by manually projecting through IgnoreQueryFilters().
+        var consent = await db.QarzanHasanaGuarantorConsents.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.Token == token, ct);
+        if (consent is null) return Error.NotFound("qh_consent.not_found", "This consent link is not valid.");
+
+        var loan = await db.QarzanHasanaLoans.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(l => l.Id == consent.LoanId, ct);
+        if (loan is null) return Error.NotFound("qh_consent.not_found", "This consent link is not valid.");
+
+        var borrower = await db.Members.IgnoreQueryFilters()
+            .Where(m => m.Id == loan.MemberId)
+            .Select(m => new { m.FullName, m.ItsNumber })
+            .FirstOrDefaultAsync(ct);
+        var guarantor = await db.Members.IgnoreQueryFilters()
+            .Where(m => m.Id == consent.GuarantorMemberId)
+            .Select(m => m.FullName).FirstOrDefaultAsync(ct);
+
+        return new GuarantorConsentPortalDto(
+            loan.Id, loan.Code,
+            borrower?.FullName ?? "(unknown)",
+            borrower?.ItsNumber.Value ?? "",
+            loan.AmountRequested, loan.Currency, loan.InstalmentsRequested,
+            loan.Purpose,
+            (int)consent.Status, consent.RespondedAtUtc,
+            guarantor ?? "(unknown)");
+    }
+
+    public async Task<Result<GuarantorConsentPortalDto>> AcceptConsentAsync(string token, RecordConsentResponseDto meta, CancellationToken ct = default)
+        => await RecordConsentResponseAsync(token, accept: true, meta, ct);
+
+    public async Task<Result<GuarantorConsentPortalDto>> DeclineConsentAsync(string token, RecordConsentResponseDto meta, CancellationToken ct = default)
+        => await RecordConsentResponseAsync(token, accept: false, meta, ct);
+
+    private async Task<Result<GuarantorConsentPortalDto>> RecordConsentResponseAsync(string token, bool accept, RecordConsentResponseDto meta, CancellationToken ct)
+    {
+        var consent = await db.QarzanHasanaGuarantorConsents.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.Token == token, ct);
+        if (consent is null) return Error.NotFound("qh_consent.not_found", "This consent link is not valid.");
+
+        try
+        {
+            if (accept) consent.Accept(meta.IpAddress, meta.UserAgent, clock.UtcNow);
+            else consent.Decline(meta.IpAddress, meta.UserAgent, clock.UtcNow);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Error.Business("qh_consent.already_responded", ex.Message);
+        }
+        await uow.SaveChangesAsync(ct);
+        return await GetConsentPortalAsync(token, ct);
     }
 
     private async Task<string> NextCodeAsync(CancellationToken ct)
@@ -503,7 +845,10 @@ public sealed class QarzanHasanaService(
             loan.ProgressPercent,
             loan.CreatedAtUtc,
             loan.Purpose, loan.RepaymentPlan, loan.SourceOfIncome, loan.OtherObligations,
-            loan.GuarantorsAcknowledged, loan.GuarantorsAcknowledgedAtUtc, loan.GuarantorsAcknowledgedByUserName);
+            loan.GuarantorsAcknowledged, loan.GuarantorsAcknowledgedAtUtc, loan.GuarantorsAcknowledgedByUserName,
+            loan.MonthlyIncome, loan.MonthlyExpenses, loan.MonthlyExistingEmis,
+            loan.GoldWeightGrams, loan.GoldPurityKarat, loan.GoldHeldAt,
+            loan.IncomeSources);
 
     private static QarzanHasanaLoanDto ProjectRow(JamaatDbContextFacade db, QarzanHasanaLoan x) =>
         new(x.Id, x.Code,
@@ -530,7 +875,10 @@ public sealed class QarzanHasanaService(
             x.ProgressPercent,
             x.CreatedAtUtc,
             x.Purpose, x.RepaymentPlan, x.SourceOfIncome, x.OtherObligations,
-            x.GuarantorsAcknowledged, x.GuarantorsAcknowledgedAtUtc, x.GuarantorsAcknowledgedByUserName);
+            x.GuarantorsAcknowledged, x.GuarantorsAcknowledgedAtUtc, x.GuarantorsAcknowledgedByUserName,
+            x.MonthlyIncome, x.MonthlyExpenses, x.MonthlyExistingEmis,
+            x.GoldWeightGrams, x.GoldPurityKarat, x.GoldHeldAt,
+            x.IncomeSources);
 }
 
 public sealed class CreateQarzanHasanaValidator : AbstractValidator<CreateQarzanHasanaDto>
@@ -552,6 +900,29 @@ public sealed class CreateQarzanHasanaValidator : AbstractValidator<CreateQarzan
             .MaximumLength(2000);
         RuleFor(x => x.SourceOfIncome).MaximumLength(1000);
         RuleFor(x => x.OtherObligations).MaximumLength(1000);
+
+        // Structured cashflow numbers can't be negative; net surplus computed client-side stays
+        // honest when those constraints hold. None individually required (they're optional context).
+        RuleFor(x => x.MonthlyIncome).GreaterThanOrEqualTo(0).When(x => x.MonthlyIncome.HasValue);
+        RuleFor(x => x.MonthlyExpenses).GreaterThanOrEqualTo(0).When(x => x.MonthlyExpenses.HasValue);
+        RuleFor(x => x.MonthlyExistingEmis).GreaterThanOrEqualTo(0).When(x => x.MonthlyExistingEmis.HasValue);
+
+        // Income sources tag list - at least one required for new submissions; the form ensures
+        // this client-side, server-side keeps it honest.
+        RuleFor(x => x.IncomeSources).NotEmpty().WithMessage("Select at least one income source.")
+            .MaximumLength(500);
+
+        // Gold structured fields are required only when GoldAmount > 0.
+        When(x => x.GoldAmount.HasValue && x.GoldAmount.Value > 0, () =>
+        {
+            RuleFor(x => x.GoldWeightGrams).NotNull().GreaterThan(0)
+                .WithMessage("Weight in grams is required when pledging gold.");
+            RuleFor(x => x.GoldPurityKarat).NotNull().GreaterThan(0).LessThanOrEqualTo(24)
+                .WithMessage("Purity in karat is required (1-24) when pledging gold.");
+            RuleFor(x => x.GoldHeldAt).NotEmpty()
+                .WithMessage("Indicate where the pledged gold is held.")
+                .MaximumLength(200);
+        });
     }
 }
 
