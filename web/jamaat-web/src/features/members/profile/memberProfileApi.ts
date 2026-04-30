@@ -129,4 +129,35 @@ export const memberProfileApi = {
   deletePhoto: async (id: string) => { await api.delete(`/api/v1/members/${id}/profile/photo/file`); },
   contributionSummary: async (id: string): Promise<ContributionSummary> =>
     (await api.get(`/api/v1/members/${id}/contribution-summary`)).data,
+
+  // Multi-education endpoints (item 6)
+  listEducations: async (id: string): Promise<MemberEducationEntry[]> =>
+    (await api.get(`/api/v1/members/${id}/profile/educations`)).data,
+  addEducation: async (id: string, input: AddMemberEducationInput): Promise<MemberEducationEntry> =>
+    (await api.post(`/api/v1/members/${id}/profile/educations`, input)).data,
+  updateEducation: async (id: string, eduId: string, input: AddMemberEducationInput): Promise<MemberEducationEntry> =>
+    (await api.put(`/api/v1/members/${id}/profile/educations/${eduId}`, input)).data,
+  deleteEducation: async (id: string, eduId: string) => {
+    await api.delete(`/api/v1/members/${id}/profile/educations/${eduId}`);
+  },
+};
+
+export type MemberEducationEntry = {
+  id: string;
+  memberId: string;
+  level: Qualification;
+  degree?: string | null;
+  institution?: string | null;
+  yearCompleted?: number | null;
+  specialization?: string | null;
+  isHighest: boolean;
+};
+
+export type AddMemberEducationInput = {
+  level: Qualification;
+  degree?: string | null;
+  institution?: string | null;
+  yearCompleted?: number | null;
+  specialization?: string | null;
+  isHighest?: boolean;
 };

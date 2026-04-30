@@ -105,6 +105,23 @@ public sealed record BulkVerifyResultDto(int UpdatedCount, int NotFoundCount, IR
 
 public sealed record UploadPhotoDto(string? PhotoUrl);
 
+// --- Multi-education (item 6) -----------------------------------------------
+public sealed record MemberEducationDto(
+    Guid Id, Guid MemberId,
+    Qualification Level,
+    string? Degree, string? Institution, int? YearCompleted,
+    string? Specialization, bool IsHighest);
+
+public sealed record AddMemberEducationDto(
+    Qualification Level,
+    string? Degree, string? Institution, int? YearCompleted,
+    string? Specialization, bool IsHighest = false);
+
+public sealed record UpdateMemberEducationDto(
+    Qualification Level,
+    string? Degree, string? Institution, int? YearCompleted,
+    string? Specialization, bool IsHighest);
+
 public sealed record MemberContributionSummaryDto(
     Guid MemberId,
     decimal TotalReceipts,

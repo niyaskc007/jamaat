@@ -46,6 +46,7 @@ public sealed class JamaatDbContextFacadeImpl(JamaatDbContext db) : JamaatDbCont
     public override DbSet<EventPageSection> EventPageSections => db.EventPageSections;
     public override DbSet<MemberBehaviorSnapshot> MemberBehaviorSnapshots => db.MemberBehaviorSnapshots;
     public override DbSet<QarzanHasanaGuarantorConsent> QarzanHasanaGuarantorConsents => db.QarzanHasanaGuarantorConsents;
+    public override DbSet<MemberEducation> MemberEducations => db.MemberEducations;
     public override DatabaseFacade Database => db.Database;
     protected override Task<int> DatabaseSaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 

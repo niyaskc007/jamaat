@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Card, Tabs, Spin, Result, Space, Button, Form, Input, InputNumber, Select, DatePicker, Switch, Tag,
   Row, Col, Descriptions, App as AntdApp, Avatar, Divider, Typography, Badge, Upload, Alert,
+  Table, Drawer,
 } from 'antd';
 import { useAuth } from '../../../shared/auth/useAuth';
 import { UserOutlined, TeamOutlined, HomeOutlined, BookOutlined, IdcardOutlined, CheckCircleOutlined, PhoneOutlined, GlobalOutlined, HeartOutlined, SafetyCertificateOutlined, FileProtectOutlined, StarOutlined, UploadOutlined, ThunderboltOutlined } from '@ant-design/icons';
@@ -14,11 +15,13 @@ import { formatDate, formatDateTime, money } from '../../../shared/format/format
 import { extractProblem } from '../../../shared/api/client';
 import {
   memberProfileApi, type MemberProfile, type VerificationStatus,
+  type MemberEducationEntry, type AddMemberEducationInput, type Qualification,
   GenderLabel, MaritalStatusLabel, BloodGroupLabel, WarakatLabel, MisaqStatusLabel,
   QualificationLabel, HousingOwnershipLabel, TypeOfHouseLabel, VerificationStatusLabel, VerificationStatusColor,
 } from './memberProfileApi';
 import { sectorsApi, subSectorsApi } from '../../sectors/sectorsApi';
 import { membersApi } from '../membersApi';
+import { lookupsApi, MemberLookupCategory } from '../../admin/master-data/lookups/lookupsApi';
 import { organisationsApi, type MemberOrgMembership } from '../../organisations/organisationsApi';
 import { FamilyDetailDrawer } from '../../families/FamilyDetailDrawer';
 
@@ -413,12 +416,12 @@ function OriginTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSave
     <div style={{ padding: 24 }}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={profile}>
         <Row gutter={16}>
-          <Col span={8}><Form.Item label="Category" name="category"><Input /></Form.Item></Col>
-          <Col span={8}><Form.Item label="Idara" name="idara"><Input /></Form.Item></Col>
-          <Col span={8}><Form.Item label="Vatan" name="vatan"><Input /></Form.Item></Col>
-          <Col span={8}><Form.Item label="Nationality" name="nationality"><Input /></Form.Item></Col>
-          <Col span={8}><Form.Item label="Jamaat" name="jamaat"><Input /></Form.Item></Col>
-          <Col span={8}><Form.Item label="Jamiaat" name="jamiaat"><Input placeholder="e.g., Khaleej" /></Form.Item></Col>
+          <Col span={8}><LookupSelect category={MemberLookupCategory.Category} name="category" label="Category" current={profile.category} /></Col>
+          <Col span={8}><LookupSelect category={MemberLookupCategory.Idara} name="idara" label="Idara" current={profile.idara} /></Col>
+          <Col span={8}><LookupSelect category={MemberLookupCategory.Vatan} name="vatan" label="Vatan" current={profile.vatan} /></Col>
+          <Col span={8}><LookupSelect category={MemberLookupCategory.Nationality} name="nationality" label="Nationality" current={profile.nationality} /></Col>
+          <Col span={8}><LookupSelect category={MemberLookupCategory.Jamaat} name="jamaat" label="Jamaat" current={profile.jamaat} /></Col>
+          <Col span={8}><LookupSelect category={MemberLookupCategory.Jamiaat} name="jamiaat" label="Jamiaat" current={profile.jamiaat} /></Col>
           <Col span={12}><Form.Item label="Sector" name="sectorId">
             <Select allowClear showSearch optionFilterProp="label" onChange={(v) => { setSectorId(v); form.setFieldValue('subSectorId', null); }}
               options={(sectorsQ.data?.items ?? []).map((s) => ({ value: s.id, label: `${s.code} - ${s.name}` }))} />
@@ -428,9 +431,41 @@ function OriginTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSave
               options={(subsQ.data?.items ?? []).map((s) => ({ value: s.id, label: `${s.code} - ${s.name}` }))} />
           </Form.Item></Col>
         </Row>
+        <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 8 }}>
+          Categories / Idara / Vatan / Nationality / Jamaat / Jamiaat are managed in <a href="/admin/master-data" target="_blank" rel="noreferrer">Master data</a>.
+          Existing free-text values are preserved as "(legacy)" entries in the dropdowns until they're remapped to a master value.
+        </div>
       </Form>
       <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} />
     </div>
+  );
+}
+
+/// Master-data-driven dropdown for one of the origin fields. Loads the lookup category
+/// once, builds options + carries the existing free-text value through as a "(legacy)"
+/// option so admins see the data and can choose to remap. The form binds on the lookup
+/// Code (string), keeping the column shape unchanged on the backend.
+function LookupSelect({ category, name, label, current }: {
+  category: string; name: string; label: string; current?: string | null;
+}) {
+  const q = useQuery({
+    queryKey: ['lookup-list', category],
+    queryFn: () => lookupsApi.list({ category, pageSize: 200, activeOnly: true }),
+    staleTime: 5 * 60_000,
+  });
+  const masterCodes = (q.data?.items ?? []).map((l) => l.code);
+  const options = (q.data?.items ?? []).map((l) => ({ value: l.code, label: `${l.code} - ${l.name}` }));
+  // If the saved value isn't in the master list, surface it as a legacy option so the user
+  // sees what's there. Empty string => no current value, no legacy entry.
+  const trimmed = (current ?? '').trim();
+  if (trimmed && !masterCodes.includes(trimmed)) {
+    options.unshift({ value: trimmed, label: `${trimmed} (legacy)` });
+  }
+  return (
+    <Form.Item label={label} name={name}>
+      <Select allowClear showSearch optionFilterProp="label" options={options}
+        placeholder={q.isLoading ? 'Loading...' : `Select ${label.toLowerCase()}`} />
+    </Form.Item>
   );
 }
 
@@ -443,8 +478,9 @@ function EducationTab({ profile, onSaved, onErr }: { profile: MemberProfile; onS
   return (
     <div style={{ padding: 24 }}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={profile}>
+        <Typography.Title level={5} style={{ marginBlockStart: 0 }}>Headline (highest qualification snapshot)</Typography.Title>
         <Row gutter={16}>
-          <Col span={8}><Form.Item label="Qualification" name="qualification">
+          <Col span={8}><Form.Item label="Qualification" name="qualification" tooltip="Headline level. Use the multi-row table below to capture the full education history.">
             <Select options={Object.entries(QualificationLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
           </Form.Item></Col>
           <Col span={16}><Form.Item label="Languages (comma-separated)" name="languagesCsv"><Input placeholder="Lisaan-ud-Dawat, English, Arabic, Urdu" /></Form.Item></Col>
@@ -455,7 +491,125 @@ function EducationTab({ profile, onSaved, onErr }: { profile: MemberProfile; onS
         </Row>
       </Form>
       <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} />
+
+      {/* Multi-row education history (item 6). Independent CRUD - the headline above is a
+          snapshot; this section is the truth. Each row carries level + degree + institution
+          + year + specialization. One row may be flagged "highest" (auto-managed). */}
+      <Divider orientation="left" plain style={{ marginBlockStart: 24 }}>
+        <Typography.Title level={5} style={{ margin: 0 }}>Education history</Typography.Title>
+      </Divider>
+      <EducationsPanel memberId={profile.id} />
     </div>
+  );
+}
+
+function EducationsPanel({ memberId }: { memberId: string }) {
+  const qc = useQueryClient();
+  const { message, modal } = AntdApp.useApp();
+  const q = useQuery({
+    queryKey: ['member-educations', memberId],
+    queryFn: () => memberProfileApi.listEducations(memberId),
+    enabled: !!memberId,
+  });
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editing, setEditing] = useState<MemberEducationEntry | null>(null);
+  const delMut = useMutation({
+    mutationFn: (eduId: string) => memberProfileApi.deleteEducation(memberId, eduId),
+    onSuccess: () => { message.success('Removed.'); void qc.invalidateQueries({ queryKey: ['member-educations', memberId] }); },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed'),
+  });
+  const rows = q.data ?? [];
+
+  return (
+    <div>
+      <div style={{ marginBlockEnd: 12, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button size="small" type="primary" onClick={() => { setEditing(null); setDrawerOpen(true); }}>Add education</Button>
+      </div>
+      <Table<MemberEducationEntry>
+        rowKey="id" size="small" pagination={false} dataSource={rows} loading={q.isLoading}
+        locale={{ emptyText: 'No education entries yet. Click Add education to capture one.' }}
+        columns={[
+          { title: 'Level', dataIndex: 'level', width: 130,
+            render: (v: number) => QualificationLabel[v as Qualification] ?? '-' },
+          { title: 'Degree', dataIndex: 'degree', render: (v: string | null) => v ?? '-' },
+          { title: 'Institution', dataIndex: 'institution', render: (v: string | null) => v ?? '-' },
+          { title: 'Year', dataIndex: 'yearCompleted', width: 90, render: (v: number | null) => v ?? '-' },
+          { title: 'Specialization', dataIndex: 'specialization', render: (v: string | null) => v ?? '-' },
+          { title: 'Highest', dataIndex: 'isHighest', width: 90,
+            render: (v: boolean) => v ? <Tag color="green">Highest</Tag> : null },
+          { title: '', width: 100, align: 'end',
+            render: (_: unknown, row) => (
+              <Space>
+                <Button size="small" type="link" onClick={() => { setEditing(row); setDrawerOpen(true); }}>Edit</Button>
+                <Button size="small" type="link" danger
+                  onClick={() => modal.confirm({ title: 'Remove this education entry?', okButtonProps: { danger: true }, onOk: () => delMut.mutateAsync(row.id) })}>
+                  Remove
+                </Button>
+              </Space>
+            )
+          },
+        ]}
+      />
+      {drawerOpen && (
+        <EducationDrawer memberId={memberId} editing={editing} onClose={() => setDrawerOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+function EducationDrawer({ memberId, editing, onClose }: {
+  memberId: string;
+  editing: MemberEducationEntry | null;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const { message } = AntdApp.useApp();
+  const [form] = Form.useForm();
+  const isEdit = !!editing;
+  const mut = useMutation({
+    mutationFn: async (input: AddMemberEducationInput) =>
+      isEdit
+        ? memberProfileApi.updateEducation(memberId, editing!.id, input)
+        : memberProfileApi.addEducation(memberId, input),
+    onSuccess: () => {
+      message.success(isEdit ? 'Updated.' : 'Added.');
+      void qc.invalidateQueries({ queryKey: ['member-educations', memberId] });
+      onClose();
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed'),
+  });
+  return (
+    <Drawer open onClose={onClose} title={isEdit ? 'Edit education' : 'Add education'} width={520}
+      footer={
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button onClick={onClose} style={{ marginInlineEnd: 8 }}>Cancel</Button>
+          <Button type="primary" loading={mut.isPending}
+            onClick={() => mut.mutate(form.getFieldsValue() as AddMemberEducationInput)}>
+            {isEdit ? 'Save' : 'Add'}
+          </Button>
+        </div>
+      }>
+      <Form layout="vertical" form={form} initialValues={editing ?? { level: 0, isHighest: false }} requiredMark={false}>
+        <Form.Item label="Level" name="level" rules={[{ required: true }]}>
+          <Select options={Object.entries(QualificationLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
+        </Form.Item>
+        <Form.Item label="Degree" name="degree" tooltip="e.g., B.Tech, M.Sc, Diploma in Hospital Management">
+          <Input />
+        </Form.Item>
+        <Form.Item label="Institution" name="institution" tooltip="University / college / school">
+          <Input />
+        </Form.Item>
+        <Form.Item label="Year completed" name="yearCompleted">
+          <InputNumber min={1900} max={dayjs().year()} style={{ inlineSize: '100%' }} />
+        </Form.Item>
+        <Form.Item label="Specialization" name="specialization">
+          <Input placeholder="Optional - subject of study" />
+        </Form.Item>
+        <Form.Item name="isHighest" valuePropName="checked" tooltip="Marks this as the member's highest qualification. Setting it here will clear the flag from any other entry.">
+          <Switch checkedChildren="Highest" unCheckedChildren="Not highest" />
+        </Form.Item>
+      </Form>
+    </Drawer>
   );
 }
 

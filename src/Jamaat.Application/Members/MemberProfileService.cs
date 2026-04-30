@@ -25,10 +25,17 @@ public interface IMemberProfileService
     Task<Result<BulkVerifyResultDto>> VerifyDataBulkAsync(BulkVerifyRequestDto dto, CancellationToken ct = default);
     Task<Result<MemberProfileDto>> SetPhotoUrlAsync(Guid id, UploadPhotoDto dto, CancellationToken ct = default);
     Task<Result<MemberContributionSummaryDto>> GetContributionSummaryAsync(Guid id, CancellationToken ct = default);
+
+    // --- Multi-education (item 6) -------------------------------------------
+    Task<Result<IReadOnlyList<MemberEducationDto>>> ListEducationsAsync(Guid memberId, CancellationToken ct = default);
+    Task<Result<MemberEducationDto>> AddEducationAsync(Guid memberId, AddMemberEducationDto dto, CancellationToken ct = default);
+    Task<Result<MemberEducationDto>> UpdateEducationAsync(Guid memberId, Guid id, UpdateMemberEducationDto dto, CancellationToken ct = default);
+    Task<Result> DeleteEducationAsync(Guid memberId, Guid id, CancellationToken ct = default);
 }
 
 public sealed class MemberProfileService(
-    JamaatDbContextFacade db, IUnitOfWork uow, ICurrentUser currentUser, IClock clock) : IMemberProfileService
+    JamaatDbContextFacade db, IUnitOfWork uow, ICurrentUser currentUser, IClock clock,
+    ITenantContext tenant) : IMemberProfileService
 {
     public Task<Result<MemberProfileDto>> GetProfileAsync(Guid id, CancellationToken ct = default)
         => LoadProfileAsync(id, ct);
@@ -274,5 +281,66 @@ public sealed class MemberProfileService(
             m.LastScannedEventId, m.LastScannedEventName, m.LastScannedPlace, m.LastScannedAtUtc,
             m.Status, m.InactiveReason,
             m.CreatedAtUtc, m.UpdatedAtUtc);
+    }
+
+    // --- Multi-education methods ---------------------------------------------
+
+    public async Task<Result<IReadOnlyList<MemberEducationDto>>> ListEducationsAsync(Guid memberId, CancellationToken ct = default)
+    {
+        if (!await db.Members.AsNoTracking().AnyAsync(m => m.Id == memberId, ct))
+            return Error.NotFound("member.not_found", "Member not found.");
+        var rows = await db.MemberEducations.AsNoTracking()
+            .Where(e => e.MemberId == memberId)
+            .OrderByDescending(e => e.IsHighest)
+            .ThenByDescending(e => e.YearCompleted)
+            .Select(e => new MemberEducationDto(
+                e.Id, e.MemberId, e.Level, e.Degree, e.Institution, e.YearCompleted,
+                e.Specialization, e.IsHighest))
+            .ToListAsync(ct);
+        return rows;
+    }
+
+    public async Task<Result<MemberEducationDto>> AddEducationAsync(Guid memberId, AddMemberEducationDto dto, CancellationToken ct = default)
+    {
+        if (!await db.Members.AsNoTracking().AnyAsync(m => m.Id == memberId, ct))
+            return Error.NotFound("member.not_found", "Member not found.");
+        // Only one row may be flagged "highest" per member; clear the flag elsewhere if this
+        // entry claims it. Cleaner than a DB constraint and keeps existing rows valid.
+        if (dto.IsHighest)
+        {
+            await db.MemberEducations
+                .Where(e => e.MemberId == memberId && e.IsHighest)
+                .ExecuteUpdateAsync(s => s.SetProperty(e => e.IsHighest, false), ct);
+        }
+        var e = new MemberEducation(Guid.NewGuid(), tenant.TenantId, memberId,
+            dto.Level, dto.Degree, dto.Institution, dto.YearCompleted, dto.Specialization, dto.IsHighest);
+        db.MemberEducations.Add(e);
+        await uow.SaveChangesAsync(ct);
+        return new MemberEducationDto(e.Id, e.MemberId, e.Level, e.Degree, e.Institution, e.YearCompleted, e.Specialization, e.IsHighest);
+    }
+
+    public async Task<Result<MemberEducationDto>> UpdateEducationAsync(Guid memberId, Guid id, UpdateMemberEducationDto dto, CancellationToken ct = default)
+    {
+        var e = await db.MemberEducations.FirstOrDefaultAsync(x => x.Id == id && x.MemberId == memberId, ct);
+        if (e is null) return Error.NotFound("education.not_found", "Education entry not found for this member.");
+        if (dto.IsHighest && !e.IsHighest)
+        {
+            await db.MemberEducations
+                .Where(x => x.MemberId == memberId && x.IsHighest && x.Id != id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsHighest, false), ct);
+        }
+        e.Update(dto.Level, dto.Degree, dto.Institution, dto.YearCompleted, dto.Specialization, dto.IsHighest);
+        db.MemberEducations.Update(e);
+        await uow.SaveChangesAsync(ct);
+        return new MemberEducationDto(e.Id, e.MemberId, e.Level, e.Degree, e.Institution, e.YearCompleted, e.Specialization, e.IsHighest);
+    }
+
+    public async Task<Result> DeleteEducationAsync(Guid memberId, Guid id, CancellationToken ct = default)
+    {
+        var e = await db.MemberEducations.FirstOrDefaultAsync(x => x.Id == id && x.MemberId == memberId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("education.not_found", "Education entry not found for this member."));
+        db.MemberEducations.Remove(e);
+        await uow.SaveChangesAsync(ct);
+        return Result.Success();
     }
 }

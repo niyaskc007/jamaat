@@ -117,4 +117,26 @@ public sealed class MemberProfileController(
     [Authorize(Policy = "member.view")]
     public async Task<IActionResult> ContributionSummary(Guid id, CancellationToken ct)
     { var r = await svc.GetContributionSummaryAsync(id, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+
+    // --- Multi-education (item 6) -------------------------------------------
+
+    [HttpGet("educations")]
+    [Authorize(Policy = "member.view")]
+    public async Task<IActionResult> ListEducations(Guid id, CancellationToken ct)
+    { var r = await svc.ListEducationsAsync(id, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+
+    [HttpPost("educations")]
+    [Authorize(Policy = "member.update")]
+    public async Task<IActionResult> AddEducation(Guid id, [FromBody] AddMemberEducationDto dto, CancellationToken ct)
+    { var r = await svc.AddEducationAsync(id, dto, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+
+    [HttpPut("educations/{eduId:guid}")]
+    [Authorize(Policy = "member.update")]
+    public async Task<IActionResult> UpdateEducation(Guid id, Guid eduId, [FromBody] UpdateMemberEducationDto dto, CancellationToken ct)
+    { var r = await svc.UpdateEducationAsync(id, eduId, dto, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+
+    [HttpDelete("educations/{eduId:guid}")]
+    [Authorize(Policy = "member.update")]
+    public async Task<IActionResult> DeleteEducation(Guid id, Guid eduId, CancellationToken ct)
+    { var r = await svc.DeleteEducationAsync(id, eduId, ct); return r.IsSuccess ? NoContent() : ErrorMapper.ToActionResult(this, r.Error); }
 }
