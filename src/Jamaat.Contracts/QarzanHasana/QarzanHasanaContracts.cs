@@ -82,3 +82,47 @@ public sealed record QarzanHasanaListQuery(
     QarzanHasanaStatus? Status = null,
     QarzanHasanaScheme? Scheme = null,
     Guid? MemberId = null);
+
+/// <summary>Decision-support bundle for a QH approver. One round-trip; the panel
+/// shows borrower behavior + active commitments + donation history + past loans + fund
+/// position so the approver doesn't have to navigate four other pages to make a call.</summary>
+public sealed record LoanDecisionSupportDto(
+    Guid LoanId,
+    LoanReliabilitySummary Reliability,
+    LoanCommitmentSummary Commitments,
+    LoanDonationSummary Donations,
+    LoanPastLoansSummary PastLoans,
+    LoanFundPosition FundPosition);
+
+public sealed record LoanReliabilitySummary(
+    string Grade, decimal? TotalScore, bool LoanReady, string? LoanReadyReason,
+    IReadOnlyList<LoanReliabilityFactor> Factors);
+
+public sealed record LoanReliabilityFactor(string Key, string Name, decimal? Score, bool Excluded, string Raw);
+
+public sealed record LoanCommitmentSummary(
+    int ActiveCount, decimal TotalAmount, decimal PaidAmount, decimal OutstandingAmount,
+    IReadOnlyList<LoanCommitmentLine> Top);
+
+public sealed record LoanCommitmentLine(string Code, string FundName, decimal TotalAmount, decimal OutstandingAmount);
+
+public sealed record LoanDonationSummary(
+    int Months, decimal TotalAmount, int ReceiptCount,
+    IReadOnlyList<LoanDonationFundLine> ByFund);
+
+public sealed record LoanDonationFundLine(string FundName, decimal Amount, int ReceiptCount);
+
+public sealed record LoanPastLoansSummary(
+    int LoanCount, int CompletedCount, int DefaultedCount,
+    decimal TotalDisbursed, decimal TotalRepaid,
+    decimal OnTimeRepaymentPercent);
+
+/// <summary>Position of the QH fund pool. CurrentNetBalance = total received to loan-category
+/// funds minus current outstanding loan balances. ProjectedAfterDisbursement = current minus
+/// the amount this loan would consume. Highlight red when PercentRemainingAfter &lt; 10%.</summary>
+public sealed record LoanFundPosition(
+    string Currency,
+    decimal CurrentNetBalance,
+    decimal RequestedAmount,
+    decimal ProjectedAfterDisbursement,
+    decimal PercentRemainingAfter);

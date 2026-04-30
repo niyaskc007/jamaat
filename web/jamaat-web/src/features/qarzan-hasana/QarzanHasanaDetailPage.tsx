@@ -15,6 +15,7 @@ import {
   qarzanHasanaApi, type QhInstallment,
   QhStatusLabel, QhStatusColor, QhSchemeLabel, QhInstallmentStatusLabel,
 } from './qarzanHasanaApi';
+import { LoanDecisionSupport } from './LoanDecisionSupport';
 
 export function QarzanHasanaDetailPage() {
   const { id = '' } = useParams();
@@ -154,13 +155,21 @@ export function QarzanHasanaDetailPage() {
           </Card>
         </Col>
         <Col span={8}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
-            <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 8 }}>Repayment progress</div>
-            <Progress type="dashboard" percent={Math.min(100, Number(loan.progressPercent.toFixed(1)))}
-              status={loan.status === 7 ? 'success' : loan.status === 8 || loan.status === 9 || loan.status === 10 ? 'exception' : 'active'} />
-            {loan.cashflowDocumentUrl && <div style={{ marginBlockStart: 12 }}><a href={loan.cashflowDocumentUrl} target="_blank" rel="noreferrer">Cashflow document</a></div>}
-            {loan.goldSlipDocumentUrl && <div><a href={loan.goldSlipDocumentUrl} target="_blank" rel="noreferrer">Gold slip</a></div>}
-          </Card>
+          {/* Decision-support panel for approvers - shows reliability + commitments + donations
+              + past loans + fund position. Only meaningful while the loan is awaiting an approval
+              decision; once disbursed, the repayment progress dashboard takes over. Statuses:
+              2=PendingLevel1, 3=PendingLevel2, 4=Approved, others = settled. */}
+          {(loan.status === 2 || loan.status === 3 || loan.status === 4) ? (
+            <LoanDecisionSupport loanId={loan.id} />
+          ) : (
+            <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+              <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 8 }}>Repayment progress</div>
+              <Progress type="dashboard" percent={Math.min(100, Number(loan.progressPercent.toFixed(1)))}
+                status={loan.status === 7 ? 'success' : loan.status === 8 || loan.status === 9 || loan.status === 10 ? 'exception' : 'active'} />
+              {loan.cashflowDocumentUrl && <div style={{ marginBlockStart: 12 }}><a href={loan.cashflowDocumentUrl} target="_blank" rel="noreferrer">Cashflow document</a></div>}
+              {loan.goldSlipDocumentUrl && <div><a href={loan.goldSlipDocumentUrl} target="_blank" rel="noreferrer">Gold slip</a></div>}
+            </Card>
+          )}
         </Col>
       </Row>
 

@@ -60,6 +60,7 @@ public class JamaatDbContext : IdentityDbContext<ApplicationUser, ApplicationRol
     public DbSet<EventRegistration> EventRegistrations => Set<EventRegistration>();
     public DbSet<EventCommunication> EventCommunications => Set<EventCommunication>();
     public DbSet<EventPageSection> EventPageSections => Set<EventPageSection>();
+    public DbSet<MemberBehaviorSnapshot> MemberBehaviorSnapshots => Set<MemberBehaviorSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

@@ -287,6 +287,7 @@ public sealed class ReceiptService(
         // Notify the contributor that we've recorded their money. Fire-and-forget - the sender
         // catches its own failures so SMTP flakiness can never roll back the receipt.
         await NotifyReceiptConfirmedAsync(receipt, member, ct);
+        await InvalidateReliabilityAsync(receipt.MemberId, ct);
 
         var fresh = await repo.GetWithLinesAsync(receipt.Id, ct);
         return await MapAsync(fresh!, ct);
@@ -383,6 +384,7 @@ public sealed class ReceiptService(
         // Now that approval cleared and the GL is posted, tell the contributor.
         var member = await db.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == e.MemberId, ct);
         if (member is not null) await NotifyReceiptConfirmedAsync(e, member, ct);
+        await InvalidateReliabilityAsync(e.MemberId, ct);
 
         var fresh = await repo.GetWithLinesAsync(e.Id, ct);
         return await MapAsync(fresh!, ct);
@@ -400,6 +402,7 @@ public sealed class ReceiptService(
         e.Cancel(dto.Reason, currentUser.UserId ?? Guid.Empty, clock.UtcNow);
         repo.Update(e);
         await uow.SaveChangesAsync(ct);
+        await InvalidateReliabilityAsync(e.MemberId, ct);
         var fresh = await repo.GetWithLinesAsync(e.Id, ct);
         return await MapAsync(fresh!, ct);
     }
@@ -451,6 +454,7 @@ public sealed class ReceiptService(
         repo.Update(e);
         await uow.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+        await InvalidateReliabilityAsync(e.MemberId, ct);
 
         var fresh = await repo.GetWithLinesAsync(e.Id, ct);
         return await MapAsync(fresh!, ct);
@@ -847,6 +851,23 @@ Jamaat";
                     l.QarzanHasanaLoanId, loanCode, l.QarzanHasanaInstallmentId, qhInstNo);
             }).ToList(),
             e.Intention, e.NiyyathNote, e.MaturityDate, e.AgreementReference, e.AmountReturned, e.MaturityState, e.AgreementDocumentUrl);
+    }
+
+    /// <summary>Best-effort cache invalidation for the affected member's reliability snapshot.
+    /// Resolved late through the service provider so receipts don't take a hard dependency on
+    /// the reliability module (and so a missing/broken reliability service can never fail
+    /// a receipt write).</summary>
+    private async Task InvalidateReliabilityAsync(Guid memberId, CancellationToken ct)
+    {
+        try
+        {
+            var rel = services.GetService<Members.Reliability.IReliabilityService>();
+            if (rel is not null) await rel.InvalidateAsync(memberId, ct);
+        }
+        catch
+        {
+            // Swallow - this is purely a cache hint. Next read will recompute anyway.
+        }
     }
 }
 

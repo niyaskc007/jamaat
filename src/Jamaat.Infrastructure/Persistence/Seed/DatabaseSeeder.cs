@@ -183,6 +183,8 @@ public static class DatabaseSeeder
                 "member.view", "family.view", "commitment.view", "enrollment.view", "qh.view",
                 "receipt.view", "receipt.create", "receipt.confirm", "receipt.reprint",
                 "event.view", "event.scan",
+                // Counters consult reliability when accepting cheques / setting up commitments.
+                "member.reliability.view",
             }),
             ("accountant@jamaat.local", "Senior Accountant", "Accountant", new[]
             {
@@ -194,6 +196,8 @@ public static class DatabaseSeeder
                 "voucher.view", "voucher.create", "voucher.approve", "voucher.cancel", "voucher.reverse",
                 "accounting.view", "accounting.journal", "period.open", "period.close",
                 "reports.view", "reports.export",
+                // Accountants reference reliability when reviewing returnables and overdue receivables.
+                "member.reliability.view",
             }),
             ("events@jamaat.local", "Events Coordinator", "Counter", new[]
             {
@@ -206,12 +210,15 @@ public static class DatabaseSeeder
                 "member.view", "family.view",
                 "qh.view", "qh.create", "qh.approve_l1",
                 "reports.view",
+                // L1 approvers see the reliability profile when deciding whether to recommend a loan.
+                "member.reliability.view",
             }),
             ("qh-l2@jamaat.local", "QH Approver (L2)", "Approver", new[]
             {
                 "member.view", "family.view",
                 "qh.view", "qh.approve_l2", "qh.disburse", "qh.cancel", "qh.waive",
                 "reports.view",
+                "member.reliability.view",
             }),
             ("verifier@jamaat.local", "Data Verifier", "Counter", new[]
             {
@@ -655,5 +662,10 @@ Accepted on {{today}}.
         "reports.view", "reports.export",
         // Admin
         "admin.users", "admin.roles", "admin.masterdata", "admin.integration", "admin.audit", "admin.errorlogs",
+        // Member Reliability Profile (advisory scoring; surfaced on member profile, QH approval, and admin dashboard).
+        // .view is held by people who actually consult the score (admins, approvers, counters, accountants);
+        // .recompute is admin-only - regular users see the lazy-cached score and shouldn't be churning compute.
+        // admin.reliability gates the cross-member distribution dashboard.
+        "member.reliability.view", "member.reliability.recompute", "admin.reliability",
     ];
 }

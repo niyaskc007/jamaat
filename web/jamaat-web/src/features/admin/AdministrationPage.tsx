@@ -1,7 +1,7 @@
 import { Card, Row, Col } from 'antd';
 import {
   UserSwitchOutlined, DatabaseOutlined, ApiOutlined, SafetyOutlined,
-  BugOutlined, BellOutlined,
+  BugOutlined, BellOutlined, ThunderboltOutlined,
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -61,6 +61,13 @@ const TOOLS: AdminTool[] = [
     description: 'Every email / log-only notification the system fired - subject, body, recipient, delivery outcome.',
     icon: <BellOutlined />, color: '#D97706',
     permissions: ['admin.audit'],
+  },
+  {
+    path: '/admin/reliability',
+    title: 'Reliability dashboard',
+    description: 'Cross-member behavior overview - grade distribution + top performers + members needing outreach. Advisory only.',
+    icon: <ThunderboltOutlined />, color: '#0B6E63',
+    permissions: ['admin.reliability'],
   },
 ];
 

@@ -117,6 +117,8 @@ export function AppLayout() {
       adm.push({ key: '/admin/error-logs', icon: <BugOutlined />, label: t('nav.errorLogs') });
     if (any('admin.audit'))
       adm.push({ key: '/admin/notifications', icon: <BellOutlined />, label: 'Notifications' });
+    if (any('admin.reliability'))
+      adm.push({ key: '/admin/reliability', icon: <BarChartOutlined />, label: 'Reliability' });
 
     const help: any[] = [{ key: '/help', icon: <QuestionCircleOutlined />, label: 'Help & Docs' }];
 
@@ -311,7 +313,7 @@ function resolveActiveKey(path: string): string {
   const known = [
     '/dashboard', '/members', '/families', '/events', '/commitments', '/fund-enrollments', '/qarzan-hasana',
     '/receipts', '/cheques', '/vouchers', '/ledger', '/reports', '/accounting', '/help',
-    '/admin/users', '/admin/master-data', '/admin/integrations', '/admin/audit', '/admin/error-logs', '/admin/notifications',
+    '/admin/users', '/admin/master-data', '/admin/integrations', '/admin/audit', '/admin/error-logs', '/admin/notifications', '/admin/reliability',
     '/admin',
   ];
   return known.find((k) => path === k || path.startsWith(k + '/')) ?? '/dashboard';

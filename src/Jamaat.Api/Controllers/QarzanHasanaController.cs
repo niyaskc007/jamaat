@@ -101,4 +101,13 @@ public sealed class QarzanHasanaController(IQarzanHasanaService svc, IExcelExpor
     [Authorize(Policy = "qh.waive")]
     public async Task<IActionResult> Waive(Guid id, [FromBody] WaiveQhInstallmentDto dto, CancellationToken ct)
     { var r = await svc.WaiveInstallmentAsync(id, dto, ct); return r.IsSuccess ? NoContent() : ErrorMapper.ToActionResult(this, r.Error); }
+
+    /// <summary>Decision-support bundle for an L1/L2 approver - reliability + commitments +
+    /// donations + past loans + fund position. Gated to qh.view since both L1 and L2 approvers
+    /// (and admins) hold it; the panel exposes nothing more sensitive than what those roles
+    /// already see on the loan detail page.</summary>
+    [HttpGet("{id:guid}/decision-support")]
+    [Authorize(Policy = "qh.view")]
+    public async Task<IActionResult> DecisionSupport(Guid id, CancellationToken ct)
+    { var r = await svc.DecisionSupportAsync(id, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
 }

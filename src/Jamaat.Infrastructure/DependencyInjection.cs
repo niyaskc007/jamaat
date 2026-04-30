@@ -12,6 +12,7 @@ using Jamaat.Application.FundEnrollments;
 using Jamaat.Application.FundTypes;
 using Jamaat.Application.Lookups;
 using Jamaat.Application.Members;
+using Jamaat.Application.Members.Reliability;
 using Jamaat.Application.NumberingSeries;
 using Jamaat.Application.Organisations;
 using Jamaat.Application.Persistence;
@@ -127,6 +128,7 @@ public static class DependencyInjection
         services.AddScoped<IMembershipService, MembershipService>();
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IMemberProfileService, MemberProfileService>();
+        services.AddScoped<IReliabilityService, ReliabilityService>();
         services.AddScoped<IFundEnrollmentService, FundEnrollmentService>();
         services.AddScoped<IQarzanHasanaService, QarzanHasanaService>();
         services.AddScoped<IEventService, EventService>();

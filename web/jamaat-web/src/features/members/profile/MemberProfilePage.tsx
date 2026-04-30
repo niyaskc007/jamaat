@@ -4,7 +4,8 @@ import {
   Row, Col, Descriptions, App as AntdApp, Avatar, Divider, Typography, Badge, Upload, Alert,
 } from 'antd';
 import { useAuth } from '../../../shared/auth/useAuth';
-import { UserOutlined, TeamOutlined, HomeOutlined, BookOutlined, IdcardOutlined, CheckCircleOutlined, PhoneOutlined, GlobalOutlined, HeartOutlined, SafetyCertificateOutlined, FileProtectOutlined, StarOutlined, UploadOutlined } from '@ant-design/icons';
+import { UserOutlined, TeamOutlined, HomeOutlined, BookOutlined, IdcardOutlined, CheckCircleOutlined, PhoneOutlined, GlobalOutlined, HeartOutlined, SafetyCertificateOutlined, FileProtectOutlined, StarOutlined, UploadOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { ReliabilityTab } from '../reliability/ReliabilityTab';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -27,6 +28,7 @@ export function MemberProfilePage() {
   const navigate = useNavigate();
   const { message } = AntdApp.useApp();
   const qc = useQueryClient();
+  const { hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState('identity');
 
   const { data: profile, isLoading } = useQuery({
@@ -115,6 +117,9 @@ export function MemberProfilePage() {
             { key: 'personal', label: <span><UserOutlined /> Personal</span>, children: <PersonalTab profile={profile} onSaved={onSaved} onErr={onErr} /> },
             { key: 'orgs', label: <span><HeartOutlined /> Organisations</span>, children: <OrganisationsTab memberId={id} memberships={memberships?.items ?? []} /> },
             { key: 'verification', label: <span><CheckCircleOutlined /> Verification</span>, children: <VerificationTab profile={profile} onSaved={onSaved} onErr={onErr} /> },
+            ...(hasPermission('member.reliability.view')
+              ? [{ key: 'reliability', label: <span><ThunderboltOutlined /> Reliability</span>, children: <ReliabilityTab memberId={profile.id} /> }]
+              : []),
           ]}
         />
       </Card>

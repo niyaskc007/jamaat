@@ -32,6 +32,7 @@ import { AuditPage } from '../features/admin/AuditPage';
 import { ErrorLogsPage } from '../features/admin/error-logs/ErrorLogsPage';
 import { NotificationLogPage } from '../features/admin/notifications/NotificationLogPage';
 import { AdministrationPage } from '../features/admin/AdministrationPage';
+import { ReliabilityDashboard } from '../features/admin/reliability/ReliabilityDashboard';
 import { AccountingPage } from '../features/accounting/AccountingPage';
 import { HelpPage } from '../features/help/HelpPage';
 import { MePage } from '../features/me/MePage';
@@ -90,6 +91,7 @@ export function App() {
         <Route path="admin/audit" element={<Gate anyOf={['admin.audit']}><AuditPage /></Gate>} />
         <Route path="admin/error-logs" element={<Gate anyOf={['admin.errorlogs']}><ErrorLogsPage /></Gate>} />
         <Route path="admin/notifications" element={<Gate anyOf={['admin.audit']}><NotificationLogPage /></Gate>} />
+        <Route path="admin/reliability" element={<Gate anyOf={['admin.reliability']}><ReliabilityDashboard /></Gate>} />
         <Route path="help" element={<HelpPage />} />
         <Route path="me" element={<MePage />} />
       </Route>

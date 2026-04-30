@@ -24,6 +24,7 @@ public interface IQarzanHasanaService
     Task<Result<QarzanHasanaLoanDto>> CancelAsync(Guid id, CancelQhDto dto, CancellationToken ct = default);
     Task<Result<QarzanHasanaLoanDto>> DisburseAsync(Guid id, DisburseQhDto dto, CancellationToken ct = default);
     Task<Result> WaiveInstallmentAsync(Guid id, WaiveQhInstallmentDto dto, CancellationToken ct = default);
+    Task<Result<LoanDecisionSupportDto>> DecisionSupportAsync(Guid id, CancellationToken ct = default);
 }
 
 public sealed class QarzanHasanaService(
@@ -32,7 +33,8 @@ public sealed class QarzanHasanaService(
     IPostingService posting, IFxConverter fx, INumberingService numbering,
     IValidator<CreateQarzanHasanaDto> createV,
     IValidator<UpdateQarzanHasanaDraftDto> updateV,
-    IValidator<ApproveL1Dto> approveL1V) : IQarzanHasanaService
+    IValidator<ApproveL1Dto> approveL1V,
+    IServiceProvider services) : IQarzanHasanaService
 {
     public async Task<PagedResult<QarzanHasanaLoanDto>> ListAsync(QarzanHasanaListQuery q, CancellationToken ct = default)
     {
@@ -238,7 +240,24 @@ public sealed class QarzanHasanaService(
             db.QarzanHasanaLoans.Update(loan);
             await uow.SaveChangesAsync(ct);
         }
+        await InvalidateReliabilityAsync(loan.MemberId, ct);
         return await LoadAsync(id, ct);
+    }
+
+    /// <summary>Best-effort reliability cache invalidation. Resolved late so a missing
+    /// reliability service can never block a disbursement.</summary>
+    private async Task InvalidateReliabilityAsync(Guid memberId, CancellationToken ct)
+    {
+        try
+        {
+            var rel = services.GetService(typeof(Members.Reliability.IReliabilityService))
+                as Members.Reliability.IReliabilityService;
+            if (rel is not null) await rel.InvalidateAsync(memberId, ct);
+        }
+        catch
+        {
+            // Swallow - cache hint only.
+        }
     }
 
     public async Task<Result> WaiveInstallmentAsync(Guid id, WaiveQhInstallmentDto dto, CancellationToken ct = default)
@@ -272,6 +291,159 @@ public sealed class QarzanHasanaService(
             list.Add(new QarzanHasanaInstallment(Guid.NewGuid(), i + 1, due, amt));
         }
         loan.SetSchedule(list);
+    }
+
+    public async Task<Result<LoanDecisionSupportDto>> DecisionSupportAsync(Guid id, CancellationToken ct = default)
+    {
+        var loan = await db.QarzanHasanaLoans.AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
+        if (loan is null) return Error.NotFound("qh.not_found", "Loan not found.");
+
+        // 1. Reliability profile via the reliability service. Resolved late so QH doesn't take a
+        //    hard module dependency; if the service is unavailable, we still serve the rest of the
+        //    panel with an Unrated stub so the approver isn't blocked.
+        LoanReliabilitySummary reliability;
+        try
+        {
+            var rel = services.GetService(typeof(Members.Reliability.IReliabilityService))
+                as Members.Reliability.IReliabilityService;
+            if (rel is not null)
+            {
+                var profile = await rel.GetAsync(loan.MemberId, ct);
+                if (profile.IsSuccess)
+                {
+                    reliability = new LoanReliabilitySummary(
+                        profile.Value.Grade, profile.Value.TotalScore,
+                        profile.Value.LoanReady, profile.Value.LoanReadyReason,
+                        profile.Value.Dimensions.Select(d => new LoanReliabilityFactor(d.Key, d.Name, d.Score, d.Excluded, d.Raw)).ToList());
+                }
+                else
+                {
+                    reliability = new LoanReliabilitySummary("Unrated", null, false, "Profile unavailable", []);
+                }
+            }
+            else
+            {
+                reliability = new LoanReliabilitySummary("Unrated", null, false, "Profile service not registered", []);
+            }
+        }
+        catch
+        {
+            reliability = new LoanReliabilitySummary("Unrated", null, false, "Profile lookup failed", []);
+        }
+
+        // 2. Active commitments (Active or Paused) - count + totals + top 5 by outstanding.
+        var commitments = await db.Commitments.AsNoTracking()
+            .Where(c => c.MemberId == loan.MemberId
+                && (c.Status == CommitmentStatus.Active || c.Status == CommitmentStatus.Paused))
+            .Select(c => new
+            {
+                c.Code, c.FundTypeId,
+                FundName = db.FundTypes.Where(f => f.Id == c.FundTypeId).Select(f => f.NameEnglish).FirstOrDefault() ?? "",
+                c.TotalAmount, c.PaidAmount,
+            })
+            .ToListAsync(ct);
+        var commitmentSummary = new LoanCommitmentSummary(
+            commitments.Count,
+            commitments.Sum(c => c.TotalAmount),
+            commitments.Sum(c => c.PaidAmount),
+            commitments.Sum(c => c.TotalAmount - c.PaidAmount),
+            commitments
+                .OrderByDescending(c => c.TotalAmount - c.PaidAmount)
+                .Take(5)
+                .Select(c => new LoanCommitmentLine(c.Code, c.FundName, c.TotalAmount, c.TotalAmount - c.PaidAmount))
+                .ToList());
+
+        // 3. Donation history (last 12 months, confirmed receipts).
+        var twelveMonthsAgo = clock.Today.AddMonths(-12);
+        var receiptLines = await (
+            from r in db.Receipts.AsNoTracking()
+            where r.MemberId == loan.MemberId
+                && r.Status == ReceiptStatus.Confirmed
+                && r.ReceiptDate >= twelveMonthsAgo
+            from line in r.Lines
+            select new { r.Id, r.ReceiptDate, line.FundTypeId, line.Amount }
+        ).ToListAsync(ct);
+        var receiptIds = receiptLines.Select(x => x.Id).Distinct().ToList();
+        var fundIds = receiptLines.Select(x => x.FundTypeId).Distinct().ToList();
+        var fundNames = await db.FundTypes.AsNoTracking()
+            .Where(f => fundIds.Contains(f.Id))
+            .ToDictionaryAsync(f => f.Id, f => f.NameEnglish, ct);
+        var donationsByFund = receiptLines
+            .GroupBy(x => x.FundTypeId)
+            .OrderByDescending(g => g.Sum(l => l.Amount))
+            .Take(5)
+            .Select(g => new LoanDonationFundLine(
+                fundNames.GetValueOrDefault(g.Key, "(unknown fund)"),
+                g.Sum(l => l.Amount),
+                g.Select(l => l.Id).Distinct().Count()))
+            .ToList();
+        var donationSummary = new LoanDonationSummary(
+            12,
+            receiptLines.Sum(l => l.Amount),
+            receiptIds.Count,
+            donationsByFund);
+
+        // 4. Past loans for this borrower (any non-rejected/cancelled status, any age).
+        var pastLoans = await db.QarzanHasanaLoans.AsNoTracking()
+            .Include(l => l.Installments)
+            .Where(l => l.MemberId == loan.MemberId && l.Id != id
+                && l.Status != QarzanHasanaStatus.Cancelled
+                && l.Status != QarzanHasanaStatus.Rejected
+                && l.Status != QarzanHasanaStatus.Draft
+                && l.Status != QarzanHasanaStatus.PendingLevel1
+                && l.Status != QarzanHasanaStatus.PendingLevel2)
+            .ToListAsync(ct);
+        int dueCount = 0, onTimeCount = 0;
+        foreach (var l in pastLoans)
+        {
+            foreach (var i in l.Installments.Where(i => i.DueDate <= clock.Today))
+            {
+                dueCount++;
+                if (i.Status == QarzanHasanaInstallmentStatus.Waived) { onTimeCount++; continue; }
+                if (i.Status == QarzanHasanaInstallmentStatus.Paid && i.LastPaymentDate.HasValue
+                    && i.LastPaymentDate.Value.DayNumber - i.DueDate.DayNumber <= 14)
+                    onTimeCount++;
+            }
+        }
+        var onTimePct = dueCount == 0 ? 0m : Math.Round(100m * onTimeCount / dueCount, 1);
+        var pastSummary = new LoanPastLoansSummary(
+            pastLoans.Count,
+            pastLoans.Count(l => l.Status == QarzanHasanaStatus.Completed),
+            pastLoans.Count(l => l.Status == QarzanHasanaStatus.Defaulted),
+            pastLoans.Sum(l => l.AmountDisbursed),
+            pastLoans.Sum(l => l.AmountRepaid),
+            onTimePct);
+
+        // 5. Fund position - cash received to loan-category funds minus current outstanding.
+        // Loan-category receipts represent inflows to the QH pool (deposits / replenishments).
+        // Currently disbursed-but-unrepaid is the active outstanding. Residual = pool - outstanding.
+        var loanFundIds = await db.FundTypes.AsNoTracking()
+            .Where(f => f.Category == FundCategory.Loan)
+            .Select(f => f.Id).ToListAsync(ct);
+        decimal poolReceived = 0m;
+        if (loanFundIds.Count > 0)
+        {
+            poolReceived = await (
+                from r in db.Receipts.AsNoTracking()
+                where r.Status == ReceiptStatus.Confirmed
+                from line in r.Lines
+                where loanFundIds.Contains(line.FundTypeId)
+                select line.Amount
+            ).SumAsync(ct);
+        }
+        var activeOutstanding = await db.QarzanHasanaLoans.AsNoTracking()
+            .Where(l => l.Status == QarzanHasanaStatus.Active
+                || l.Status == QarzanHasanaStatus.Disbursed
+                || l.Status == QarzanHasanaStatus.Defaulted)
+            .Select(l => l.AmountDisbursed - l.AmountRepaid)
+            .SumAsync(ct);
+        var currentNet = poolReceived - activeOutstanding;
+        var requested = loan.AmountApproved > 0 ? loan.AmountApproved : loan.AmountRequested;
+        var projected = currentNet - requested;
+        var pctRemaining = currentNet <= 0 ? 0m : Math.Round(100m * projected / currentNet, 1);
+        var fundPosition = new LoanFundPosition(loan.Currency, currentNet, requested, projected, pctRemaining);
+
+        return new LoanDecisionSupportDto(loan.Id, reliability, commitmentSummary, donationSummary, pastSummary, fundPosition);
     }
 
     private async Task<string> NextCodeAsync(CancellationToken ct)

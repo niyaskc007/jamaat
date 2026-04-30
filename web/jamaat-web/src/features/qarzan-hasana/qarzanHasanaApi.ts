@@ -98,4 +98,51 @@ export const qarzanHasanaApi = {
   waive: async (id: string, installmentId: string, reason: string) => {
     await api.post(`/api/v1/qarzan-hasana/${id}/waive-installment`, { installmentId, reason });
   },
+  decisionSupport: async (id: string): Promise<LoanDecisionSupport> =>
+    (await api.get(`/api/v1/qarzan-hasana/${id}/decision-support`)).data,
+};
+
+// --- Decision-support DTOs ---
+export type LoanReliabilitySummary = {
+  grade: string;
+  totalScore: number | null;
+  loanReady: boolean;
+  loanReadyReason: string | null;
+  factors: { key: string; name: string; score: number | null; excluded: boolean; raw: string }[];
+};
+export type LoanCommitmentSummary = {
+  activeCount: number;
+  totalAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+  top: { code: string; fundName: string; totalAmount: number; outstandingAmount: number }[];
+};
+export type LoanDonationSummary = {
+  months: number;
+  totalAmount: number;
+  receiptCount: number;
+  byFund: { fundName: string; amount: number; receiptCount: number }[];
+};
+export type LoanPastLoansSummary = {
+  loanCount: number;
+  completedCount: number;
+  defaultedCount: number;
+  totalDisbursed: number;
+  totalRepaid: number;
+  onTimeRepaymentPercent: number;
+};
+export type LoanFundPosition = {
+  currency: string;
+  currentNetBalance: number;
+  requestedAmount: number;
+  projectedAfterDisbursement: number;
+  percentRemainingAfter: number;
+};
+export type LoanDecisionSupport = {
+  loanId: string;
+  reliability: LoanReliabilitySummary;
+  commitments: LoanCommitmentSummary;
+  donations: LoanDonationSummary;
+  pastLoans: LoanPastLoansSummary;
+  fundPosition: LoanFundPosition;
 };
