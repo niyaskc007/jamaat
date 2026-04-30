@@ -66,6 +66,28 @@ public sealed class QarzanHasanaLoan : AggregateRoot<Guid>, ITenantScoped, IAudi
     public string? CashflowDocumentUrl { get; private set; }
     public string? GoldSlipDocumentUrl { get; private set; }
 
+    // --- Borrower's case (free-text inputs from the request form) ---------
+    /// <summary>What the loan is for. Required for new submissions; legacy rows may be empty.</summary>
+    public string? Purpose { get; private set; }
+    /// <summary>How the borrower plans to repay each instalment. Required for new submissions.</summary>
+    public string? RepaymentPlan { get; private set; }
+    /// <summary>Primary source of income (salary / business / etc.). Optional context for approvers.</summary>
+    public string? SourceOfIncome { get; private set; }
+    /// <summary>Other active obligations outside this jamaat. Optional context for approvers.</summary>
+    public string? OtherObligations { get; private set; }
+
+    // --- Guarantor acknowledgment (kafalah consent, witnessed at the counter) ---
+    /// <summary>
+    /// True if both guarantors have acknowledged their kafalah at draft time.
+    /// Required to be true before <see cref="Submit"/> succeeds. The fuller notification-based
+    /// "guarantor logs in to confirm" workflow is a separate feature; this flag captures the
+    /// current real-world process where both guarantors are present at the counter.
+    /// </summary>
+    public bool GuarantorsAcknowledged { get; private set; }
+    public DateTimeOffset? GuarantorsAcknowledgedAtUtc { get; private set; }
+    /// <summary>The operator (counter user) who witnessed and recorded the consent.</summary>
+    public string? GuarantorsAcknowledgedByUserName { get; private set; }
+
     public Guid? Level1ApproverUserId { get; private set; }
     public string? Level1ApproverName { get; private set; }
     public DateTimeOffset? Level1ApprovedAtUtc { get; private set; }
@@ -95,7 +117,8 @@ public sealed class QarzanHasanaLoan : AggregateRoot<Guid>, ITenantScoped, IAudi
     // --- Behaviour ---------------------------------------------------------
 
     public void UpdateDraft(decimal amountRequested, int installmentsRequested, string? cashflowUrl, string? goldSlipUrl,
-        decimal? goldAmount, DateOnly startDate, Guid guarantor1, Guid guarantor2, Guid? familyId)
+        decimal? goldAmount, DateOnly startDate, Guid guarantor1, Guid guarantor2, Guid? familyId,
+        string? purpose, string? repaymentPlan, string? sourceOfIncome, string? otherObligations)
     {
         if (Status != QarzanHasanaStatus.Draft) throw new InvalidOperationException("Only drafts may be edited.");
         if (amountRequested <= 0) throw new ArgumentException("Amount must be > 0.");
@@ -111,11 +134,37 @@ public sealed class QarzanHasanaLoan : AggregateRoot<Guid>, ITenantScoped, IAudi
         Guarantor1MemberId = guarantor1;
         Guarantor2MemberId = guarantor2;
         FamilyId = familyId;
+        Purpose = purpose;
+        RepaymentPlan = repaymentPlan;
+        SourceOfIncome = sourceOfIncome;
+        OtherObligations = otherObligations;
+    }
+
+    /// <summary>Record that the operator has witnessed both guarantors agreeing to act as kafil.
+    /// Setting this is required before <see cref="Submit"/> can move the loan into approval.</summary>
+    public void AcknowledgeGuarantors(string operatorUserName, DateTimeOffset at)
+    {
+        if (Status != QarzanHasanaStatus.Draft)
+            throw new InvalidOperationException("Guarantor consent can only be recorded while the loan is in Draft.");
+        GuarantorsAcknowledged = true;
+        GuarantorsAcknowledgedAtUtc = at;
+        GuarantorsAcknowledgedByUserName = operatorUserName;
+    }
+
+    /// <summary>Clear a previously-recorded guarantor consent. Used when the borrower swaps a
+    /// guarantor; the operator must re-witness because the new guarantor hasn't consented yet.</summary>
+    public void ClearGuarantorAcknowledgment()
+    {
+        GuarantorsAcknowledged = false;
+        GuarantorsAcknowledgedAtUtc = null;
+        GuarantorsAcknowledgedByUserName = null;
     }
 
     public void Submit()
     {
         if (Status != QarzanHasanaStatus.Draft) throw new InvalidOperationException("Only drafts can be submitted.");
+        if (!GuarantorsAcknowledged)
+            throw new InvalidOperationException("Both guarantors must acknowledge their kafalah before the loan can be submitted for approval.");
         Status = QarzanHasanaStatus.PendingLevel1;
     }
 

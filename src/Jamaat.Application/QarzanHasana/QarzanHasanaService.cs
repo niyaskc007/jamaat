@@ -105,7 +105,14 @@ public sealed class QarzanHasanaService(
             dto.Scheme, dto.AmountRequested, dto.InstalmentsRequested, dto.Currency,
             dto.StartDate, dto.Guarantor1MemberId, dto.Guarantor2MemberId);
         loan.UpdateDraft(dto.AmountRequested, dto.InstalmentsRequested, dto.CashflowDocumentUrl, dto.GoldSlipDocumentUrl,
-            dto.GoldAmount, dto.StartDate, dto.Guarantor1MemberId, dto.Guarantor2MemberId, dto.FamilyId);
+            dto.GoldAmount, dto.StartDate, dto.Guarantor1MemberId, dto.Guarantor2MemberId, dto.FamilyId,
+            dto.Purpose, dto.RepaymentPlan, dto.SourceOfIncome, dto.OtherObligations);
+        // Operator-witnessed kafalah consent. Captured here at draft time; the consent flag stays
+        // true through edits unless the borrower changes a guarantor (UpdateDraft path).
+        if (dto.GuarantorsAcknowledged)
+        {
+            loan.AcknowledgeGuarantors(currentUser.UserName ?? "system", clock.UtcNow);
+        }
         db.QarzanHasanaLoans.Add(loan);
         await uow.SaveChangesAsync(ct);
         return await LoadAsync(loan.Id, ct);
@@ -116,8 +123,18 @@ public sealed class QarzanHasanaService(
         await updateV.ValidateAndThrowAsync(dto, ct);
         var loan = await db.QarzanHasanaLoans.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (loan is null) return Error.NotFound("qh.not_found", "Loan not found.");
+        // If a guarantor has changed, the previous acknowledgment no longer applies - the new
+        // guarantor hasn't consented. Clear the flag so Submit() will require a fresh consent.
+        var guarantorChanged = loan.Guarantor1MemberId != dto.Guarantor1MemberId
+            || loan.Guarantor2MemberId != dto.Guarantor2MemberId;
         loan.UpdateDraft(dto.AmountRequested, dto.InstalmentsRequested, dto.CashflowDocumentUrl, dto.GoldSlipDocumentUrl,
-            dto.GoldAmount, dto.StartDate, dto.Guarantor1MemberId, dto.Guarantor2MemberId, dto.FamilyId);
+            dto.GoldAmount, dto.StartDate, dto.Guarantor1MemberId, dto.Guarantor2MemberId, dto.FamilyId,
+            dto.Purpose, dto.RepaymentPlan, dto.SourceOfIncome, dto.OtherObligations);
+        if (guarantorChanged) loan.ClearGuarantorAcknowledgment();
+        if (dto.GuarantorsAcknowledged && !loan.GuarantorsAcknowledged)
+        {
+            loan.AcknowledgeGuarantors(currentUser.UserName ?? "system", clock.UtcNow);
+        }
         db.QarzanHasanaLoans.Update(loan);
         await uow.SaveChangesAsync(ct);
         return await LoadAsync(id, ct);
@@ -484,7 +501,9 @@ public sealed class QarzanHasanaService(
             loan.DisbursedOn,
             loan.RejectionReason, loan.CancellationReason,
             loan.ProgressPercent,
-            loan.CreatedAtUtc);
+            loan.CreatedAtUtc,
+            loan.Purpose, loan.RepaymentPlan, loan.SourceOfIncome, loan.OtherObligations,
+            loan.GuarantorsAcknowledged, loan.GuarantorsAcknowledgedAtUtc, loan.GuarantorsAcknowledgedByUserName);
 
     private static QarzanHasanaLoanDto ProjectRow(JamaatDbContextFacade db, QarzanHasanaLoan x) =>
         new(x.Id, x.Code,
@@ -509,7 +528,9 @@ public sealed class QarzanHasanaService(
             x.DisbursedOn,
             x.RejectionReason, x.CancellationReason,
             x.ProgressPercent,
-            x.CreatedAtUtc);
+            x.CreatedAtUtc,
+            x.Purpose, x.RepaymentPlan, x.SourceOfIncome, x.OtherObligations,
+            x.GuarantorsAcknowledged, x.GuarantorsAcknowledgedAtUtc, x.GuarantorsAcknowledgedByUserName);
 }
 
 public sealed class CreateQarzanHasanaValidator : AbstractValidator<CreateQarzanHasanaDto>
@@ -523,6 +544,14 @@ public sealed class CreateQarzanHasanaValidator : AbstractValidator<CreateQarzan
         RuleFor(x => x.AmountRequested).GreaterThan(0);
         RuleFor(x => x.InstalmentsRequested).GreaterThan(0).LessThanOrEqualTo(240);
         RuleFor(x => x.Currency).NotEmpty().Length(3);
+        // Purpose + RepaymentPlan are server-side required for new submissions. Existing legacy
+        // rows may have empty values; the precondition fires only on newly created drafts.
+        RuleFor(x => x.Purpose).NotEmpty().WithMessage("Purpose of the loan is required.")
+            .MaximumLength(2000);
+        RuleFor(x => x.RepaymentPlan).NotEmpty().WithMessage("Repayment plan is required.")
+            .MaximumLength(2000);
+        RuleFor(x => x.SourceOfIncome).MaximumLength(1000);
+        RuleFor(x => x.OtherObligations).MaximumLength(1000);
     }
 }
 

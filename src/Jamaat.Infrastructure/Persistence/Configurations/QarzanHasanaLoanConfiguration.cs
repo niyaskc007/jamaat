@@ -32,6 +32,17 @@ public sealed class QarzanHasanaLoanConfiguration : IEntityTypeConfiguration<Qar
         b.Property(x => x.RejectionReason).HasMaxLength(1000);
         b.Property(x => x.CancellationReason).HasMaxLength(1000);
 
+        // Borrower's case (free text, captured at draft).
+        b.Property(x => x.Purpose).HasMaxLength(2000);
+        b.Property(x => x.RepaymentPlan).HasMaxLength(2000);
+        b.Property(x => x.SourceOfIncome).HasMaxLength(1000);
+        b.Property(x => x.OtherObligations).HasMaxLength(1000);
+
+        // Guarantor acknowledgment - operator-witnessed v1. Default to false on existing rows
+        // (legacy data is preserved truthfully; the precondition only fires on new submissions).
+        b.Property(x => x.GuarantorsAcknowledged).HasDefaultValue(false);
+        b.Property(x => x.GuarantorsAcknowledgedByUserName).HasMaxLength(200);
+
         b.HasIndex(x => new { x.TenantId, x.Code }).IsUnique();
         b.HasIndex(x => new { x.TenantId, x.MemberId });
         b.HasIndex(x => new { x.TenantId, x.Status });

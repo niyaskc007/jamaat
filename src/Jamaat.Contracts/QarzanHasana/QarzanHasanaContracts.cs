@@ -21,7 +21,10 @@ public sealed record QarzanHasanaLoanDto(
     DateOnly? DisbursedOn,
     string? RejectionReason, string? CancellationReason,
     decimal ProgressPercent,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc,
+    // --- Borrower's case + guarantor acknowledgment (added v2) ---
+    string? Purpose, string? RepaymentPlan, string? SourceOfIncome, string? OtherObligations,
+    bool GuarantorsAcknowledged, DateTimeOffset? GuarantorsAcknowledgedAtUtc, string? GuarantorsAcknowledgedByUserName);
 
 public sealed record QarzanHasanaInstallmentDto(
     Guid Id, int InstallmentNo, DateOnly DueDate,
@@ -45,7 +48,17 @@ public sealed record CreateQarzanHasanaDto(
     Guid Guarantor2MemberId,
     decimal? GoldAmount = null,
     string? CashflowDocumentUrl = null,
-    string? GoldSlipDocumentUrl = null);
+    string? GoldSlipDocumentUrl = null,
+    /// <summary>What the loan is for. Required for new submissions.</summary>
+    string? Purpose = null,
+    /// <summary>How the borrower plans to repay each instalment. Required.</summary>
+    string? RepaymentPlan = null,
+    /// <summary>Primary source of income (salary / business / etc.). Optional.</summary>
+    string? SourceOfIncome = null,
+    /// <summary>Other current obligations outside this jamaat. Optional.</summary>
+    string? OtherObligations = null,
+    /// <summary>Operator confirms both guarantors are present and have agreed to act as kafil.</summary>
+    bool GuarantorsAcknowledged = false);
 
 public sealed record UpdateQarzanHasanaDraftDto(
     decimal AmountRequested,
@@ -56,7 +69,12 @@ public sealed record UpdateQarzanHasanaDraftDto(
     Guid Guarantor2MemberId,
     Guid? FamilyId,
     string? CashflowDocumentUrl,
-    string? GoldSlipDocumentUrl);
+    string? GoldSlipDocumentUrl,
+    string? Purpose = null,
+    string? RepaymentPlan = null,
+    string? SourceOfIncome = null,
+    string? OtherObligations = null,
+    bool GuarantorsAcknowledged = false);
 
 public sealed record ApproveL1Dto(decimal AmountApproved, int InstalmentsApproved, string? Comments);
 public sealed record ApproveL2Dto(string? Comments);
