@@ -347,6 +347,7 @@ function AddressTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSav
   return (
     <div style={{ padding: 24 }}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={profile}>
+        <Typography.Title level={5} style={{ marginBlockStart: 0 }}>Address</Typography.Title>
         <Row gutter={16}>
           <Col span={24}><Form.Item label="Address line" name="addressLine"><Input.TextArea rows={2} /></Form.Item></Col>
           <Col span={12}><Form.Item label="Building" name="building"><Input /></Form.Item></Col>
@@ -361,6 +362,33 @@ function AddressTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSav
           <Col span={8}><Form.Item label="Type of house" name="typeOfHouse">
             <Select options={Object.entries(TypeOfHouseLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
           </Form.Item></Col>
+        </Row>
+
+        {/* Property details - all optional. These power the future household wealth profile;
+            capturing them now so the data is on hand when reports / approvals start to use it.
+            Sensitive numbers (estimated market value) only render visibly to those who can
+            already see contribution + commitment data on this profile. */}
+        <Typography.Title level={5} style={{ marginBlockStart: 16 }}>
+          Property details
+          <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--jm-gray-500)', marginInlineStart: 8 }}>
+            (optional - fill what you know)
+          </span>
+        </Typography.Title>
+        <Row gutter={16}>
+          <Col span={6}><Form.Item label="Bedrooms" name="numBedrooms"><InputNumber min={0} max={50} style={{ inlineSize: '100%' }} /></Form.Item></Col>
+          <Col span={6}><Form.Item label="Bathrooms" name="numBathrooms"><InputNumber min={0} max={50} style={{ inlineSize: '100%' }} /></Form.Item></Col>
+          <Col span={6}><Form.Item label="Kitchens" name="numKitchens"><InputNumber min={0} max={20} style={{ inlineSize: '100%' }} /></Form.Item></Col>
+          <Col span={6}><Form.Item label="Living rooms" name="numLivingRooms"><InputNumber min={0} max={20} style={{ inlineSize: '100%' }} /></Form.Item></Col>
+          <Col span={6}><Form.Item label="Stories / floors" name="numStories"><InputNumber min={0} max={20} style={{ inlineSize: '100%' }} /></Form.Item></Col>
+          <Col span={6}><Form.Item label="Air conditioners" name="numAirConditioners"><InputNumber min={0} max={50} style={{ inlineSize: '100%' }} /></Form.Item></Col>
+          <Col span={6}><Form.Item label="Built-up area (sq ft)" name="builtUpAreaSqft"><InputNumber min={0} step={10} style={{ inlineSize: '100%' }} /></Form.Item></Col>
+          <Col span={6}><Form.Item label="Land area (sq ft)" name="landAreaSqft"><InputNumber min={0} step={10} style={{ inlineSize: '100%' }} /></Form.Item></Col>
+          <Col span={6}><Form.Item label="Property age (years)" name="propertyAgeYears"><InputNumber min={0} max={200} style={{ inlineSize: '100%' }} /></Form.Item></Col>
+          <Col span={6}><Form.Item label="Estimated market value" name="estimatedMarketValue" tooltip="Self-declared. Used in the household wealth profile."><InputNumber min={0} step={1000} style={{ inlineSize: '100%' }} /></Form.Item></Col>
+          <Col span={4}><Form.Item label="Elevator" name="hasElevator" valuePropName="checked"><Switch /></Form.Item></Col>
+          <Col span={4}><Form.Item label="Parking" name="hasParking" valuePropName="checked"><Switch /></Form.Item></Col>
+          <Col span={4}><Form.Item label="Garden" name="hasGarden" valuePropName="checked"><Switch /></Form.Item></Col>
+          <Col span={24}><Form.Item label="Property notes" name="propertyNotes"><Input.TextArea rows={2} placeholder="Anything else worth noting (renovations, distinctive features, etc.)" maxLength={1000} showCount /></Form.Item></Col>
         </Row>
       </Form>
       <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} />

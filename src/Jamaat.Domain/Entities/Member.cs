@@ -84,6 +84,30 @@ public sealed class Member : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISo
     public HousingOwnership HousingOwnership { get; private set; }
     public TypeOfHouse TypeOfHouse { get; private set; }
 
+    // --- Property details (v2 additions) -----------------------------------
+    /// <summary>Number of bedrooms in the dwelling. Optional; supports the future
+    /// household wealth profile.</summary>
+    public int? NumBedrooms { get; private set; }
+    public int? NumBathrooms { get; private set; }
+    public int? NumKitchens { get; private set; }
+    public int? NumLivingRooms { get; private set; }
+    /// <summary>Number of floors / stories in the dwelling.</summary>
+    public int? NumStories { get; private set; }
+    public int? NumAirConditioners { get; private set; }
+    /// <summary>Built-up area in square feet.</summary>
+    public decimal? BuiltUpAreaSqft { get; private set; }
+    /// <summary>Land area (plot) in square feet, when applicable.</summary>
+    public decimal? LandAreaSqft { get; private set; }
+    /// <summary>Approximate property age in years.</summary>
+    public int? PropertyAgeYears { get; private set; }
+    public bool? HasElevator { get; private set; }
+    public bool? HasParking { get; private set; }
+    public bool? HasGarden { get; private set; }
+    /// <summary>Self-declared estimated market value of the dwelling. Sensitive - same
+    /// visibility constraints as wealth declaration.</summary>
+    public decimal? EstimatedMarketValue { get; private set; }
+    public string? PropertyNotes { get; private set; }
+
     // --- Community / Origin -------------------------------------------------
     public string? Category { get; private set; }
     public string? Idara { get; private set; }
@@ -216,7 +240,12 @@ public sealed class Member : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISo
 
     public void UpdateAddress(string? addressLine, string? building, string? street, string? area,
         string? city, string? state, string? pincode,
-        HousingOwnership ownership, TypeOfHouse typeOfHouse)
+        HousingOwnership ownership, TypeOfHouse typeOfHouse,
+        int? numBedrooms = null, int? numBathrooms = null, int? numKitchens = null,
+        int? numLivingRooms = null, int? numStories = null, int? numAirConditioners = null,
+        decimal? builtUpAreaSqft = null, decimal? landAreaSqft = null, int? propertyAgeYears = null,
+        bool? hasElevator = null, bool? hasParking = null, bool? hasGarden = null,
+        decimal? estimatedMarketValue = null, string? propertyNotes = null)
     {
         AddressLine = addressLine;
         Building = building;
@@ -227,6 +256,21 @@ public sealed class Member : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISo
         Pincode = pincode;
         HousingOwnership = ownership;
         TypeOfHouse = typeOfHouse;
+
+        NumBedrooms = numBedrooms;
+        NumBathrooms = numBathrooms;
+        NumKitchens = numKitchens;
+        NumLivingRooms = numLivingRooms;
+        NumStories = numStories;
+        NumAirConditioners = numAirConditioners;
+        BuiltUpAreaSqft = builtUpAreaSqft;
+        LandAreaSqft = landAreaSqft;
+        PropertyAgeYears = propertyAgeYears;
+        HasElevator = hasElevator;
+        HasParking = hasParking;
+        HasGarden = hasGarden;
+        EstimatedMarketValue = estimatedMarketValue;
+        PropertyNotes = NullIfBlank(propertyNotes);
     }
 
     public void UpdateOrigin(string? category, string? idara, string? vatan, string? nationality,

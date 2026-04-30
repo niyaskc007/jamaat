@@ -27,6 +27,13 @@ public sealed record MemberProfileDto(
     string? AddressLine, string? Building, string? Street, string? Area,
     string? City, string? State, string? Pincode,
     HousingOwnership HousingOwnership, TypeOfHouse TypeOfHouse,
+    // Property details (v2). All optional - this is the foundation for the
+    // member wealth profile we're building incrementally.
+    int? NumBedrooms, int? NumBathrooms, int? NumKitchens, int? NumLivingRooms,
+    int? NumStories, int? NumAirConditioners,
+    decimal? BuiltUpAreaSqft, decimal? LandAreaSqft, int? PropertyAgeYears,
+    bool? HasElevator, bool? HasParking, bool? HasGarden,
+    decimal? EstimatedMarketValue, string? PropertyNotes,
     string? Category, string? Idara, string? Vatan, string? Nationality,
     string? Jamaat, string? Jamiaat,
     Guid? SectorId, string? SectorCode, string? SectorName,
@@ -66,7 +73,12 @@ public sealed record UpdateContactDto(
 public sealed record UpdateAddressDto(
     string? AddressLine, string? Building, string? Street, string? Area,
     string? City, string? State, string? Pincode,
-    HousingOwnership HousingOwnership, TypeOfHouse TypeOfHouse);
+    HousingOwnership HousingOwnership, TypeOfHouse TypeOfHouse,
+    int? NumBedrooms = null, int? NumBathrooms = null, int? NumKitchens = null,
+    int? NumLivingRooms = null, int? NumStories = null, int? NumAirConditioners = null,
+    decimal? BuiltUpAreaSqft = null, decimal? LandAreaSqft = null, int? PropertyAgeYears = null,
+    bool? HasElevator = null, bool? HasParking = null, bool? HasGarden = null,
+    decimal? EstimatedMarketValue = null, string? PropertyNotes = null);
 
 public sealed record UpdateOriginDto(
     string? Category, string? Idara, string? Vatan, string? Nationality,

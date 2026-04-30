@@ -67,6 +67,11 @@ public sealed class MemberConfiguration : IEntityTypeConfiguration<Member>
         b.Property(x => x.Pincode).HasMaxLength(16);
         b.Property(x => x.HousingOwnership).HasConversion<int>();
         b.Property(x => x.TypeOfHouse).HasConversion<int>();
+        // Property detail fields (v2). All optional; admins/members fill what they know.
+        b.Property(x => x.BuiltUpAreaSqft).HasColumnType("decimal(10,2)");
+        b.Property(x => x.LandAreaSqft).HasColumnType("decimal(10,2)");
+        b.Property(x => x.EstimatedMarketValue).HasColumnType("decimal(18,2)");
+        b.Property(x => x.PropertyNotes).HasMaxLength(1000);
 
         // Community / origin
         b.Property(x => x.Category).HasMaxLength(100);

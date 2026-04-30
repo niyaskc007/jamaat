@@ -71,6 +71,13 @@ export type MemberProfile = {
   addressLine?: string | null; building?: string | null; street?: string | null; area?: string | null;
   city?: string | null; state?: string | null; pincode?: string | null;
   housingOwnership: HousingOwnership; typeOfHouse: TypeOfHouse;
+  // Property details (v2). All optional. The numbers/booleans support a future household
+  // wealth profile - we capture them now so the data is there when we need it.
+  numBedrooms?: number | null; numBathrooms?: number | null; numKitchens?: number | null;
+  numLivingRooms?: number | null; numStories?: number | null; numAirConditioners?: number | null;
+  builtUpAreaSqft?: number | null; landAreaSqft?: number | null; propertyAgeYears?: number | null;
+  hasElevator?: boolean | null; hasParking?: boolean | null; hasGarden?: boolean | null;
+  estimatedMarketValue?: number | null; propertyNotes?: string | null;
   category?: string | null; idara?: string | null; vatan?: string | null; nationality?: string | null;
   jamaat?: string | null; jamiaat?: string | null;
   sectorId?: string | null; sectorCode?: string | null; sectorName?: string | null;

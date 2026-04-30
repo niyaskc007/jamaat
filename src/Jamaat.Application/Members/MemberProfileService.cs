@@ -74,7 +74,12 @@ public sealed class MemberProfileService(
         var m = await db.Members.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
         if (m is null) return Error.NotFound("member.not_found", "Member not found.");
         m.UpdateAddress(dto.AddressLine, dto.Building, dto.Street, dto.Area, dto.City, dto.State, dto.Pincode,
-            dto.HousingOwnership, dto.TypeOfHouse);
+            dto.HousingOwnership, dto.TypeOfHouse,
+            dto.NumBedrooms, dto.NumBathrooms, dto.NumKitchens, dto.NumLivingRooms,
+            dto.NumStories, dto.NumAirConditioners,
+            dto.BuiltUpAreaSqft, dto.LandAreaSqft, dto.PropertyAgeYears,
+            dto.HasElevator, dto.HasParking, dto.HasGarden,
+            dto.EstimatedMarketValue, dto.PropertyNotes);
         db.Members.Update(m);
         await uow.SaveChangesAsync(ct);
         return await LoadProfileAsync(id, ct);
@@ -250,6 +255,11 @@ public sealed class MemberProfileService(
             m.AddressLine, m.Building, m.Street, m.Area,
             m.City, m.State, m.Pincode,
             m.HousingOwnership, m.TypeOfHouse,
+            m.NumBedrooms, m.NumBathrooms, m.NumKitchens, m.NumLivingRooms,
+            m.NumStories, m.NumAirConditioners,
+            m.BuiltUpAreaSqft, m.LandAreaSqft, m.PropertyAgeYears,
+            m.HasElevator, m.HasParking, m.HasGarden,
+            m.EstimatedMarketValue, m.PropertyNotes,
             m.Category, m.Idara, m.Vatan, m.Nationality,
             m.Jamaat, m.Jamiaat,
             m.SectorId, sectorCode, sectorName,
