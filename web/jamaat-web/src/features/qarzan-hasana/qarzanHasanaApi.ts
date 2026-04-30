@@ -40,6 +40,14 @@ export type QhLoan = {
   rejectionReason?: string | null; cancellationReason?: string | null;
   progressPercent: number;
   createdAtUtc: string;
+  // Borrower's case + guarantor consent (added with the form uplift)
+  purpose?: string | null;
+  repaymentPlan?: string | null;
+  sourceOfIncome?: string | null;
+  otherObligations?: string | null;
+  guarantorsAcknowledged: boolean;
+  guarantorsAcknowledgedAtUtc?: string | null;
+  guarantorsAcknowledgedByUserName?: string | null;
 };
 
 export type QhInstallment = {
@@ -67,6 +75,11 @@ export type CreateQhInput = {
   goldAmount?: number;
   cashflowDocumentUrl?: string;
   goldSlipDocumentUrl?: string;
+  purpose?: string;
+  repaymentPlan?: string;
+  sourceOfIncome?: string;
+  otherObligations?: string;
+  guarantorsAcknowledged?: boolean;
 };
 
 export const qarzanHasanaApi = {

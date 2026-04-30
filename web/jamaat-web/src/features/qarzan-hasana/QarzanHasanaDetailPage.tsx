@@ -216,6 +216,60 @@ export function QarzanHasanaDetailPage() {
         </Card>
       )}
 
+      {/* Borrower's case - the qualitative inputs the L1 approver reads. Only renders when at
+          least one of the new fields is filled in; legacy loans created before the form uplift
+          will silently skip this card rather than show empty rows. */}
+      {(loan.purpose || loan.repaymentPlan || loan.sourceOfIncome || loan.otherObligations
+        || loan.guarantorsAcknowledged
+        || loan.guarantorsAcknowledgedByUserName) && (
+        <Card size="small" title={<span><FileTextOutlined /> Borrower's case</span>}
+          style={{ marginBlockEnd: 16, border: '1px solid var(--jm-border)' }}
+          extra={loan.guarantorsAcknowledged ? (
+            <Tag color="green">
+              <CheckCircleOutlined /> Guarantors acknowledged
+              {loan.guarantorsAcknowledgedByUserName && <> by {loan.guarantorsAcknowledgedByUserName}</>}
+              {loan.guarantorsAcknowledgedAtUtc && <> on {dayjs(loan.guarantorsAcknowledgedAtUtc).format('DD MMM YYYY')}</>}
+            </Tag>
+          ) : (
+            <Tag color="orange">Guarantor acknowledgment pending</Tag>
+          )}>
+          <Row gutter={[16, 12]}>
+            <Col xs={24} md={12}>
+              <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 4 }}>
+                Purpose
+              </div>
+              <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>
+                {loan.purpose || <span style={{ color: 'var(--jm-gray-400)' }}>Not provided</span>}
+              </div>
+            </Col>
+            <Col xs={24} md={12}>
+              <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 4 }}>
+                Repayment plan
+              </div>
+              <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>
+                {loan.repaymentPlan || <span style={{ color: 'var(--jm-gray-400)' }}>Not provided</span>}
+              </div>
+            </Col>
+            {loan.sourceOfIncome && (
+              <Col xs={24} md={12}>
+                <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 4 }}>
+                  Source of income
+                </div>
+                <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{loan.sourceOfIncome}</div>
+              </Col>
+            )}
+            {loan.otherObligations && (
+              <Col xs={24} md={12}>
+                <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 4 }}>
+                  Other current obligations
+                </div>
+                <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{loan.otherObligations}</div>
+              </Col>
+            )}
+          </Row>
+        </Card>
+      )}
+
       <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
         <Col xs={24} lg={inApproval ? 24 : 16}>
           <Card size="small" title="Loan details" style={{ border: '1px solid var(--jm-border)' }}>
