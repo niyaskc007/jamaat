@@ -99,7 +99,7 @@ export function AccountingPage() {
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 16, marginBlockEnd: 4 }}>{openPeriod.name}</div>
                     <div style={{ color: 'var(--jm-gray-600)', fontSize: 13 }}>
-                      {openPeriod.startDate} -> {openPeriod.endDate}
+                      {openPeriod.startDate} {'->'} {openPeriod.endDate}
                       <Tag color="green" style={{ marginInlineStart: 8 }}>Open</Tag>
                     </div>
                   </div>
