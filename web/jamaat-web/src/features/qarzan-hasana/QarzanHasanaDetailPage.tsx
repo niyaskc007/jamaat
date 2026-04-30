@@ -1,10 +1,13 @@
-import { useState } from 'react';
-import { Button, Card, Descriptions, Space, Table, Tag, Spin, App as AntdApp, Result, Modal, Input, InputNumber, Progress, Row, Col, Alert } from 'antd';
+import { useMemo, useState } from 'react';
+import { Button, Card, Descriptions, Space, Table, Tag, Spin, App as AntdApp, Result, Modal, Input, InputNumber, Progress, Row, Col, Alert, Statistic, Empty } from 'antd';
 import type { TableProps } from 'antd';
 import {
   ArrowLeftOutlined, SendOutlined, CheckCircleOutlined, CloseCircleOutlined, DollarOutlined,
-  StopOutlined, FileProtectOutlined,
+  StopOutlined, FileProtectOutlined, BankOutlined, RiseOutlined, LineChartOutlined, FileTextOutlined,
 } from '@ant-design/icons';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, Legend,
+} from 'recharts';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -76,6 +79,31 @@ export function QarzanHasanaDetailPage() {
     onSuccess: () => { onOk(); setWaiving(null); setWaiveReason(''); }, onError: onErr,
   });
 
+  // Build the repayment trend chart data once per render. Two cumulative series:
+  //   - Scheduled: cumulative sum of scheduledAmount across installments by due date
+  //   - Paid: cumulative sum of paidAmount, attributed to the lastPaymentDate when present
+  // Falls back to no-data state when the loan hasn't generated a schedule yet.
+  const repaymentTrend = useMemo(() => {
+    if (!data?.installments?.length) return [];
+    const sorted = [...data.installments].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    let cumScheduled = 0;
+    let cumPaid = 0;
+    const points: { label: string; date: string; scheduled: number; paid: number }[] = [];
+    for (const i of sorted) {
+      cumScheduled += i.scheduledAmount;
+      // We attribute paid amount to the lastPaymentDate; if absent (still pending), it's
+      // accumulated at zero so the line stays flat for that bucket.
+      if (i.paidAmount > 0) cumPaid += i.paidAmount;
+      points.push({
+        label: dayjs(i.dueDate).format("MMM 'YY"),
+        date: i.dueDate,
+        scheduled: cumScheduled,
+        paid: cumPaid,
+      });
+    }
+    return points;
+  }, [data?.installments]);
+
   if (isLoading || !data) return <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>;
   const { loan, installments } = data;
 
@@ -85,6 +113,7 @@ export function QarzanHasanaDetailPage() {
   const isApproved = loan.status === 4;
   const isActive = loan.status === 5 || loan.status === 6;
   const isClosed = loan.status === 7 || loan.status === 8 || loan.status === 9 || loan.status === 10;
+  const inApproval = isL1 || isL2 || isApproved;
 
   const cols: TableProps<QhInstallment>['columns'] = [
     { title: '#', dataIndex: 'installmentNo', width: 60 },
@@ -128,52 +157,138 @@ export function QarzanHasanaDetailPage() {
       {loan.status === 10 && loan.rejectionReason && <Alert type="error" showIcon message="Rejected" description={loan.rejectionReason} style={{ marginBlockEnd: 16 }} />}
       {loan.status === 9 && loan.cancellationReason && <Alert type="warning" showIcon message="Cancelled" description={loan.cancellationReason} style={{ marginBlockEnd: 16 }} />}
 
-      <Row gutter={16}>
-        <Col span={16}>
+      {/* KPI strip - five money tiles. Reads as a single horizontal "loan cashflow" snapshot
+          and fills the page width regardless of approval/active state, eliminating the previous
+          right-column whitespace gap when LoanDecisionSupport wasn't being rendered. */}
+      <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
+        <Col xs={12} md={8} lg={Math.floor(24 / 5)}>
           <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+            <Statistic title="Requested" value={loan.amountRequested} precision={2}
+              formatter={(v) => money(Number(v), loan.currency)}
+              valueStyle={{ fontSize: 16 }} />
+          </Card>
+        </Col>
+        <Col xs={12} md={8} lg={Math.floor(24 / 5)}>
+          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+            <Statistic title="Approved" value={loan.amountApproved} precision={2}
+              formatter={(v) => money(Number(v), loan.currency)}
+              valueStyle={{ fontSize: 16, color: loan.amountApproved > 0 ? '#0E5C40' : 'var(--jm-gray-400)' }} />
+          </Card>
+        </Col>
+        <Col xs={12} md={8} lg={Math.floor(24 / 5)}>
+          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+            <Statistic title="Disbursed" value={loan.amountDisbursed} precision={2} prefix={<BankOutlined />}
+              formatter={(v) => money(Number(v), loan.currency)}
+              valueStyle={{ fontSize: 16 }} />
+          </Card>
+        </Col>
+        <Col xs={12} md={8} lg={Math.floor(24 / 5)}>
+          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+            <Statistic title="Repaid" value={loan.amountRepaid} precision={2} prefix={<RiseOutlined />}
+              formatter={(v) => money(Number(v), loan.currency)}
+              valueStyle={{ fontSize: 16, color: '#0E5C40' }} />
+          </Card>
+        </Col>
+        <Col xs={24} md={8} lg={Math.ceil(24 / 5)}>
+          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+            <Statistic title="Outstanding" value={loan.amountOutstanding} precision={2}
+              formatter={(v) => money(Number(v), loan.currency)}
+              valueStyle={{ fontSize: 16, fontWeight: 700, color: loan.amountOutstanding > 0 ? '#B45309' : 'inherit' }} />
+            <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
+              {loan.progressPercent.toFixed(0)}% repaid
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Layout strategy:
+          - In approval states (PendingL1 / PendingL2 / Approved-not-yet-disbursed) - render the
+            decision-support panel full-width up front so the approver sees the whole picture.
+            The Details card sits below it, keeping the focus on the decision.
+          - Otherwise (Disbursed / Active / Completed / Defaulted / Cancelled / Rejected) - the
+            normal 2-col Details + Repayment progress widget, then a full-width repayment trend
+            line chart. This fills the page with substantive content and removes the whitespace. */}
+      {inApproval && (
+        <Card size="small" style={{ marginBlockEnd: 16, border: '1px solid var(--jm-border)' }}
+          title={<span><FileTextOutlined /> Decision support</span>}
+          extra={<Tag color="blue">Awaiting {isL1 ? 'L1 approval' : isL2 ? 'L2 approval' : 'disbursement'}</Tag>}>
+          <LoanDecisionSupport loanId={loan.id} />
+        </Card>
+      )}
+
+      <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
+        <Col xs={24} lg={inApproval ? 24 : 16}>
+          <Card size="small" title="Loan details" style={{ border: '1px solid var(--jm-border)' }}>
             <Descriptions size="small" column={2} bordered
               items={[
                 { key: 'b', label: 'Borrower', children: `${loan.memberName} · ITS ${loan.memberItsNumber}` },
                 { key: 's', label: 'Scheme', children: QhSchemeLabel[loan.scheme] },
-                { key: 'req', label: 'Amount requested', children: <span className="jm-tnum">{money(loan.amountRequested, loan.currency)}</span> },
-                { key: 'apr', label: 'Amount approved', children: <span className="jm-tnum">{money(loan.amountApproved, loan.currency)}</span> },
-                { key: 'dis', label: 'Disbursed', children: <span className="jm-tnum">{money(loan.amountDisbursed, loan.currency)}</span> },
-                { key: 'rep', label: 'Repaid', children: <span className="jm-tnum" style={{ color: '#0E5C40' }}>{money(loan.amountRepaid, loan.currency)}</span> },
-                { key: 'out', label: 'Outstanding', children: <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(loan.amountOutstanding, loan.currency)}</span> },
                 { key: 'inst', label: 'Installments', children: `${loan.instalmentsApproved || loan.instalmentsRequested}` },
+                { key: 'gold', label: 'Gold amount', children: loan.goldAmount ? <span className="jm-tnum">{money(loan.goldAmount, loan.currency)}</span> : '-' },
                 { key: 'start', label: 'Start', children: formatDate(loan.startDate) },
                 { key: 'end', label: 'End', children: loan.endDate ? formatDate(loan.endDate) : '-' },
-                { key: 'gold', label: 'Gold amount', children: loan.goldAmount ? <span className="jm-tnum">{money(loan.goldAmount, loan.currency)}</span> : '-' },
                 { key: 'status', label: 'Status', children: <Tag color={QhStatusColor[loan.status]}>{QhStatusLabel[loan.status]}</Tag> },
+                { key: 'd', label: 'Disbursed on', children: loan.disbursedOn ? formatDate(loan.disbursedOn) : '-' },
                 { key: 'g1', label: 'Guarantor 1', children: loan.guarantor1Name },
                 { key: 'g2', label: 'Guarantor 2', children: loan.guarantor2Name },
                 ...(loan.level1ApprovedAtUtc ? [{ key: 'l1', label: 'L1 approval', span: 2, children: `${loan.level1ApproverName} · ${formatDateTime(loan.level1ApprovedAtUtc)}${loan.level1Comments ? ` · ${loan.level1Comments}` : ''}` }] : []),
                 ...(loan.level2ApprovedAtUtc ? [{ key: 'l2', label: 'L2 approval', span: 2, children: `${loan.level2ApproverName} · ${formatDateTime(loan.level2ApprovedAtUtc)}${loan.level2Comments ? ` · ${loan.level2Comments}` : ''}` }] : []),
-                ...(loan.disbursedOn ? [{ key: 'd', label: 'Disbursed on', children: formatDate(loan.disbursedOn) }] : []),
+                ...(loan.cashflowDocumentUrl || loan.goldSlipDocumentUrl ? [{ key: 'docs', label: 'Documents', span: 2, children: (
+                  <Space>
+                    {loan.cashflowDocumentUrl && <a href={loan.cashflowDocumentUrl} target="_blank" rel="noreferrer">Cashflow</a>}
+                    {loan.goldSlipDocumentUrl && <a href={loan.goldSlipDocumentUrl} target="_blank" rel="noreferrer">Gold slip</a>}
+                  </Space>
+                ) }] : []),
               ]}
             />
           </Card>
         </Col>
-        <Col span={8}>
-          {/* Decision-support panel for approvers - shows reliability + commitments + donations
-              + past loans + fund position. Only meaningful while the loan is awaiting an approval
-              decision; once disbursed, the repayment progress dashboard takes over. Statuses:
-              2=PendingLevel1, 3=PendingLevel2, 4=Approved, others = settled. */}
-          {(loan.status === 2 || loan.status === 3 || loan.status === 4) ? (
-            <LoanDecisionSupport loanId={loan.id} />
-          ) : (
-            <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
-              <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 8 }}>Repayment progress</div>
+        {!inApproval && (
+          <Col xs={24} lg={8}>
+            <Card size="small" title="Repayment progress" style={{ border: '1px solid var(--jm-border)', blockSize: '100%', textAlign: 'center' }}>
               <Progress type="dashboard" percent={Math.min(100, Number(loan.progressPercent.toFixed(1)))}
-                status={loan.status === 7 ? 'success' : loan.status === 8 || loan.status === 9 || loan.status === 10 ? 'exception' : 'active'} />
-              {loan.cashflowDocumentUrl && <div style={{ marginBlockStart: 12 }}><a href={loan.cashflowDocumentUrl} target="_blank" rel="noreferrer">Cashflow document</a></div>}
-              {loan.goldSlipDocumentUrl && <div><a href={loan.goldSlipDocumentUrl} target="_blank" rel="noreferrer">Gold slip</a></div>}
+                status={loan.status === 7 ? 'success' : (loan.status === 8 || loan.status === 9 || loan.status === 10) ? 'exception' : 'active'} />
+              <div style={{ marginBlockStart: 12, display: 'flex', justifyContent: 'space-around', fontSize: 12 }}>
+                <div>
+                  <div style={{ color: 'var(--jm-gray-500)' }}>Paid</div>
+                  <div className="jm-tnum" style={{ fontWeight: 600, color: '#0E5C40' }}>{money(loan.amountRepaid, loan.currency)}</div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--jm-gray-500)' }}>Remaining</div>
+                  <div className="jm-tnum" style={{ fontWeight: 600 }}>{money(loan.amountOutstanding, loan.currency)}</div>
+                </div>
+              </div>
             </Card>
-          )}
-        </Col>
+          </Col>
+        )}
       </Row>
 
-      <Card title="Installments" size="small" style={{ marginBlockStart: 16, border: '1px solid var(--jm-border)' }}>
+      {/* Full-width repayment trend chart - fills the visual gap that used to exist on
+          disbursed/active/closed loans when the right column was nearly empty. Two cumulative
+          series make over- vs under-pace immediately obvious. */}
+      {!inApproval && installments.length > 0 && (
+        <Card size="small" title={<span><LineChartOutlined /> Repayment trajectory</span>}
+          style={{ marginBlockEnd: 16, border: '1px solid var(--jm-border)' }}
+          extra={<span style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Cumulative scheduled vs paid</span>}>
+          {repaymentTrend.length === 0 ? <Empty description="No installments yet" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={repaymentTrend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#E5E9EF" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748B' }} interval="preserveStartEnd" axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} width={80} />
+                <RTooltip formatter={(v: number) => money(v, loan.currency)}
+                  labelFormatter={(_l, p) => p[0]?.payload?.date ? dayjs(p[0].payload.date).format('DD MMM YYYY') : ''}
+                  contentStyle={{ fontSize: 12, borderRadius: 6, border: '1px solid var(--jm-border)' }} />
+                <Legend wrapperStyle={{ fontSize: 12 }} iconSize={10} />
+                <Line type="monotone" dataKey="scheduled" name="Scheduled" stroke="#94A3B8" strokeWidth={2} dot={{ r: 2 }} strokeDasharray="6 3" />
+                <Line type="monotone" dataKey="paid" name="Paid" stroke="#0E5C40" strokeWidth={2} dot={{ r: 2 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
+      )}
+
+      <Card title="Installments" size="small" style={{ marginBlockEnd: 16, border: '1px solid var(--jm-border)' }}>
         {installments.length === 0
           ? <div style={{ color: 'var(--jm-gray-500)' }}>Schedule will be generated on L2 approval.</div>
           : <Table<QhInstallment> rowKey="id" size="small" pagination={false} columns={cols} dataSource={installments} />}
