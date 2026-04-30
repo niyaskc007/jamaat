@@ -159,4 +159,64 @@ export const dashboardApi = {
   upcomingCheques: async (days = 30) =>
     (await api.get<{ id: string; chequeNumber: string; chequeDate: string; amount: number; memberName: string; status: number; currency: string }[]>(
       '/api/v1/dashboard/upcoming-cheques', { params: { days } })).data,
+
+  qhPortfolio: async () => (await api.get<QhPortfolioDto>('/api/v1/dashboard/qh-portfolio')).data,
+  receivablesAging: async () => (await api.get<ReceivablesAgingDto>('/api/v1/dashboard/receivables-aging')).data,
+  memberEngagement: async (months = 12) =>
+    (await api.get<MemberEngagementDto>('/api/v1/dashboard/member-engagement', { params: { months } })).data,
+  compliance: async () => (await api.get<ComplianceDashboardDto>('/api/v1/dashboard/compliance')).data,
+};
+
+export type QhStatusBucket = { status: number; label: string; count: number; outstanding: number };
+export type QhMonthlyPoint = { year: number; month: number; disbursed: number; repaid: number };
+export type QhBorrowerRow = { memberId: string; itsNumber: string; fullName: string; outstanding: number; loanCount: number };
+export type QhUpcomingInstallment = {
+  loanId: string; loanCode: string; memberId: string; memberName: string;
+  installmentNo: number; dueDate: string; remainingAmount: number;
+};
+export type QhPortfolioDto = {
+  currency: string;
+  totalLoans: number; activeCount: number; completedCount: number; defaultedCount: number; inApprovalCount: number;
+  totalDisbursed: number; totalRepaid: number; totalOutstanding: number;
+  defaultRatePercent: number;
+  byStatus: QhStatusBucket[];
+  repaymentTrend: QhMonthlyPoint[];
+  topBorrowers: QhBorrowerRow[];
+  upcomingInstallments: QhUpcomingInstallment[];
+};
+
+export type AgingBucket = { label: string; count: number; amount: number };
+export type OldestObligationRow = { kind: string; reference: string; memberName: string; dueDate: string; daysOverdue: number; amount: number };
+export type ReceivablesAgingDto = {
+  currency: string;
+  commitmentsOutstanding: number; commitmentsOverdueCount: number;
+  returnablesOutstanding: number; returnablesOverdueCount: number;
+  chequesPledgedAmount: number; chequesPledgedCount: number;
+  commitmentBuckets: AgingBucket[];
+  returnableBuckets: AgingBucket[];
+  oldestObligations: OldestObligationRow[];
+};
+
+export type MemberMonthlyPoint = { year: number; month: number; count: number };
+export type MemberEngagementDto = {
+  totalMembers: number; activeMembers: number; inactiveMembers: number; deceasedMembers: number; suspendedMembers: number;
+  verifiedMembers: number; verificationPendingMembers: number; verificationNotStartedMembers: number; verificationRejectedMembers: number;
+  newThisMonth: number; newThisYear: number;
+  newMemberTrend: MemberMonthlyPoint[];
+};
+
+export type DailyCountPoint = { date: string; count: number };
+export type NamedCountPoint = { label: string; count: number };
+export type ComplianceDashboardDto = {
+  auditEvents30d: number;
+  openErrors: number;
+  pendingChangeRequests: number;
+  pendingVoucherApprovals: number;
+  draftReceipts: number;
+  unverifiedMembers: number;
+  hasOpenPeriod: boolean;
+  openPeriodName: string | null;
+  auditTrend30d: DailyCountPoint[];
+  errorsBySeverity: NamedCountPoint[];
+  changeRequestsByStatus: NamedCountPoint[];
 };

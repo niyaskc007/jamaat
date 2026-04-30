@@ -754,6 +754,331 @@ public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domai
             memberNames.GetValueOrDefault(r.MemberId, "(unknown)"),
             r.Status, r.Currency)).ToList();
     }
+
+    public async Task<QhPortfolioDto> QhPortfolioAsync(CancellationToken ct = default)
+    {
+        var today = clock.Today;
+        var trendStart = new DateOnly(today.Year, today.Month, 1).AddMonths(-11);
+
+        var loans = await db.QarzanHasanaLoans.AsNoTracking()
+            .Include(l => l.Installments)
+            .ToListAsync(ct);
+
+        var memberIds = loans.Select(l => l.MemberId).Distinct().ToList();
+        var members = memberIds.Count == 0
+            ? new Dictionary<Guid, (string Its, string Name)>()
+            : await db.Members.AsNoTracking().Where(m => memberIds.Contains(m.Id))
+                .ToDictionaryAsync(m => m.Id, m => ValueTuple.Create(m.ItsNumber.Value, m.FullName), ct);
+
+        var currency = loans.Select(l => l.Currency).FirstOrDefault() ?? "AED";
+        var totalDisbursed = loans.Sum(l => l.AmountDisbursed);
+        var totalRepaid = loans.Sum(l => l.AmountRepaid);
+        var totalOutstanding = loans.Sum(l => l.AmountOutstanding);
+
+        var statusGroups = loans.GroupBy(l => l.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count(), Outstanding = g.Sum(l => l.AmountOutstanding) })
+            .ToList();
+        var byStatus = statusGroups
+            .Select(g => new QhStatusBucket((int)g.Status, g.Status.ToString(), g.Count, g.Outstanding))
+            .OrderBy(b => b.Status)
+            .ToList();
+
+        int countOf(QarzanHasanaStatus s) => statusGroups.Where(g => g.Status == s).Sum(g => g.Count);
+        var activeCount = countOf(QarzanHasanaStatus.Active) + countOf(QarzanHasanaStatus.Disbursed);
+        var completedCount = countOf(QarzanHasanaStatus.Completed);
+        var defaultedCount = countOf(QarzanHasanaStatus.Defaulted);
+        var inApprovalCount = countOf(QarzanHasanaStatus.PendingLevel1) + countOf(QarzanHasanaStatus.PendingLevel2)
+            + countOf(QarzanHasanaStatus.Approved) + countOf(QarzanHasanaStatus.Draft);
+
+        var sanctioned = activeCount + completedCount + defaultedCount;
+        var defaultRate = sanctioned == 0 ? 0m : Math.Round(defaultedCount * 100m / sanctioned, 2);
+
+        // Repayment trend: per month, sum of AmountDisbursed (by DisbursedOn) and sum of installment
+        // PaidAmount (by LastPaymentDate). Walk 12 buckets so the chart always has the same x-axis.
+        var trendByMonth = new Dictionary<(int Y, int M), (decimal D, decimal R)>();
+        for (var d = trendStart; d <= today; d = d.AddMonths(1))
+            trendByMonth[(d.Year, d.Month)] = (0m, 0m);
+        foreach (var l in loans.Where(l => l.DisbursedOn.HasValue && l.DisbursedOn.Value >= trendStart))
+        {
+            var k = (l.DisbursedOn!.Value.Year, l.DisbursedOn.Value.Month);
+            if (trendByMonth.TryGetValue(k, out var v)) trendByMonth[k] = (v.D + l.AmountDisbursed, v.R);
+        }
+        foreach (var inst in loans.SelectMany(l => l.Installments).Where(i => i.LastPaymentDate.HasValue && i.LastPaymentDate.Value >= trendStart))
+        {
+            var k = (inst.LastPaymentDate!.Value.Year, inst.LastPaymentDate.Value.Month);
+            if (trendByMonth.TryGetValue(k, out var v)) trendByMonth[k] = (v.D, v.R + inst.PaidAmount);
+        }
+        var repaymentTrend = trendByMonth
+            .OrderBy(kv => kv.Key.Y).ThenBy(kv => kv.Key.M)
+            .Select(kv => new QhMonthlyPoint(kv.Key.Y, kv.Key.M, kv.Value.D, kv.Value.R))
+            .ToList();
+
+        var topBorrowers = loans
+            .Where(l => l.AmountOutstanding > 0)
+            .GroupBy(l => l.MemberId)
+            .Select(g =>
+            {
+                var (its, name) = members.TryGetValue(g.Key, out var m) ? m : ("-", "-");
+                return new QhBorrowerRow(g.Key, its, name, g.Sum(l => l.AmountOutstanding), g.Count());
+            })
+            .OrderByDescending(b => b.Outstanding)
+            .Take(5)
+            .ToList();
+
+        var horizon = today.AddDays(30);
+        var upcoming = loans
+            .SelectMany(l => l.Installments
+                .Where(i => i.Status != QarzanHasanaInstallmentStatus.Paid && i.Status != QarzanHasanaInstallmentStatus.Waived)
+                .Where(i => i.DueDate >= today && i.DueDate <= horizon)
+                .Select(i =>
+                {
+                    var (_, name) = members.TryGetValue(l.MemberId, out var m) ? m : ("-", "-");
+                    return new QhUpcomingInstallment(l.Id, l.Code, l.MemberId, name, i.InstallmentNo, i.DueDate, i.RemainingAmount);
+                }))
+            .OrderBy(u => u.DueDate)
+            .Take(20)
+            .ToList();
+
+        return new QhPortfolioDto(
+            currency, loans.Count, activeCount, completedCount, defaultedCount, inApprovalCount,
+            totalDisbursed, totalRepaid, totalOutstanding, defaultRate,
+            byStatus, repaymentTrend, topBorrowers, upcoming);
+    }
+
+    public async Task<ReceivablesAgingDto> ReceivablesAgingAsync(CancellationToken ct = default)
+    {
+        var today = clock.Today;
+
+        // Commitments: open installments past due. We bucket by overdue days; a "current" bucket
+        // collects future-due unpaid installments so the user sees the full pipeline.
+        var openCommitments = await db.Commitments.AsNoTracking()
+            .Include(c => c.Installments)
+            .Where(c => c.Status == CommitmentStatus.Active || c.Status == CommitmentStatus.Paused)
+            .Where(c => c.PaidAmount < c.TotalAmount)
+            .ToListAsync(ct);
+
+        var commitmentMemberIds = openCommitments.Where(c => c.MemberId.HasValue).Select(c => c.MemberId!.Value).Distinct().ToList();
+        var commitmentMembers = commitmentMemberIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.Members.AsNoTracking().Where(m => commitmentMemberIds.Contains(m.Id))
+                .ToDictionaryAsync(m => m.Id, m => m.FullName, ct);
+
+        var commitmentInstallments = openCommitments
+            .SelectMany(c => c.Installments
+                .Where(i => i.Status != InstallmentStatus.Paid && i.Status != InstallmentStatus.Waived)
+                .Select(i => new
+                {
+                    Commitment = c,
+                    Installment = i,
+                    DaysOverdue = today.DayNumber - i.DueDate.DayNumber,
+                }))
+            .ToList();
+
+        var commitmentsOutstanding = openCommitments.Sum(c => c.RemainingAmount);
+        var commitmentsOverdueCount = commitmentInstallments.Count(x => x.DaysOverdue > 0);
+        var commitmentBuckets = BuildBuckets(commitmentInstallments.Select(x => (x.DaysOverdue, x.Installment.RemainingAmount)));
+
+        // Returnable receipts: matured but still outstanding. Same bucket math, except we
+        // measure overdue from MaturityDate.
+        var openReturnables = await db.Receipts.AsNoTracking()
+            .Where(r => r.Status == ReceiptStatus.Confirmed
+                && r.Intention == ContributionIntention.Returnable
+                && r.AmountReturned < r.AmountTotal)
+            .Select(r => new
+            {
+                r.Id,
+                r.ReceiptNumber,
+                r.MemberNameSnapshot,
+                r.AmountTotal,
+                r.AmountReturned,
+                r.MaturityDate,
+            })
+            .ToListAsync(ct);
+
+        var returnableRows = openReturnables.Select(r => new
+        {
+            r.Id,
+            r.ReceiptNumber,
+            r.MemberNameSnapshot,
+            Outstanding = r.AmountTotal - r.AmountReturned,
+            r.MaturityDate,
+            DaysOverdue = r.MaturityDate.HasValue ? today.DayNumber - r.MaturityDate.Value.DayNumber : -1,
+        }).ToList();
+
+        var returnablesOutstanding = returnableRows.Sum(r => r.Outstanding);
+        var returnablesOverdueCount = returnableRows.Count(r => r.DaysOverdue > 0);
+        var returnableBuckets = BuildBuckets(returnableRows.Select(r => (r.DaysOverdue, r.Outstanding)));
+
+        var pdcAgg = await db.PostDatedCheques.AsNoTracking()
+            .Where(p => p.Status == PostDatedChequeStatus.Pledged)
+            .GroupBy(p => 1)
+            .Select(g => new { Count = g.Count(), Amount = g.Sum(p => p.Amount) })
+            .FirstOrDefaultAsync(ct);
+        var chequesPledgedCount = pdcAgg?.Count ?? 0;
+        var chequesPledgedAmount = pdcAgg?.Amount ?? 0m;
+
+        // Top 10 oldest open obligations across both kinds. Sorted by days-overdue desc so the
+        // worst offenders appear first.
+        var oldest = new List<OldestObligationRow>();
+        oldest.AddRange(commitmentInstallments
+            .Where(x => x.DaysOverdue > 0)
+            .Select(x =>
+            {
+                var memberName = x.Commitment.MemberId.HasValue && commitmentMembers.TryGetValue(x.Commitment.MemberId.Value, out var n)
+                    ? n : x.Commitment.PartyNameSnapshot;
+                return new OldestObligationRow(
+                    "Commitment", x.Commitment.Code, memberName ?? "-",
+                    x.Installment.DueDate, x.DaysOverdue, x.Installment.RemainingAmount);
+            }));
+        oldest.AddRange(returnableRows
+            .Where(x => x.DaysOverdue > 0 && x.MaturityDate.HasValue)
+            .Select(x => new OldestObligationRow(
+                "Returnable", x.ReceiptNumber ?? "-", x.MemberNameSnapshot,
+                x.MaturityDate!.Value, x.DaysOverdue, x.Outstanding)));
+        var oldestTop = oldest.OrderByDescending(o => o.DaysOverdue).Take(10).ToList();
+
+        var currency = openCommitments.Select(c => c.Currency).FirstOrDefault()
+            ?? await db.Receipts.AsNoTracking()
+                .Where(r => r.Status == ReceiptStatus.Confirmed)
+                .GroupBy(r => r.Currency).OrderByDescending(g => g.Count())
+                .Select(g => g.Key).FirstOrDefaultAsync(ct) ?? "AED";
+
+        return new ReceivablesAgingDto(
+            currency,
+            commitmentsOutstanding, commitmentsOverdueCount,
+            returnablesOutstanding, returnablesOverdueCount,
+            chequesPledgedAmount, chequesPledgedCount,
+            commitmentBuckets, returnableBuckets, oldestTop);
+    }
+
+    private static IReadOnlyList<AgingBucket> BuildBuckets(IEnumerable<(int DaysOverdue, decimal Amount)> rows)
+    {
+        var buckets = new[]
+        {
+            (Label: "Current", Min: int.MinValue, Max: 0),
+            (Label: "1-30",   Min: 1,             Max: 30),
+            (Label: "31-60",  Min: 31,            Max: 60),
+            (Label: "61-90",  Min: 61,            Max: 90),
+            (Label: "90+",    Min: 91,            Max: int.MaxValue),
+        };
+        var list = rows.ToList();
+        return buckets.Select(b => new AgingBucket(b.Label,
+            list.Count(r => r.DaysOverdue >= b.Min && r.DaysOverdue <= b.Max),
+            list.Where(r => r.DaysOverdue >= b.Min && r.DaysOverdue <= b.Max).Sum(r => r.Amount))).ToList();
+    }
+
+    public async Task<MemberEngagementDto> MemberEngagementAsync(int months, CancellationToken ct = default)
+    {
+        if (months <= 0) months = 12;
+        var today = clock.Today;
+        var monthStart = new DateOnly(today.Year, today.Month, 1);
+        var yearStart = new DateOnly(today.Year, 1, 1);
+        var trendStart = monthStart.AddMonths(-(months - 1));
+
+        var snapshot = await db.Members.AsNoTracking()
+            .Select(m => new
+            {
+                m.Status,
+                Verification = m.DataVerificationStatus,
+                Created = m.CreatedAtUtc,
+            })
+            .ToListAsync(ct);
+
+        int countByStatus(MemberStatus s) => snapshot.Count(x => x.Status == s);
+        int countByVerif(VerificationStatus v) => snapshot.Count(x => x.Verification == v);
+
+        var trendByMonth = new Dictionary<(int Y, int M), int>();
+        for (var d = trendStart; d <= monthStart; d = d.AddMonths(1))
+            trendByMonth[(d.Year, d.Month)] = 0;
+        foreach (var s in snapshot)
+        {
+            var key = (s.Created.Year, s.Created.Month);
+            if (trendByMonth.TryGetValue(key, out var existing)) trendByMonth[key] = existing + 1;
+        }
+        var trend = trendByMonth
+            .OrderBy(kv => kv.Key.Y).ThenBy(kv => kv.Key.M)
+            .Select(kv => new MemberMonthlyPoint(kv.Key.Y, kv.Key.M, kv.Value))
+            .ToList();
+
+        var newThisMonth = snapshot.Count(x => x.Created >= monthStart.ToDateTime(TimeOnly.MinValue));
+        var newThisYear = snapshot.Count(x => x.Created >= yearStart.ToDateTime(TimeOnly.MinValue));
+
+        return new MemberEngagementDto(
+            snapshot.Count,
+            countByStatus(MemberStatus.Active),
+            countByStatus(MemberStatus.Inactive),
+            countByStatus(MemberStatus.Deceased),
+            countByStatus(MemberStatus.Suspended),
+            countByVerif(VerificationStatus.Verified),
+            countByVerif(VerificationStatus.Pending),
+            countByVerif(VerificationStatus.NotStarted),
+            countByVerif(VerificationStatus.Rejected),
+            newThisMonth, newThisYear,
+            trend);
+    }
+
+    public async Task<ComplianceDashboardDto> ComplianceAsync(CancellationToken ct = default)
+    {
+        var today = clock.Today;
+        var since30 = today.AddDays(-29);
+        var since30Utc = since30.ToDateTime(TimeOnly.MinValue);
+
+        var auditCount30 = await db.AuditLogs.AsNoTracking()
+            .CountAsync(a => a.AtUtc >= since30Utc, ct);
+        var openErrors = await db.ErrorLogs.AsNoTracking()
+            .CountAsync(e => e.Status == ErrorStatus.Reported, ct);
+        var pendingChangeRequests = await db.MemberChangeRequests.AsNoTracking()
+            .CountAsync(r => r.Status == MemberChangeRequestStatus.Pending, ct);
+        var pendingVoucherApprovals = await db.Vouchers.AsNoTracking()
+            .CountAsync(v => v.Status == VoucherStatus.PendingApproval, ct);
+        var draftReceipts = await db.Receipts.AsNoTracking()
+            .CountAsync(r => r.Status == ReceiptStatus.Draft, ct);
+        var unverifiedMembers = await db.Members.AsNoTracking()
+            .CountAsync(m => m.DataVerificationStatus != VerificationStatus.Verified, ct);
+
+        var openPeriod = await db.Periods.AsNoTracking()
+            .Where(p => p.Status == PeriodStatus.Open)
+            .OrderByDescending(p => p.StartDate)
+            .Select(p => new { p.Name })
+            .FirstOrDefaultAsync(ct);
+
+        // 30-day audit volume per day. Materialise narrow then group/fill in memory so the
+        // chart has a contiguous x-axis even on quiet days.
+        var auditRaw = await db.AuditLogs.AsNoTracking()
+            .Where(a => a.AtUtc >= since30Utc)
+            .Select(a => a.AtUtc)
+            .ToListAsync(ct);
+        var byDate = auditRaw.GroupBy(d => DateOnly.FromDateTime(d.UtcDateTime))
+            .ToDictionary(g => g.Key, g => g.Count());
+        var auditTrend = new List<DailyCountPoint>(30);
+        for (var d = since30; d <= today; d = d.AddDays(1))
+            auditTrend.Add(new DailyCountPoint(d, byDate.TryGetValue(d, out var c) ? c : 0));
+
+        var errorBuckets = await db.ErrorLogs.AsNoTracking()
+            .Where(e => e.Status == ErrorStatus.Reported)
+            .GroupBy(e => e.Severity)
+            .Select(g => new { Severity = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        var errorsBySeverity = errorBuckets
+            .Select(b => new NamedCountPoint(b.Severity.ToString(), b.Count))
+            .OrderByDescending(b => b.Count)
+            .ToList();
+
+        var changeReqBuckets = await db.MemberChangeRequests.AsNoTracking()
+            .GroupBy(r => r.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        var changeRequestsByStatus = changeReqBuckets
+            .Select(b => new NamedCountPoint(b.Status.ToString(), b.Count))
+            .OrderBy(b => b.Label)
+            .ToList();
+
+        return new ComplianceDashboardDto(
+            auditCount30, openErrors, pendingChangeRequests, pendingVoucherApprovals,
+            draftReceipts, unverifiedMembers,
+            openPeriod is not null, openPeriod?.Name,
+            auditTrend, errorsBySeverity, changeRequestsByStatus);
+    }
 }
 
 public sealed class PeriodService(Persistence.JamaatDbContextFacade db, Domain.Abstractions.IUnitOfWork uow,

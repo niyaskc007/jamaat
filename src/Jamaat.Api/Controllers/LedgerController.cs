@@ -460,4 +460,25 @@ public sealed class DashboardController(IDashboardService svc) : ControllerBase
     [HttpGet("upcoming-cheques")]
     public async Task<IActionResult> UpcomingCheques([FromQuery] int days = 30, CancellationToken ct = default)
         => Ok(await svc.UpcomingChequesAsync(days, ct));
+
+    /// <summary>QH portfolio dashboard data.</summary>
+    [HttpGet("qh-portfolio")]
+    [Authorize(Policy = "qh.view")]
+    public async Task<IActionResult> QhPortfolio(CancellationToken ct) => Ok(await svc.QhPortfolioAsync(ct));
+
+    /// <summary>Receivables aging across commitments + returnable receipts.</summary>
+    [HttpGet("receivables-aging")]
+    [Authorize(Policy = "reports.view")]
+    public async Task<IActionResult> ReceivablesAging(CancellationToken ct) => Ok(await svc.ReceivablesAgingAsync(ct));
+
+    /// <summary>Member status / verification breakdown + new-member trend.</summary>
+    [HttpGet("member-engagement")]
+    [Authorize(Policy = "member.view")]
+    public async Task<IActionResult> MemberEngagement([FromQuery] int months = 12, CancellationToken ct = default)
+        => Ok(await svc.MemberEngagementAsync(months, ct));
+
+    /// <summary>Compliance + audit dashboard - audit volume, error counts, queues.</summary>
+    [HttpGet("compliance")]
+    [Authorize(Policy = "admin.audit")]
+    public async Task<IActionResult> Compliance(CancellationToken ct) => Ok(await svc.ComplianceAsync(ct));
 }

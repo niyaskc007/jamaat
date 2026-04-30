@@ -102,6 +102,8 @@ export function AppLayout() {
     if (any('accounting.view')) acc.push({ key: '/accounting', icon: <DashboardOutlined />, label: 'Overview' });
     if (any('accounting.view')) acc.push({ key: '/ledger', icon: <BookOutlined />, label: t('nav.ledger') });
     if (any('reports.view')) acc.push({ key: '/reports', icon: <BarChartOutlined />, label: t('nav.reports') });
+    if (any('reports.view', 'accounting.view', 'admin.audit', 'qh.view', 'member.view'))
+      acc.push({ key: '/dashboards', icon: <DashboardOutlined />, label: 'Dashboards' });
 
     const adm: any[] = [];
     if (any('admin.users', 'admin.roles', 'admin.masterdata', 'admin.integration', 'admin.audit', 'admin.errorlogs'))
@@ -311,7 +313,7 @@ function resolveActiveKey(path: string): string {
   // Order matters: deeper paths must be listed before their parents so the deepest
   // prefix wins (e.g. /admin/users before /admin, otherwise /admin would always match first).
   const known = [
-    '/dashboard', '/members', '/families', '/events', '/commitments', '/fund-enrollments', '/qarzan-hasana',
+    '/dashboards', '/dashboard', '/members', '/families', '/events', '/commitments', '/fund-enrollments', '/qarzan-hasana',
     '/receipts', '/cheques', '/vouchers', '/ledger', '/reports', '/accounting', '/help',
     '/admin/users', '/admin/master-data', '/admin/integrations', '/admin/audit', '/admin/error-logs', '/admin/notifications', '/admin/reliability',
     '/admin',
@@ -347,6 +349,7 @@ function resolveBreadcrumb(path: string, t: (k: string) => string): { title: Rea
       vouchers: t('nav.vouchers'),
       ledger: t('nav.ledger'),
       reports: t('nav.reports'),
+      dashboards: 'Dashboards',
       accounting: t('nav.sectionAccounting'),
       admin: t('nav.sectionAdmin'),
       help: 'Help & Docs',

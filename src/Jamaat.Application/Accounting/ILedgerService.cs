@@ -65,7 +65,74 @@ public interface IDashboardService
 
     /// <summary>Cheques maturing in the next N days (Pledged or Deposited only).</summary>
     Task<IReadOnlyList<UpcomingChequePoint>> UpcomingChequesAsync(int days, CancellationToken ct = default);
+
+    /// <summary>QH loan portfolio - status distribution + outstanding + repayment trend +
+    /// top borrowers + upcoming installments. Backs the /dashboards/qh-portfolio page.</summary>
+    Task<QhPortfolioDto> QhPortfolioAsync(CancellationToken ct = default);
+
+    /// <summary>Aging breakdown for outstanding commitments + returnable receipts. Backs
+    /// the /dashboards/receivables page.</summary>
+    Task<ReceivablesAgingDto> ReceivablesAgingAsync(CancellationToken ct = default);
+
+    /// <summary>New-member trend (last N months) + status breakdown + verification breakdown.
+    /// Backs the /dashboards/member-engagement page.</summary>
+    Task<MemberEngagementDto> MemberEngagementAsync(int months, CancellationToken ct = default);
+
+    /// <summary>Audit volume + error counts + queues. Backs the /dashboards/compliance page.</summary>
+    Task<ComplianceDashboardDto> ComplianceAsync(CancellationToken ct = default);
 }
+
+public sealed record QhPortfolioDto(
+    string Currency,
+    int TotalLoans, int ActiveCount, int CompletedCount, int DefaultedCount, int InApprovalCount,
+    decimal TotalDisbursed, decimal TotalRepaid, decimal TotalOutstanding,
+    decimal DefaultRatePercent,
+    IReadOnlyList<QhStatusBucket> ByStatus,
+    IReadOnlyList<QhMonthlyPoint> RepaymentTrend,
+    IReadOnlyList<QhBorrowerRow> TopBorrowers,
+    IReadOnlyList<QhUpcomingInstallment> UpcomingInstallments);
+
+public sealed record QhStatusBucket(int Status, string Label, int Count, decimal Outstanding);
+public sealed record QhMonthlyPoint(int Year, int Month, decimal Disbursed, decimal Repaid);
+public sealed record QhBorrowerRow(Guid MemberId, string ItsNumber, string FullName, decimal Outstanding, int LoanCount);
+public sealed record QhUpcomingInstallment(Guid LoanId, string LoanCode, Guid MemberId, string MemberName,
+    int InstallmentNo, DateOnly DueDate, decimal RemainingAmount);
+
+public sealed record ReceivablesAgingDto(
+    string Currency,
+    decimal CommitmentsOutstanding, int CommitmentsOverdueCount,
+    decimal ReturnablesOutstanding, int ReturnablesOverdueCount,
+    decimal ChequesPledgedAmount, int ChequesPledgedCount,
+    IReadOnlyList<AgingBucket> CommitmentBuckets,
+    IReadOnlyList<AgingBucket> ReturnableBuckets,
+    IReadOnlyList<OldestObligationRow> OldestObligations);
+
+public sealed record AgingBucket(string Label, int Count, decimal Amount);
+public sealed record OldestObligationRow(string Kind, string Reference, string MemberName, DateOnly DueDate, int DaysOverdue, decimal Amount);
+
+public sealed record MemberEngagementDto(
+    int TotalMembers, int ActiveMembers, int InactiveMembers, int DeceasedMembers, int SuspendedMembers,
+    int VerifiedMembers, int VerificationPendingMembers, int VerificationNotStartedMembers, int VerificationRejectedMembers,
+    int NewThisMonth, int NewThisYear,
+    IReadOnlyList<MemberMonthlyPoint> NewMemberTrend);
+
+public sealed record MemberMonthlyPoint(int Year, int Month, int Count);
+
+public sealed record ComplianceDashboardDto(
+    int AuditEvents30d,
+    int OpenErrors,
+    int PendingChangeRequests,
+    int PendingVoucherApprovals,
+    int DraftReceipts,
+    int UnverifiedMembers,
+    bool HasOpenPeriod,
+    string? OpenPeriodName,
+    IReadOnlyList<DailyCountPoint> AuditTrend30d,
+    IReadOnlyList<NamedCountPoint> ErrorsBySeverity,
+    IReadOnlyList<NamedCountPoint> ChangeRequestsByStatus);
+
+public sealed record DailyCountPoint(DateOnly Date, int Count);
+public sealed record NamedCountPoint(string Label, int Count);
 
 public sealed record IncomeExpensePoint(int Year, int Month, decimal Income, decimal Expense, string Currency);
 public sealed record TopContributorPoint(Guid MemberId, string ItsNumber, string FullName, decimal Amount, int ReceiptCount, string Currency);

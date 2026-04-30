@@ -26,6 +26,7 @@ import { PostDatedChequesPage } from '../features/post-dated-cheques/PostDatedCh
 import { NewVoucherPage } from '../features/vouchers/NewVoucherPage';
 import { VoucherDetailPage } from '../features/vouchers/VoucherDetailPage';
 import { ReportsPage } from '../features/reports/ReportsPage';
+import { DashboardsPage } from '../features/dashboards/DashboardsPage';
 import { LedgerPage } from '../features/ledger/LedgerPage';
 import { UsersPage } from '../features/admin/UsersPage';
 import { MasterDataPage } from '../features/admin/MasterDataPage';
@@ -89,6 +90,8 @@ export function App() {
         <Route path="ledger" element={<Gate anyOf={['accounting.view']}><LedgerPage /></Gate>} />
         <Route path="reports" element={<Gate anyOf={['reports.view']}><ReportsPage /></Gate>} />
         <Route path="reports/:reportSlug" element={<Gate anyOf={['reports.view']}><ReportsPage /></Gate>} />
+        <Route path="dashboards" element={<Gate anyOf={['reports.view', 'accounting.view', 'admin.audit', 'qh.view', 'member.view']}><DashboardsPage /></Gate>} />
+        <Route path="dashboards/:dashSlug" element={<Gate anyOf={['reports.view', 'accounting.view', 'admin.audit', 'qh.view', 'member.view']}><DashboardsPage /></Gate>} />
         <Route path="admin" element={<Gate anyOf={['admin.users', 'admin.roles', 'admin.masterdata', 'admin.integration', 'admin.audit', 'admin.errorlogs']}><AdministrationPage /></Gate>} />
         <Route path="admin/users" element={<Gate anyOf={['admin.users', 'admin.roles']}><UsersPage /></Gate>} />
         <Route path="admin/master-data" element={<Gate anyOf={['admin.masterdata']}><MasterDataPage /></Gate>} />

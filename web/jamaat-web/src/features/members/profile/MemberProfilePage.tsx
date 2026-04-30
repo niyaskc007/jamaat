@@ -27,6 +27,7 @@ import { membersApi } from '../membersApi';
 import { lookupsApi, MemberLookupCategory } from '../../admin/master-data/lookups/lookupsApi';
 import { organisationsApi, type MemberOrgMembership } from '../../organisations/organisationsApi';
 import { FamilyDetailDrawer } from '../../families/FamilyDetailDrawer';
+import { FamilyRoleLabel, type FamilyRole } from '../../families/familiesApi';
 
 const { Text } = Typography;
 
@@ -333,7 +334,8 @@ function FamilyTab({ profile }: { profile: MemberProfile; onSaved: (p: MemberPro
                 </Space>
               ),
             },
-            { key: 'role', label: 'Role in family', children: profile.familyRole ? String(profile.familyRole) : '-' },
+            // Show the friendly role name (Son / Daughter / etc.) - we were rendering the raw enum digit.
+            { key: 'role', label: 'Role in family', children: profile.familyRole != null ? (FamilyRoleLabel[profile.familyRole as FamilyRole] ?? '-') : '-' },
           ]}
         />
       </Card>

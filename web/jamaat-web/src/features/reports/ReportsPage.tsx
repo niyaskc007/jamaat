@@ -12,7 +12,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { money, formatDate } from '../../shared/format/format';
-import { reportsApi } from '../ledger/ledgerApi';
+import { reportsApi, dashboardApi } from '../ledger/ledgerApi';
 import { QhStatusLabel, QhStatusColor, type QhStatus } from '../qarzan-hasana/qarzanHasanaApi';
 import { StatusLabel as CommitmentStatusLabel, StatusColor as CommitmentStatusColor, type CommitmentStatus } from '../commitments/commitmentsApi';
 import { accountsApi } from '../admin/master-data/chart-of-accounts/accountsApi';
@@ -127,6 +127,7 @@ export function ReportsPage() {
     <div>
       <PageHeader title={t('nav.reports')}
         subtitle="Operational and financial reports. Each card opens a focused report - bookmark or share the URL." />
+      <ReportsQuickStats />
       {groups.map((g) => (
         <div key={g} style={{ marginBlockEnd: 24 }}>
           <div style={{
@@ -157,6 +158,31 @@ export function ReportsPage() {
         </div>
       ))}
     </div>
+  );
+}
+
+/// Compact "today at a glance" row that sits above the report cards. Drives off
+/// /api/v1/dashboard/stats so we don't fan out additional queries; values are the same as
+/// the Operations dashboard, just rendered tight here so a user can scan the room before
+/// drilling into a specific report.
+function ReportsQuickStats() {
+  const { data } = useQuery({ queryKey: ['rpt-quick-stats'], queryFn: dashboardApi.stats });
+  if (!data) return null;
+  const tile = (label: string, value: React.ReactNode, color?: string) => (
+    <Col xs={12} md={6}>
+      <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+        <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+        <div className="jm-tnum" style={{ fontSize: 20, fontWeight: 700, marginBlockStart: 4, color: color ?? 'var(--jm-gray-900)' }}>{value}</div>
+      </Card>
+    </Col>
+  );
+  return (
+    <Row gutter={[12, 12]} style={{ marginBlockEnd: 24 }}>
+      {tile("Today's collection", money(data.todayCollection, data.currency), '#0E5C40')}
+      {tile('Receipts today', data.receiptsToday)}
+      {tile('Pending approvals', data.pendingApprovals, data.pendingApprovals > 0 ? '#D97706' : undefined)}
+      {tile('Draft receipts', data.pendingReceipts, data.pendingReceipts > 0 ? '#D97706' : undefined)}
+    </Row>
   );
 }
 
