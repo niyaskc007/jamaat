@@ -73,19 +73,30 @@ function FamilyTreeBody({ head, familyMembers, familyId, onOpenMember }: {
   const father = head.fatherItsNumber ? findByIts(head.fatherItsNumber) : undefined;
   const mother = head.motherItsNumber ? findByIts(head.motherItsNumber) : undefined;
   const spouse = head.spouseItsNumber ? findByIts(head.spouseItsNumber) : undefined;
-  // Children = members in this family whose Father OR Mother ITS = head's or spouse's ITS.
-  // We cross-check the family members list (already loaded above) but fall back to global
-  // if a child profile happens to have parental ITS that matches the head.
-  const childCandidatesIts = new Set([head.itsNumber, head.spouseItsNumber].filter(Boolean) as string[]);
-  // Children come from family member rows + their resolved profile (we need parent ITS).
-  // Simpler: pull each family member's profile in batch via global lookup we already have.
-  const children = (memberLookupQ.data?.items ?? []).filter((m) =>
-    m.familyId === familyId && m.id !== head.id && m.id !== spouse?.id
-  );
-  void childCandidatesIts; // reserved for richer matching once Member API exposes parental ITS in the list DTO.
+
+  // Use the FamilyRole on each family-member row to slot people into the right tree level.
+  // The role is a labelling field set when the member was added; we group by it so siblings
+  // don't end up labelled as "Child" and grand-relatives are surfaced in their own row.
+  // Roles ref: 1=Head, 2=Spouse, 3=Father, 4=Mother, 5=Son, 6=Daughter, 7=Brother, 8=Sister,
+  //  9=GrandFather, 10=GrandMother, 11=GrandSon, 12=GrandDaughter, 13=SonInLaw,
+  //  14=DaughterInLaw, 15=Uncle, 16=Aunt, 17=Nephew, 18=Niece, 99=Other.
+  const exclude = new Set([head.id, spouse?.id].filter(Boolean) as string[]);
+  const inFamily = familyMembers.filter((m) => !exclude.has(m.id));
+
+  const childRoles = new Set<number>([5, 6, 13, 14]);          // Son / Daughter / SonInLaw / DaughterInLaw
+  const siblingRoles = new Set<number>([7, 8]);                 // Brother / Sister
+  const grandchildRoles = new Set<number>([11, 12]);            // GrandSon / GrandDaughter
+  const olderRoles = new Set<number>([3, 4, 9, 10]);            // Father / Mother / Grandparents - handled via ITS above
+  const otherRoles = new Set<number>([15, 16, 17, 18, 99]);     // Uncle / Aunt / Nephew / Niece / Other
+
+  const children = inFamily.filter((m) => childRoles.has(m.familyRole ?? 99));
+  const siblings = inFamily.filter((m) => siblingRoles.has(m.familyRole ?? 99));
+  const grandchildren = inFamily.filter((m) => grandchildRoles.has(m.familyRole ?? 99));
+  const others = inFamily.filter((m) => otherRoles.has(m.familyRole ?? 99) && !olderRoles.has(m.familyRole ?? 99));
 
   // Empty state: nothing to draw beyond the head itself.
-  const hasAny = father || mother || spouse || children.length > 0;
+  const hasAny = father || mother || spouse || children.length > 0
+    || siblings.length > 0 || grandchildren.length > 0 || others.length > 0;
   if (!hasAny) {
     return (
       <Empty description="No related members captured yet. Set Father / Mother / Spouse ITS on the member's profile to build the tree." />
@@ -94,7 +105,7 @@ function FamilyTreeBody({ head, familyMembers, familyId, onOpenMember }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, paddingBlock: 8 }}>
-      {/* Parents row */}
+      {/* Parents row (resolved via head's ITS refs) */}
       {(father || mother) && (
         <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
           {father ? <PersonCard label="Father" name={father.fullName} its={father.itsNumber} onClick={() => onOpenMember(father.id)} /> : <PersonCardPlaceholder label="Father" its={head.fatherItsNumber ?? null} />}
@@ -114,16 +125,51 @@ function FamilyTreeBody({ head, familyMembers, familyId, onOpenMember }: {
         )}
       </div>
 
+      {/* Siblings row - same generation as the head */}
+      {siblings.length > 0 && (
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', maxInlineSize: 720, marginBlockStart: 4 }}>
+          {siblings.map((s) => (
+            <PersonCard key={s.id} label={s.familyRole === 7 ? 'Brother' : 'Sister'} name={s.fullName} its={s.itsNumber} onClick={() => onOpenMember(s.id)} />
+          ))}
+        </div>
+      )}
+
       {/* Children row */}
       {children.length > 0 && (
         <>
           <Connector />
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', maxInlineSize: 720 }}>
             {children.map((c) => (
-              <PersonCard key={c.id} label="Child" name={c.fullName} its={c.itsNumber} onClick={() => onOpenMember(c.id)} />
+              <PersonCard key={c.id}
+                label={c.familyRole === 5 ? 'Son' : c.familyRole === 6 ? 'Daughter' : c.familyRole === 13 ? 'Son-in-Law' : 'Daughter-in-Law'}
+                name={c.fullName} its={c.itsNumber} onClick={() => onOpenMember(c.id)} />
             ))}
           </div>
         </>
+      )}
+
+      {/* Grandchildren row */}
+      {grandchildren.length > 0 && (
+        <>
+          <Connector />
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', maxInlineSize: 720 }}>
+            {grandchildren.map((g) => (
+              <PersonCard key={g.id} label={g.familyRole === 11 ? 'Grandson' : 'Granddaughter'}
+                name={g.fullName} its={g.itsNumber} onClick={() => onOpenMember(g.id)} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Other / extended-family row - kept separate so the main tree stays clean */}
+      {others.length > 0 && (
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', maxInlineSize: 720, marginBlockStart: 8, paddingBlockStart: 12, borderBlockStart: '1px dashed var(--jm-border)' }}>
+          {others.map((o) => (
+            <PersonCard key={o.id}
+              label={o.familyRole === 15 ? 'Uncle' : o.familyRole === 16 ? 'Aunt' : o.familyRole === 17 ? 'Nephew' : o.familyRole === 18 ? 'Niece' : 'Other'}
+              name={o.fullName} its={o.itsNumber} onClick={() => onOpenMember(o.id)} />
+          ))}
+        </div>
       )}
     </div>
   );

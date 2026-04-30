@@ -188,7 +188,17 @@ function EditForm({ open, onClose, family }: { open: boolean; onClose: () => voi
   );
 }
 
-export function MemberPicker({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+export function MemberPicker({ value, onChange, disabled, excludeIds, placeholder }: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  /// Member ids to filter out of search results - used by the Add-to-family modal to hide
+  /// the head + already-assigned members so the operator can't pick them and hit a backend
+  /// rejection. The current value still renders even if it's in excludeIds (so the user
+  /// sees what's selected when re-opening the picker).
+  excludeIds?: readonly string[];
+  placeholder?: string;
+}) {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<Member[]>([]);
@@ -205,10 +215,13 @@ export function MemberPicker({ value, onChange, disabled }: { value: string; onC
     return () => { cancelled = true; clearTimeout(t); };
   }, [search]);
 
-  const items = useMemo(() => options.map((m) => ({
-    value: m.id,
-    label: `${m.itsNumber} - ${m.fullName}`,
-  })), [options]);
+  const exclude = new Set(excludeIds ?? []);
+  const items = useMemo(() => options
+    .filter((m) => !exclude.has(m.id) || m.id === value)
+    .map((m) => ({
+      value: m.id,
+      label: `${m.itsNumber} - ${m.fullName}`,
+    })), [options, exclude, value]);
 
   return (
     <Select
@@ -220,7 +233,7 @@ export function MemberPicker({ value, onChange, disabled }: { value: string; onC
       onSearch={setSearch}
       notFoundContent={loading ? <Spin size="small" /> : search.length < 2 ? 'Type at least 2 characters…' : 'No matching members'}
       options={items}
-      placeholder="Search members by ITS or name"
+      placeholder={placeholder ?? 'Search members by ITS or name'}
       style={{ inlineSize: '100%' }}
     />
   );

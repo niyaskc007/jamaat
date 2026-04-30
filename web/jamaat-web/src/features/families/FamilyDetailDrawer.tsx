@@ -120,7 +120,10 @@ export function FamilyDetailDrawer({ familyId, onClose }: { familyId: string; on
       )}
 
       {addOpen && data && (
-        <AddMemberModal familyId={familyId} onClose={() => setAddOpen(false)} onDone={() => { setAddOpen(false); void refetch(); }} />
+        <AddMemberModal familyId={familyId}
+          existingMemberIds={data.members.map((m) => m.id)}
+          onClose={() => setAddOpen(false)}
+          onDone={() => { setAddOpen(false); void refetch(); }} />
       )}
       {transferOpen && data && (
         <TransferHeadModal familyId={familyId} members={data.members} onClose={() => setTransferOpen(false)} onDone={() => { setTransferOpen(false); void refetch(); }} />
@@ -129,7 +132,14 @@ export function FamilyDetailDrawer({ familyId, onClose }: { familyId: string; on
   );
 }
 
-function AddMemberModal({ familyId, onClose, onDone }: { familyId: string; onClose: () => void; onDone: () => void }) {
+function AddMemberModal({ familyId, existingMemberIds, onClose, onDone }: {
+  familyId: string;
+  /// Members already in this family (head + everyone else). Filtered out of the picker
+  /// so the operator can't pick someone who'll just hit a backend rejection.
+  existingMemberIds: readonly string[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const { message } = AntdApp.useApp();
   const [memberId, setMemberId] = useState('');
   const [role, setRole] = useState<FamilyRole>(99);
@@ -153,7 +163,10 @@ function AddMemberModal({ familyId, onClose, onDone }: { familyId: string; onClo
       <Space direction="vertical" size={12} style={{ inlineSize: '100%' }}>
         <div>
           <div style={{ fontSize: 13, marginBlockEnd: 4 }}>Member</div>
-          <MemberPicker value={memberId} onChange={setMemberId} />
+          <MemberPicker value={memberId} onChange={setMemberId} excludeIds={existingMemberIds} />
+          <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
+            The head and current members of this family are filtered out automatically.
+          </div>
         </div>
         <div>
           <div style={{ fontSize: 13, marginBlockEnd: 4 }}>Role in family</div>

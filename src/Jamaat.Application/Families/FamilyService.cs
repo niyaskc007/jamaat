@@ -107,10 +107,37 @@ public sealed class FamilyService(
         if (family is null) return Result.Failure(Error.NotFound("family.not_found", "Family not found."));
         var member = await db.Members.FirstOrDefaultAsync(m => m.Id == dto.MemberId && !m.IsDeleted, ct);
         if (member is null) return Result.Failure(Error.NotFound("member.not_found", "Member not found."));
+
+        // Active-status guard. Suspended / Deceased / Inactive members can't be added as
+        // family members - it'd corrupt the rolls. They're still soft-deleted-equivalent
+        // for the purpose of this operation; admins re-activate first if intentional.
+        if (member.Status != Domain.Enums.MemberStatus.Active)
+            return Result.Failure(Error.Business("member.not_active",
+                $"Member status is {member.Status}; only Active members can be added to a family."));
+
+        // The head is, by definition, already a member of their own family. Adding them
+        // again with a non-head role is the bug screenshot the user reported - it would
+        // silently re-tag the head as Spouse / Other, breaking the family structure.
+        if (family.HeadMemberId == member.Id && dto.Role != FamilyRole.Head)
+            return Result.Failure(Error.Business("family.head_already_member",
+                "This member is the head of the family. Use Transfer headship to replace them; you can't re-tag the head as another role."));
+
+        // Different family already - clear and unambiguous; no automatic move.
         if (member.FamilyId.HasValue && member.FamilyId != familyId)
-            return Result.Failure(Error.Business("member.in_other_family", "Member is already in another family. Remove them first."));
+            return Result.Failure(Error.Business("member.in_other_family",
+                "Member is already in another family. Remove them from that family first."));
+
+        // Already in this family with the same role - duplicate request, harmless but noisy.
+        // Reject so the caller knows nothing changed (and doesn't double-write audit rows).
+        if (member.FamilyId == familyId && member.FamilyRole == dto.Role)
+            return Result.Failure(Error.Business("family.member_already_assigned",
+                $"This member is already in the family with role {dto.Role}. Pick a different role or remove them first."));
+
+        // Head reassignment is gated to TransferHeadship (which manages both old + new head).
         if (dto.Role == FamilyRole.Head && family.HeadMemberId != member.Id)
-            return Result.Failure(Error.Business("family.head_conflict", "Use transfer-headship to change the head."));
+            return Result.Failure(Error.Business("family.head_conflict",
+                "Use Transfer headship to change the head."));
+
         member.LinkFamily(familyId, dto.Role);
         db.Members.Update(member);
         await uow.SaveChangesAsync(ct);
@@ -135,8 +162,16 @@ public sealed class FamilyService(
     {
         var family = await db.Families.FirstOrDefaultAsync(f => f.Id == familyId, ct);
         if (family is null) return Result.Failure(Error.NotFound("family.not_found", "Family not found."));
+        // No-op when the proposed new head is already the head; a UI mis-click shouldn't
+        // generate audit churn or silently change roles back to Head.
+        if (family.HeadMemberId == dto.NewHeadMemberId)
+            return Result.Failure(Error.Business("family.head_unchanged",
+                "This member is already the head of the family."));
         var newHead = await db.Members.FirstOrDefaultAsync(m => m.Id == dto.NewHeadMemberId && m.FamilyId == familyId, ct);
         if (newHead is null) return Result.Failure(Error.NotFound("member.not_in_family", "New head must be a member of this family."));
+        if (newHead.Status != Domain.Enums.MemberStatus.Active)
+            return Result.Failure(Error.Business("member.not_active",
+                $"New head's status is {newHead.Status}; only Active members can hold headship."));
         if (family.HeadMemberId is Guid oldHeadId && oldHeadId != newHead.Id)
         {
             var oldHead = await db.Members.FirstOrDefaultAsync(m => m.Id == oldHeadId, ct);
