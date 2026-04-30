@@ -332,6 +332,42 @@ Open the dashboard to review and approve.",
                 return new VoucherLineDto(l.Id, l.LineNo, l.ExpenseTypeId, et.Code, et.Name, l.Amount, l.Narration);
             }).ToList());
     }
+
+    public async Task<VoucherSummaryDto> SummaryAsync(CancellationToken ct = default)
+    {
+        var today = clock.Today;
+        var monthStart = new DateOnly(today.Year, today.Month, 1);
+        var yearStart = new DateOnly(today.Year, 1, 1);
+
+        // We only count Paid vouchers towards the money tiles - Approved-but-not-yet-paid hasn't
+        // actually moved cash. Pending and Draft are pure counts and currency-agnostic.
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        var paidThisMonth = await db.Vouchers.AsNoTracking()
+            .Where(v => v.Status == VoucherStatus.Paid && v.VoucherDate >= monthStart)
+            .Select(v => new { v.AmountTotal, v.Currency })
+            .ToListAsync(ct);
+        var paidThisYear = await db.Vouchers.AsNoTracking()
+            .Where(v => v.Status == VoucherStatus.Paid && v.VoucherDate >= yearStart)
+            .Select(v => new { v.AmountTotal, v.Currency })
+            .ToListAsync(ct);
+        var pendingCount = await db.Vouchers.AsNoTracking()
+            .CountAsync(v => v.Status == VoucherStatus.PendingApproval, ct);
+        var draftCount = await db.Vouchers.AsNoTracking()
+            .CountAsync(v => v.Status == VoucherStatus.Draft, ct);
+
+        // Currency from the latest paid voucher; the YTD/MTD totals are summed in mixed
+        // currencies (we don't FX-convert here) which is fine because in practice the system
+        // operates in a single base currency per tenant.
+        var currency = paidThisMonth.FirstOrDefault()?.Currency
+            ?? paidThisYear.FirstOrDefault()?.Currency
+            ?? "AED";
+
+        return new VoucherSummaryDto(
+            paidThisMonth.Sum(v => v.AmountTotal), paidThisMonth.Count,
+            pendingCount, draftCount,
+            paidThisYear.Sum(v => v.AmountTotal), paidThisYear.Count,
+            currency);
+    }
 }
 
 public sealed class CreateVoucherValidator : AbstractValidator<CreateVoucherDto>

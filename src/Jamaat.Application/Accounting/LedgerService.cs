@@ -14,6 +14,7 @@ public sealed class LedgerService(Persistence.JamaatDbContextFacade db) : ILedge
         if (q.AccountId is not null) query = query.Where(x => x.AccountId == q.AccountId);
         if (q.FundTypeId is not null) query = query.Where(x => x.FundTypeId == q.FundTypeId);
         if (q.SourceType is not null) query = query.Where(x => x.SourceType == q.SourceType);
+        if (q.SourceId is not null) query = query.Where(x => x.SourceId == q.SourceId);
         if (q.FromDate is not null) query = query.Where(x => x.PostingDate >= q.FromDate);
         if (q.ToDate is not null) query = query.Where(x => x.PostingDate <= q.ToDate);
         if (!string.IsNullOrWhiteSpace(q.Search))

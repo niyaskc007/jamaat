@@ -29,6 +29,7 @@ export type PagedResult<T> = { items: T[]; total: number; page: number; pageSize
 export type LedgerQuery = {
   page?: number; pageSize?: number; search?: string;
   accountId?: string; fundTypeId?: string; sourceType?: LedgerSourceType;
+  sourceId?: string;
   fromDate?: string; toDate?: string;
 };
 

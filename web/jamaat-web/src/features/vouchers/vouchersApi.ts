@@ -53,9 +53,20 @@ export type CreateVoucher = {
 
 import { openAuthenticatedPdf } from '../../shared/api/pdf';
 
+export type VoucherSummary = {
+  paidThisMonth: number;
+  paidThisMonthCount: number;
+  pendingApprovalCount: number;
+  draftCount: number;
+  paidThisYear: number;
+  paidThisYearCount: number;
+  currency: string;
+};
+
 export const vouchersApi = {
   list: async (q: VoucherListQuery) => (await api.get<PagedResult<VoucherListItem>>('/api/v1/vouchers', { params: q })).data,
   get: async (id: string) => (await api.get<Voucher>(`/api/v1/vouchers/${id}`)).data,
+  summary: async () => (await api.get<VoucherSummary>('/api/v1/vouchers/summary')).data,
   create: async (input: CreateVoucher) => (await api.post<Voucher>('/api/v1/vouchers', input)).data,
   approve: async (id: string) => (await api.post<Voucher>(`/api/v1/vouchers/${id}/approve`)).data,
   cancel: async (id: string, reason: string) => (await api.post<Voucher>(`/api/v1/vouchers/${id}/cancel`, { reason })).data,

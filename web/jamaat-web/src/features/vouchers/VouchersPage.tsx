@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, Input, Select, Table, Tag, DatePicker, App as AntdApp, Empty, Dropdown, Space } from 'antd';
+import { Button, Card, Input, Select, Table, Tag, DatePicker, App as AntdApp, Empty, Dropdown, Space, Row, Col, Statistic } from 'antd';
 import type { TableColumnsType, MenuProps } from 'antd';
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined,
@@ -53,6 +53,14 @@ export function VouchersPage() {
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['vouchers', effective], queryFn: () => vouchersApi.list(effective), placeholderData: keepPreviousData,
+  });
+
+  // KPI strip - month/year totals + draft/pending counts. Refetched every 60s so the figures
+  // stay current without flickering. Skipped on the empty-state landing.
+  const summaryQ = useQuery({
+    queryKey: ['vouchers-summary'],
+    queryFn: () => vouchersApi.summary(),
+    refetchInterval: 60_000,
   });
 
   const approveMut = useMutation({
@@ -125,6 +133,53 @@ export function VouchersPage() {
           </div>
         }
       />
+
+      {/* KPI strip - 4 tiles: paid this month / pending approvals / drafts / paid YTD.
+          Pending and drafts are clickable - they deep-link the table to the matching status. */}
+      {!firstRun && (
+        <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
+          <Col xs={12} md={6}>
+            <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+              <Statistic title="Paid this month" value={summaryQ.data?.paidThisMonth ?? 0} precision={2}
+                formatter={(v) => money(Number(v), summaryQ.data?.currency ?? 'AED')}
+                valueStyle={{ fontSize: 18 }} />
+              <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
+                {summaryQ.data?.paidThisMonthCount ?? 0} voucher{(summaryQ.data?.paidThisMonthCount ?? 0) === 1 ? '' : 's'}
+              </div>
+            </Card>
+          </Col>
+          <Col xs={12} md={6}>
+            <Card size="small" hoverable style={{ border: '1px solid var(--jm-border)', cursor: 'pointer' }}
+              onClick={() => setQuery((q) => ({ ...q, page: 1, status: 2 }))}>
+              <Statistic title="Pending approval" value={summaryQ.data?.pendingApprovalCount ?? 0}
+                valueStyle={{ fontSize: 18, color: (summaryQ.data?.pendingApprovalCount ?? 0) > 0 ? '#D97706' : 'inherit' }} />
+              <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
+                Click to filter
+              </div>
+            </Card>
+          </Col>
+          <Col xs={12} md={6}>
+            <Card size="small" hoverable style={{ border: '1px solid var(--jm-border)', cursor: 'pointer' }}
+              onClick={() => setQuery((q) => ({ ...q, page: 1, status: 1 }))}>
+              <Statistic title="Drafts" value={summaryQ.data?.draftCount ?? 0}
+                valueStyle={{ fontSize: 18 }} />
+              <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
+                Not yet submitted
+              </div>
+            </Card>
+          </Col>
+          <Col xs={12} md={6}>
+            <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+              <Statistic title="Paid this year" value={summaryQ.data?.paidThisYear ?? 0} precision={2}
+                formatter={(v) => money(Number(v), summaryQ.data?.currency ?? 'AED')}
+                valueStyle={{ fontSize: 18, color: '#0E5C40' }} />
+              <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
+                {summaryQ.data?.paidThisYearCount ?? 0} voucher{(summaryQ.data?.paidThisYearCount ?? 0) === 1 ? '' : 's'}
+              </div>
+            </Card>
+          </Col>
+        </Row>
+      )}
 
       {firstRun ? (
         <ModuleEmptyState

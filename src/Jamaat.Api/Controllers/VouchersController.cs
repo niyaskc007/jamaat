@@ -57,6 +57,12 @@ public sealed class VouchersController(IVoucherService svc, IExcelExporter excel
         return r.IsSuccess ? Ok(r.Value) : ControllerResults.Problem(this, r.Error);
     }
 
+    /// <summary>Headline counts + amounts that drive the Vouchers list KPI strip.</summary>
+    [HttpGet("summary")]
+    [Authorize(Policy = "voucher.view")]
+    public async Task<IActionResult> Summary(CancellationToken ct)
+        => Ok(await svc.SummaryAsync(ct));
+
     [HttpPost]
     [Authorize(Policy = "voucher.create")]
     public async Task<IActionResult> Create([FromBody] CreateVoucherDto dto, CancellationToken ct)

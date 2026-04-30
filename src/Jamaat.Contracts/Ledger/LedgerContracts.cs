@@ -26,7 +26,10 @@ public sealed record LedgerEntryDto(
 public sealed record LedgerEntryQuery(
     int Page = 1, int PageSize = 50, string? SortBy = null, string? SortDir = null,
     string? Search = null, Guid? AccountId = null, Guid? FundTypeId = null,
-    LedgerSourceType? SourceType = null, DateOnly? FromDate = null, DateOnly? ToDate = null);
+    LedgerSourceType? SourceType = null, DateOnly? FromDate = null, DateOnly? ToDate = null,
+    /// <summary>Filter to entries whose Source aggregate has this Id - lets a detail page
+    /// show the GL postings produced by a specific receipt/voucher/journal.</summary>
+    Guid? SourceId = null);
 
 public sealed record AccountBalanceDto(
     Guid AccountId, string AccountCode, string AccountName,

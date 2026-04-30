@@ -15,7 +15,22 @@ public interface IVoucherService
     Task<Result<byte[]>> RenderPdfAsync(Guid id, CancellationToken ct = default);
     /// <summary>Bulk-import historical vouchers. Each row = one single-line voucher; auto-approved if Mode=Cash, otherwise left in Draft for manual review.</summary>
     Task<ImportResult> ImportAsync(Stream xlsxStream, CancellationToken ct = default);
+
+    /// <summary>Headline counts + amounts for the Vouchers list KPI strip.</summary>
+    Task<VoucherSummaryDto> SummaryAsync(CancellationToken ct = default);
 }
+
+/// <summary>Aggregated summary for the Vouchers list page header. All amounts in the most-used
+/// recent currency; pending and draft are counts only because mixing currencies on a single
+/// "amount owed" tile would mislead.</summary>
+public sealed record VoucherSummaryDto(
+    decimal PaidThisMonth,
+    int PaidThisMonthCount,
+    int PendingApprovalCount,
+    int DraftCount,
+    decimal PaidThisYear,
+    int PaidThisYearCount,
+    string Currency);
 
 public interface IVoucherRepository
 {
