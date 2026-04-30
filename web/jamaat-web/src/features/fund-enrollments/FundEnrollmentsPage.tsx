@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Button, Card, Input, Select, Table, Tag, Empty, App as AntdApp, Drawer, Form, DatePicker, Dropdown, Space } from 'antd';
 import type { TableProps, MenuProps } from 'antd';
-import { PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, BankOutlined, GiftOutlined, CheckCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined, CheckOutlined, DownloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, BankOutlined, GiftOutlined, CheckCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined, CheckOutlined, DownloadOutlined, WalletOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { downloadServerXlsx } from '../../shared/export/server';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -20,9 +21,11 @@ import { MemberPicker } from '../families/FamilyFormDrawer';
 
 export function FundEnrollmentsPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { hasPermission } = useAuth();
   const canCreate = hasPermission('enrollment.create');
   const canApprove = hasPermission('enrollment.approve');
+  const canCollect = hasPermission('receipt.create');
   const { message, modal } = AntdApp.useApp();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<EnrollmentStatus>();
@@ -95,6 +98,16 @@ export function FundEnrollmentsPage() {
       key: 'actions', width: 60,
       render: (_: unknown, row) => {
         const items: MenuProps['items'] = [];
+        // Collect against this patronage. Only Active (2) or Paused (3) - draft hasn't been
+        // approved yet, cancelled/expired shouldn't accept new money. NewReceiptPage reads
+        // memberId+fundTypeId from the query string and auto-links the enrollment line
+        // by member+fund match, so the receipt rolls up under this patronage's totals.
+        if (canCollect && (row.status === 2 || row.status === 3)) {
+          items.push({
+            key: 'collect', icon: <WalletOutlined />, label: 'Collect',
+            onClick: () => navigate(`/receipts/new?memberId=${row.memberId}&fundTypeId=${row.fundTypeId}`),
+          });
+        }
         if (row.status === 1) items.push({ key: 'approve', icon: <CheckCircleOutlined />, label: 'Approve', onClick: () => approveMut.mutate(row.id) });
         if (row.status === 2) items.push({ key: 'pause', icon: <PauseCircleOutlined />, label: 'Pause', onClick: () => pauseMut.mutate(row.id) });
         if (row.status === 3) items.push({ key: 'resume', icon: <PlayCircleOutlined />, label: 'Resume', onClick: () => resumeMut.mutate(row.id) });
