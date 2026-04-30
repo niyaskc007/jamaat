@@ -17,6 +17,7 @@ import { EventsPage } from '../features/events/EventsPage';
 import { EventDetailPage } from '../features/events/EventDetailPage';
 import { PortalEventsListPage } from '../features/portal/PortalEventsListPage';
 import { PortalEventPage } from '../features/portal/PortalEventPage';
+import { PortalGuarantorConsentPage } from '../features/portal/PortalGuarantorConsentPage';
 import { ReceiptsPage } from '../features/receipts/ReceiptsPage';
 import { NewReceiptPage } from '../features/receipts/NewReceiptPage';
 import { ReceiptDetailPage } from '../features/receipts/ReceiptDetailPage';
@@ -53,6 +54,7 @@ export function App() {
       {/* Public Event Portal - no auth, no app chrome */}
       <Route path="/portal/events" element={<PortalEventsListPage />} />
       <Route path="/portal/events/:slug" element={<PortalEventPage />} />
+      <Route path="/portal/qh-consent/:token" element={<PortalGuarantorConsentPage />} />
       <Route
         element={
           <RequireAuth>

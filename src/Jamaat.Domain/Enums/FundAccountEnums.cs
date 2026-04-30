@@ -49,6 +49,13 @@ public enum QarzanHasanaInstallmentStatus
     Waived = 5,
 }
 
+public enum QhGuarantorConsentStatus
+{
+    Pending = 1,
+    Accepted = 2,
+    Declined = 3,
+}
+
 public enum EventCategory
 {
     Other = 0,

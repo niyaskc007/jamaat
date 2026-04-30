@@ -61,6 +61,7 @@ public class JamaatDbContext : IdentityDbContext<ApplicationUser, ApplicationRol
     public DbSet<EventCommunication> EventCommunications => Set<EventCommunication>();
     public DbSet<EventPageSection> EventPageSections => Set<EventPageSection>();
     public DbSet<MemberBehaviorSnapshot> MemberBehaviorSnapshots => Set<MemberBehaviorSnapshot>();
+    public DbSet<QarzanHasanaGuarantorConsent> QarzanHasanaGuarantorConsents => Set<QarzanHasanaGuarantorConsent>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
