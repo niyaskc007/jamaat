@@ -40,7 +40,7 @@ public sealed class MemberProfileService(
         m.UpdateIdentity(dto.FullName, dto.FullNameArabic, dto.FullNameHindi, dto.FullNameUrdu,
             dto.Title, dto.FirstPrefix, dto.PrefixYear, dto.FirstName,
             dto.FatherPrefix, dto.FatherName, dto.FatherSurname,
-            dto.HusbandPrefix, dto.HusbandName, dto.Surname,
+            dto.SpousePrefix, dto.SpouseName, dto.Surname,
             dto.TanzeemFileNo);
         db.Members.Update(m);
         await uow.SaveChangesAsync(ct);
@@ -62,7 +62,8 @@ public sealed class MemberProfileService(
     {
         var m = await db.Members.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
         if (m is null) return Error.NotFound("member.not_found", "Member not found.");
-        m.UpdateContact(dto.Phone, dto.WhatsAppNo, dto.Email);
+        m.UpdateContact(dto.Phone, dto.WhatsAppNo, dto.Email,
+            dto.LinkedInUrl, dto.FacebookUrl, dto.InstagramUrl, dto.TwitterUrl, dto.WebsiteUrl);
         db.Members.Update(m);
         await uow.SaveChangesAsync(ct);
         return await LoadProfileAsync(id, ct);
@@ -110,7 +111,8 @@ public sealed class MemberProfileService(
         var m = await db.Members.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
         if (m is null) return Error.NotFound("member.not_found", "Member not found.");
         m.UpdateReligiousCredentials(dto.QuranSanad, dto.QadambosiSharaf, dto.RaudatTaheraZiyarat,
-            dto.KarbalaZiyarat, dto.AsharaMubarakaCount);
+            dto.KarbalaZiyarat, dto.AsharaMubarakaCount,
+            dto.HajjStatus, dto.HajjYear, dto.UmrahCount);
         db.Members.Update(m);
         await uow.SaveChangesAsync(ct);
         return await LoadProfileAsync(id, ct);
@@ -234,7 +236,7 @@ public sealed class MemberProfileService(
             m.Title,
             m.FirstPrefix, m.PrefixYear, m.FirstName,
             m.FatherPrefix, m.FatherName, m.FatherSurname,
-            m.HusbandPrefix, m.HusbandName, m.Surname,
+            m.SpousePrefix, m.SpouseName, m.Surname,
             m.TanzeemFileNo,
             m.FamilyId, familyName, familyCode, m.FamilyRole,
             m.FatherItsNumber, m.MotherItsNumber, m.SpouseItsNumber,
@@ -244,6 +246,7 @@ public sealed class MemberProfileService(
             m.MisaqStatus, m.MisaqDate,
             m.DateOfNikah, m.DateOfNikahHijri,
             m.Phone, m.WhatsAppNo, m.Email,
+            m.LinkedInUrl, m.FacebookUrl, m.InstagramUrl, m.TwitterUrl, m.WebsiteUrl,
             m.AddressLine, m.Building, m.Street, m.Area,
             m.City, m.State, m.Pincode,
             m.HousingOwnership, m.TypeOfHouse,
@@ -254,6 +257,7 @@ public sealed class MemberProfileService(
             m.Qualification, m.LanguagesCsv, m.HunarsCsv,
             m.Occupation, m.SubOccupation, m.SubOccupation2,
             m.QuranSanad, m.QadambosiSharaf, m.RaudatTaheraZiyarat, m.KarbalaZiyarat, m.AsharaMubarakaCount,
+            m.HajjStatus, m.HajjYear, m.UmrahCount,
             m.DataVerificationStatus, m.DataVerifiedOn, null,
             m.PhotoVerificationStatus, m.PhotoVerifiedOn, null,
             m.PhotoUrl,

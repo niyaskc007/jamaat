@@ -272,6 +272,19 @@ export function MembersPage() {
           columns={columns}
           dataSource={data?.items ?? []}
           onChange={onTableChange}
+          // Whole row navigates to the profile (item 1). The Name column already had an
+          // anchor; keep that working without double-navigating by stopping propagation
+          // from the cell to the row, but leaving the row click as the default.
+          onRow={(row) => ({
+            style: { cursor: 'pointer' },
+            onClick: (e) => {
+              // Don't navigate when the user is interacting with the actions dropdown,
+              // checkbox, or any inline button.
+              const target = e.target as HTMLElement;
+              if (target.closest('button, .ant-dropdown-trigger, input, label, a, .ant-checkbox')) return;
+              navigate(`/members/${row.id}`);
+            },
+          })}
           rowSelection={showVerification ? {
             selectedRowKeys: selectedIds,
             onChange: (keys) => setSelectedIds(keys as string[]),

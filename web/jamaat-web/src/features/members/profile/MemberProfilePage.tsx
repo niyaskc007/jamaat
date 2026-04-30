@@ -18,6 +18,7 @@ import {
   QualificationLabel, HousingOwnershipLabel, TypeOfHouseLabel, VerificationStatusLabel, VerificationStatusColor,
 } from './memberProfileApi';
 import { sectorsApi, subSectorsApi } from '../../sectors/sectorsApi';
+import { membersApi } from '../membersApi';
 import { organisationsApi, type MemberOrgMembership } from '../../organisations/organisationsApi';
 import { FamilyDetailDrawer } from '../../families/FamilyDetailDrawer';
 
@@ -76,6 +77,15 @@ export function MemberProfilePage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <div style={{ fontSize: 18, fontWeight: 600 }}>{profile.fullName}</div>
               <Space size={12} wrap>
+                {/* Gender + age surface at the top of the profile so they're visible at a
+                    glance. Age is computed from DOB; falls back to AgeSnapshot when DOB
+                    isn't on file. Both render only when known so we don't print "Unknown". */}
+                {profile.gender !== 0 && (
+                  <Tag>{GenderLabel[profile.gender]}</Tag>
+                )}
+                {(profile.age != null || profile.ageSnapshot != null) && (
+                  <Tag>{profile.age != null ? `${profile.age} yrs` : `${profile.ageSnapshot} yrs (snapshot)`}</Tag>
+                )}
                 <Tag color={VerificationStatusColor[profile.dataVerificationStatus]} icon={<SafetyCertificateOutlined />}>
                   Data · {VerificationStatusLabel[profile.dataVerificationStatus]}
                 </Tag>
@@ -165,9 +175,29 @@ function IdentityTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSa
           <Col span={8}><Form.Item label="Father prefix" name="fatherPrefix"><Input /></Form.Item></Col>
           <Col span={8}><Form.Item label="Father name" name="fatherName"><Input /></Form.Item></Col>
           <Col span={8}><Form.Item label="Father surname" name="fatherSurname"><Input /></Form.Item></Col>
-          <Col span={8}><Form.Item label="Husband prefix" name="husbandPrefix"><Input /></Form.Item></Col>
-          <Col span={8}><Form.Item label="Husband name" name="husbandName"><Input /></Form.Item></Col>
-          <Col span={8}><Form.Item label="Surname" name="surname"><Input /></Form.Item></Col>
+          {/* Spouse fields - gender-aware label. Backend column is gender-neutral
+              (SpousePrefix/SpouseName); the UI just adapts the wording so the form reads
+              naturally. Hidden when the member's gender is unknown to avoid mismatched
+              defaults. The fields auto-populate from the linked spouse when SpouseItsNumber
+              resolves to an existing member (see Family tab); they remain editable here for
+              manual capture when the spouse isn't on our rolls yet. */}
+          {profile.gender !== 0 && (() => {
+            const spouseLabel = profile.gender === 1 ? 'Wife' : 'Husband';
+            return (
+              <>
+                <Col span={8}><Form.Item label={`${spouseLabel} prefix`} name="spousePrefix"><Input /></Form.Item></Col>
+                <Col span={8}><Form.Item label={`${spouseLabel} name`} name="spouseName"><Input /></Form.Item></Col>
+                <Col span={8}><Form.Item label="Surname" name="surname"><Input /></Form.Item></Col>
+              </>
+            );
+          })()}
+          {profile.gender === 0 && (
+            <>
+              <Col span={8}><Form.Item label="Spouse prefix" name="spousePrefix" tooltip="Set the member's gender on the Personal tab to see the right label."><Input /></Form.Item></Col>
+              <Col span={8}><Form.Item label="Spouse name" name="spouseName"><Input /></Form.Item></Col>
+              <Col span={8}><Form.Item label="Surname" name="surname"><Input /></Form.Item></Col>
+            </>
+          )}
           <Col span={12}><Form.Item label="Full name (Hindi)" name="fullNameHindi"><Input /></Form.Item></Col>
           <Col span={12}><Form.Item label="Full name (Urdu)" name="fullNameUrdu"><Input dir="rtl" /></Form.Item></Col>
         </Row>
@@ -239,9 +269,30 @@ function FamilyTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSave
           dateOfNikahHijri: profile.dateOfNikahHijri,
         }}>
         <Row gutter={16}>
-          <Col span={8}><Form.Item label="Father ITS" name="fatherItsNumber"><Input maxLength={8} className="jm-tnum" /></Form.Item></Col>
-          <Col span={8}><Form.Item label="Mother ITS" name="motherItsNumber"><Input maxLength={8} className="jm-tnum" /></Form.Item></Col>
-          <Col span={8}><Form.Item label="Spouse ITS" name="spouseItsNumber"><Input maxLength={8} className="jm-tnum" /></Form.Item></Col>
+          {/* ITS pickers with live lookup. As soon as the user types an 8-digit ITS, we
+              search /api/v1/members and show the resolved name if found. The free-text
+              input remains editable (so relatives not on our rolls can still be captured),
+              but a green tag confirms when the ITS resolves to an existing member. */}
+          <Col span={8}>
+            <Form.Item label="Father ITS" name="fatherItsNumber" tooltip="Enter the 8-digit ITS. We'll auto-link to the existing member if found.">
+              <Input maxLength={8} className="jm-tnum" />
+            </Form.Item>
+            <Form.Item noStyle shouldUpdate={(p, c) => p.fatherItsNumber !== c.fatherItsNumber}>
+              {({ getFieldValue }) => <ItsLookupTag its={getFieldValue('fatherItsNumber')} />}
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Mother ITS" name="motherItsNumber"><Input maxLength={8} className="jm-tnum" /></Form.Item>
+            <Form.Item noStyle shouldUpdate={(p, c) => p.motherItsNumber !== c.motherItsNumber}>
+              {({ getFieldValue }) => <ItsLookupTag its={getFieldValue('motherItsNumber')} />}
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Spouse ITS" name="spouseItsNumber"><Input maxLength={8} className="jm-tnum" /></Form.Item>
+            <Form.Item noStyle shouldUpdate={(p, c) => p.spouseItsNumber !== c.spouseItsNumber}>
+              {({ getFieldValue }) => <ItsLookupTag its={getFieldValue('spouseItsNumber')} />}
+            </Form.Item>
+          </Col>
           <Col span={8}><Form.Item label="Date of Nikah" name="dateOfNikah"><DatePicker style={{ inlineSize: '100%' }} /></Form.Item></Col>
           <Col span={16}><Form.Item label="Date of Nikah (Hijri)" name="dateOfNikahHijri"><Input placeholder="e.g., 15 Rabiul Akhar 1431H." /></Form.Item></Col>
         </Row>
@@ -260,11 +311,26 @@ function ContactTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSav
   return (
     <div style={{ padding: 24 }}>
       <Form layout="vertical" form={form} requiredMark={false}
-        initialValues={{ phone: profile.phone, whatsAppNo: profile.whatsAppNo, email: profile.email }}>
+        initialValues={{
+          phone: profile.phone, whatsAppNo: profile.whatsAppNo, email: profile.email,
+          linkedInUrl: profile.linkedInUrl, facebookUrl: profile.facebookUrl,
+          instagramUrl: profile.instagramUrl, twitterUrl: profile.twitterUrl, websiteUrl: profile.websiteUrl,
+        }}>
+        <Typography.Title level={5} style={{ marginBlockStart: 0 }}>Phone &amp; email</Typography.Title>
         <Row gutter={16}>
           <Col span={12}><Form.Item label="Mobile" name="phone"><Input /></Form.Item></Col>
           <Col span={12}><Form.Item label="WhatsApp" name="whatsAppNo"><Input /></Form.Item></Col>
           <Col span={24}><Form.Item label="Email" name="email"><Input type="email" /></Form.Item></Col>
+        </Row>
+        {/* Social profiles - all optional. Stored as plain URL strings; light validation
+            only (max length). The labels show familiar names to make it self-explanatory. */}
+        <Typography.Title level={5} style={{ marginBlockStart: 16 }}>Social profiles &amp; web</Typography.Title>
+        <Row gutter={16}>
+          <Col span={12}><Form.Item label="LinkedIn" name="linkedInUrl"><Input placeholder="https://linkedin.com/in/..." /></Form.Item></Col>
+          <Col span={12}><Form.Item label="Facebook" name="facebookUrl"><Input placeholder="https://facebook.com/..." /></Form.Item></Col>
+          <Col span={12}><Form.Item label="Instagram" name="instagramUrl"><Input placeholder="https://instagram.com/..." /></Form.Item></Col>
+          <Col span={12}><Form.Item label="Twitter / X" name="twitterUrl"><Input placeholder="https://twitter.com/..." /></Form.Item></Col>
+          <Col span={24}><Form.Item label="Personal website" name="websiteUrl"><Input placeholder="https://..." /></Form.Item></Col>
         </Row>
       </Form>
       <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} />
@@ -381,6 +447,34 @@ function ReligiousTab({ profile, onSaved, onErr }: { profile: MemberProfile; onS
           <Col span={8}><Form.Item label="Raudat Tahera" name="raudatTaheraZiyarat" valuePropName="checked"><Switch /></Form.Item></Col>
           <Col span={8}><Form.Item label="Karbala Ziyarat" name="karbalaZiyarat" valuePropName="checked"><Switch /></Form.Item></Col>
         </Row>
+        {/* Hajj + Umrah (v2). Hajj year is only meaningful when status is Performed/Multiple;
+            we surface it conditionally so the form doesn't ask for a year that won't apply. */}
+        <Typography.Title level={5} style={{ marginBlockStart: 16 }}>Hajj &amp; Umrah</Typography.Title>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Hajj status" name="hajjStatus">
+              <Select options={[
+                { value: 0, label: 'Not performed' },
+                { value: 1, label: 'Performed' },
+                { value: 2, label: 'Multiple times' },
+              ]} />
+            </Form.Item>
+          </Col>
+          <Form.Item noStyle shouldUpdate={(prev, next) => prev.hajjStatus !== next.hajjStatus}>
+            {({ getFieldValue }) => Number(getFieldValue('hajjStatus') ?? 0) !== 0 ? (
+              <Col span={8}>
+                <Form.Item label="Hajj year (most recent)" name="hajjYear">
+                  <InputNumber min={1900} max={dayjs().year()} style={{ inlineSize: '100%' }} placeholder="e.g., 2019" />
+                </Form.Item>
+              </Col>
+            ) : null}
+          </Form.Item>
+          <Col span={8}>
+            <Form.Item label="Umrah count" name="umrahCount" tooltip="How many Umrahs the member has performed.">
+              <InputNumber min={0} max={99} style={{ inlineSize: '100%' }} />
+            </Form.Item>
+          </Col>
+        </Row>
       </Form>
       <SectionSaveBar loading={mut.isPending} onSave={() => mut.mutate(form.getFieldsValue())} />
     </div>
@@ -410,10 +504,17 @@ function PersonalTab({ profile, onSaved, onErr }: { profile: MemberProfile; onSa
       }}>
         <Row gutter={16}>
           <Col span={8}><Form.Item label="Date of birth" name="dateOfBirth"><DatePicker style={{ inlineSize: '100%' }} /></Form.Item></Col>
-          <Col span={8}><Form.Item label="Age snapshot" name="ageSnapshot"><InputNumber style={{ inlineSize: '100%' }} min={0} max={150} /></Form.Item></Col>
+          <Col span={8}>
+            <Form.Item label="Age" tooltip="Auto-calculated from date of birth. The 'snapshot' below is a fallback for legacy imports where DOB is unknown - prefer DOB.">
+              <Input value={profile.age != null ? `${profile.age} years` : (profile.ageSnapshot != null ? `${profile.ageSnapshot} (snapshot)` : '-')} disabled />
+            </Form.Item>
+          </Col>
           <Col span={8}><Form.Item label="Gender" name="gender">
             <Select options={Object.entries(GenderLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
           </Form.Item></Col>
+          {/* Hidden snapshot kept for back-compat with the existing UpdatePersonal payload;
+              we no longer expose it as a user-editable field. */}
+          <Form.Item name="ageSnapshot" hidden><InputNumber /></Form.Item>
           <Col span={8}><Form.Item label="Marital status" name="maritalStatus">
             <Select options={Object.entries(MaritalStatusLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
           </Form.Item></Col>
@@ -569,5 +670,36 @@ function VerificationTab({ profile, onSaved, onErr }: { profile: MemberProfile; 
         </Card>
       )}
     </div>
+  );
+}
+
+/// Inline ITS lookup tag. As soon as the user has typed an 8-digit ITS, hit the members
+/// search and show whether it resolves to an existing member. Green when resolved,
+/// orange when no match. The free-text input above stays editable so relatives not yet
+/// on our rolls can still be captured by ITS even before we onboard them.
+function ItsLookupTag({ its }: { its?: string | null }) {
+  const valid = !!its && /^\d{8}$/.test(its.trim());
+  const q = useQuery({
+    queryKey: ['its-lookup', its],
+    queryFn: async () => {
+      const res = await membersApi.list({ search: (its ?? '').trim(), pageSize: 5 });
+      return res.items?.find((m) => m.itsNumber === (its ?? '').trim()) ?? null;
+    },
+    enabled: valid,
+    staleTime: 60_000,
+  });
+  if (!valid) return null;
+  if (q.isLoading) return <span style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Looking up...</span>;
+  if (q.data) {
+    return (
+      <Tag color="green" style={{ marginBlockStart: 4 }}>
+        Linked: {q.data.fullName}
+      </Tag>
+    );
+  }
+  return (
+    <Tag color="orange" style={{ marginBlockStart: 4 }}>
+      Not in roll - free-text only
+    </Tag>
   );
 }

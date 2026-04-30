@@ -52,3 +52,9 @@ public enum TypeOfHouse
 }
 
 public enum VerificationStatus { NotStarted = 0, Pending = 1, Verified = 2, Rejected = 3 }
+
+/// <summary>
+/// Performance of the Hajj pilgrimage. Most members will be NotPerformed; those who have
+/// done Hajj at least once choose Performed (single year captured) or MultipleTimes.
+/// </summary>
+public enum HajjStatus { NotPerformed = 0, Performed = 1, MultipleTimes = 2 }

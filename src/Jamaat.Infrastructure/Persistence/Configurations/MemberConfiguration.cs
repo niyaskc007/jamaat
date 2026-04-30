@@ -28,8 +28,8 @@ public sealed class MemberConfiguration : IEntityTypeConfiguration<Member>
         b.Property(x => x.FatherPrefix).HasMaxLength(32);
         b.Property(x => x.FatherName).HasMaxLength(100);
         b.Property(x => x.FatherSurname).HasMaxLength(100);
-        b.Property(x => x.HusbandPrefix).HasMaxLength(32);
-        b.Property(x => x.HusbandName).HasMaxLength(100);
+        b.Property(x => x.SpousePrefix).HasMaxLength(32);
+        b.Property(x => x.SpouseName).HasMaxLength(100);
         b.Property(x => x.Surname).HasMaxLength(100);
         b.Property(x => x.Title).HasMaxLength(32);
 
@@ -50,6 +50,12 @@ public sealed class MemberConfiguration : IEntityTypeConfiguration<Member>
         b.Property(x => x.Phone).HasMaxLength(32);
         b.Property(x => x.WhatsAppNo).HasMaxLength(32);
         b.Property(x => x.Email).HasMaxLength(200);
+        // Social profiles (URLs - 500 chars to fit Mini-URLs without trimming).
+        b.Property(x => x.LinkedInUrl).HasMaxLength(500);
+        b.Property(x => x.FacebookUrl).HasMaxLength(500);
+        b.Property(x => x.InstagramUrl).HasMaxLength(500);
+        b.Property(x => x.TwitterUrl).HasMaxLength(500);
+        b.Property(x => x.WebsiteUrl).HasMaxLength(500);
 
         // Address
         b.Property(x => x.AddressLine).HasMaxLength(500);
@@ -80,6 +86,7 @@ public sealed class MemberConfiguration : IEntityTypeConfiguration<Member>
 
         // Religious
         b.Property(x => x.QuranSanad).HasMaxLength(100);
+        b.Property(x => x.HajjStatus).HasConversion<int>();
 
         // Verification
         b.Property(x => x.DataVerificationStatus).HasConversion<int>();

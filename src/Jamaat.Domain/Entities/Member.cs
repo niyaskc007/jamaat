@@ -31,8 +31,12 @@ public sealed class Member : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISo
     public string? FatherPrefix { get; private set; }
     public string? FatherName { get; private set; }
     public string? FatherSurname { get; private set; }
-    public string? HusbandPrefix { get; private set; }
-    public string? HusbandName { get; private set; }
+    /// <summary>Prefix for the spouse's name. Renamed from HusbandPrefix in v2 - the
+    /// underlying column is gender-neutral now. UI labels it "Husband" / "Wife" based on
+    /// the member's gender so it reads naturally; data is the same field underneath.</summary>
+    public string? SpousePrefix { get; private set; }
+    /// <summary>Spouse's first name. Renamed from HusbandName in v2.</summary>
+    public string? SpouseName { get; private set; }
     public string? Surname { get; private set; }
     public string? Title { get; private set; }
 
@@ -61,6 +65,13 @@ public sealed class Member : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISo
     public string? Phone { get; private set; }
     public string? WhatsAppNo { get; private set; }
     public string? Email { get; private set; }
+
+    // --- Social links (v2 additions) ---------------------------------------
+    public string? LinkedInUrl { get; private set; }
+    public string? FacebookUrl { get; private set; }
+    public string? InstagramUrl { get; private set; }
+    public string? TwitterUrl { get; private set; }
+    public string? WebsiteUrl { get; private set; }
 
     // --- Address (structured) ----------------------------------------------
     public string? AddressLine { get; private set; }
@@ -100,6 +111,14 @@ public sealed class Member : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISo
     public bool KarbalaZiyarat { get; private set; }
     public int AsharaMubarakaCount { get; private set; }
 
+    // --- Hajj + Umrah (v2 additions) ---------------------------------------
+    /// <summary>Hajj status: NotPerformed / Performed / MultipleTimes. Defaults to NotPerformed.</summary>
+    public HajjStatus HajjStatus { get; private set; }
+    /// <summary>Year of the most recent Hajj when HajjStatus != NotPerformed.</summary>
+    public int? HajjYear { get; private set; }
+    /// <summary>Number of Umrahs performed. 0 means none on record.</summary>
+    public int UmrahCount { get; private set; }
+
     // --- Verification -------------------------------------------------------
     public VerificationStatus DataVerificationStatus { get; private set; }
     public DateOnly? DataVerifiedOn { get; private set; }
@@ -138,7 +157,7 @@ public sealed class Member : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISo
     public void UpdateIdentity(string fullName, string? arabic, string? hindi, string? urdu,
         string? title, string? firstPrefix, int? prefixYear, string? firstName,
         string? fatherPrefix, string? fatherName, string? fatherSurname,
-        string? husbandPrefix, string? husbandName, string? surname,
+        string? spousePrefix, string? spouseName, string? surname,
         string? tanzeemFileNo)
     {
         if (string.IsNullOrWhiteSpace(fullName)) throw new ArgumentException("Full name required.", nameof(fullName));
@@ -147,7 +166,7 @@ public sealed class Member : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISo
         Title = title;
         FirstPrefix = firstPrefix; PrefixYear = prefixYear; FirstName = firstName;
         FatherPrefix = fatherPrefix; FatherName = fatherName; FatherSurname = fatherSurname;
-        HusbandPrefix = husbandPrefix; HusbandName = husbandName; Surname = surname;
+        SpousePrefix = spousePrefix; SpouseName = spouseName; Surname = surname;
         TanzeemFileNo = tanzeemFileNo;
     }
 
@@ -168,12 +187,22 @@ public sealed class Member : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISo
         DateOfNikahHijri = dateOfNikahHijri;
     }
 
-    public void UpdateContact(string? phone, string? whatsApp, string? email)
+    public void UpdateContact(string? phone, string? whatsApp, string? email,
+        string? linkedIn = null, string? facebook = null, string? instagram = null,
+        string? twitter = null, string? website = null)
     {
         Phone = phone;
         WhatsAppNo = whatsApp;
         Email = email;
+        LinkedInUrl = NullIfBlank(linkedIn);
+        FacebookUrl = NullIfBlank(facebook);
+        InstagramUrl = NullIfBlank(instagram);
+        TwitterUrl = NullIfBlank(twitter);
+        WebsiteUrl = NullIfBlank(website);
     }
+
+    private static string? NullIfBlank(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>Legacy helper retained while MemberService is being migrated to the structured API.</summary>
     public void UpdateName(string fullName, string? arabic, string? hindi, string? urdu)
@@ -225,13 +254,18 @@ public sealed class Member : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISo
     }
 
     public void UpdateReligiousCredentials(string? quranSanad, bool qadambosi, bool raudatTahera,
-        bool karbala, int asharaCount)
+        bool karbala, int asharaCount,
+        HajjStatus hajjStatus = HajjStatus.NotPerformed, int? hajjYear = null, int umrahCount = 0)
     {
         QuranSanad = quranSanad;
         QadambosiSharaf = qadambosi;
         RaudatTaheraZiyarat = raudatTahera;
         KarbalaZiyarat = karbala;
         AsharaMubarakaCount = Math.Max(0, asharaCount);
+        HajjStatus = hajjStatus;
+        // Year only meaningful when Hajj has actually been performed.
+        HajjYear = hajjStatus == HajjStatus.NotPerformed ? null : hajjYear;
+        UmrahCount = Math.Max(0, umrahCount);
     }
 
     public void UpdateFamilyRefs(string? fatherIts, string? motherIts, string? spouseIts)

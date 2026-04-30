@@ -12,7 +12,7 @@ public sealed record MemberProfileDto(
     string? Title,
     string? FirstPrefix, int? PrefixYear, string? FirstName,
     string? FatherPrefix, string? FatherName, string? FatherSurname,
-    string? HusbandPrefix, string? HusbandName, string? Surname,
+    string? SpousePrefix, string? SpouseName, string? Surname,
     string? TanzeemFileNo,
     Guid? FamilyId, string? FamilyName, string? FamilyCode, FamilyRole? FamilyRole,
     string? FatherItsNumber, string? MotherItsNumber, string? SpouseItsNumber,
@@ -22,6 +22,8 @@ public sealed record MemberProfileDto(
     MisaqStatus MisaqStatus, DateOnly? MisaqDate,
     DateOnly? DateOfNikah, string? DateOfNikahHijri,
     string? Phone, string? WhatsAppNo, string? Email,
+    // Social profile URLs (v2)
+    string? LinkedInUrl, string? FacebookUrl, string? InstagramUrl, string? TwitterUrl, string? WebsiteUrl,
     string? AddressLine, string? Building, string? Street, string? Area,
     string? City, string? State, string? Pincode,
     HousingOwnership HousingOwnership, TypeOfHouse TypeOfHouse,
@@ -32,6 +34,8 @@ public sealed record MemberProfileDto(
     Qualification Qualification, string? LanguagesCsv, string? HunarsCsv,
     string? Occupation, string? SubOccupation, string? SubOccupation2,
     string? QuranSanad, bool QadambosiSharaf, bool RaudatTaheraZiyarat, bool KarbalaZiyarat, int AsharaMubarakaCount,
+    // Hajj + Umrah (v2)
+    HajjStatus HajjStatus, int? HajjYear, int UmrahCount,
     VerificationStatus DataVerificationStatus, DateOnly? DataVerifiedOn, string? DataVerifiedByUserName,
     VerificationStatus PhotoVerificationStatus, DateOnly? PhotoVerifiedOn, string? PhotoVerifiedByUserName,
     string? PhotoUrl,
@@ -43,7 +47,7 @@ public sealed record UpdateIdentityDto(
     string FullName, string? FullNameArabic, string? FullNameHindi, string? FullNameUrdu,
     string? Title, string? FirstPrefix, int? PrefixYear, string? FirstName,
     string? FatherPrefix, string? FatherName, string? FatherSurname,
-    string? HusbandPrefix, string? HusbandName, string? Surname,
+    string? SpousePrefix, string? SpouseName, string? Surname,
     string? TanzeemFileNo);
 
 public sealed record UpdatePersonalDto(
@@ -53,7 +57,11 @@ public sealed record UpdatePersonalDto(
     MisaqStatus MisaqStatus, DateOnly? MisaqDate,
     DateOnly? DateOfNikah, string? DateOfNikahHijri);
 
-public sealed record UpdateContactDto(string? Phone, string? WhatsAppNo, string? Email);
+public sealed record UpdateContactDto(
+    string? Phone, string? WhatsAppNo, string? Email,
+    // Social profile URLs - all optional, basic length validation only.
+    string? LinkedInUrl = null, string? FacebookUrl = null, string? InstagramUrl = null,
+    string? TwitterUrl = null, string? WebsiteUrl = null);
 
 public sealed record UpdateAddressDto(
     string? AddressLine, string? Building, string? Street, string? Area,
@@ -70,7 +78,11 @@ public sealed record UpdateEducationWorkDto(
 
 public sealed record UpdateReligiousCredentialsDto(
     string? QuranSanad, bool QadambosiSharaf, bool RaudatTaheraZiyarat,
-    bool KarbalaZiyarat, int AsharaMubarakaCount);
+    bool KarbalaZiyarat, int AsharaMubarakaCount,
+    // Hajj + Umrah (v2 additions). Year only meaningful when HajjStatus != NotPerformed.
+    HajjStatus HajjStatus = HajjStatus.NotPerformed,
+    int? HajjYear = null,
+    int UmrahCount = 0);
 
 public sealed record UpdateFamilyRefsDto(string? FatherItsNumber, string? MotherItsNumber, string? SpouseItsNumber);
 

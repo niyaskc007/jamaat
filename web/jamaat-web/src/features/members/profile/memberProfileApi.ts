@@ -41,6 +41,11 @@ export const VerificationStatusColor: Record<VerificationStatus, string> = {
   0: 'default', 1: 'gold', 2: 'green', 3: 'red',
 };
 
+export type HajjStatus = 0 | 1 | 2;
+export const HajjStatusLabel: Record<HajjStatus, string> = {
+  0: 'Not performed', 1: 'Performed', 2: 'Multiple times',
+};
+
 export type MemberProfile = {
   id: string;
   itsNumber: string;
@@ -48,7 +53,9 @@ export type MemberProfile = {
   title?: string | null;
   firstPrefix?: string | null; prefixYear?: number | null; firstName?: string | null;
   fatherPrefix?: string | null; fatherName?: string | null; fatherSurname?: string | null;
-  husbandPrefix?: string | null; husbandName?: string | null; surname?: string | null;
+  // Renamed from husbandPrefix/husbandName in v2 - column is gender-neutral now;
+  // UI surfaces "Husband" / "Wife" / "Spouse" depending on the member's gender.
+  spousePrefix?: string | null; spouseName?: string | null; surname?: string | null;
   tanzeemFileNo?: string | null;
   familyId?: string | null; familyName?: string | null; familyCode?: string | null; familyRole?: number | null;
   fatherItsNumber?: string | null; motherItsNumber?: string | null; spouseItsNumber?: string | null;
@@ -58,6 +65,9 @@ export type MemberProfile = {
   misaqStatus: MisaqStatus; misaqDate?: string | null;
   dateOfNikah?: string | null; dateOfNikahHijri?: string | null;
   phone?: string | null; whatsAppNo?: string | null; email?: string | null;
+  // Social profile URLs (v2)
+  linkedInUrl?: string | null; facebookUrl?: string | null; instagramUrl?: string | null;
+  twitterUrl?: string | null; websiteUrl?: string | null;
   addressLine?: string | null; building?: string | null; street?: string | null; area?: string | null;
   city?: string | null; state?: string | null; pincode?: string | null;
   housingOwnership: HousingOwnership; typeOfHouse: TypeOfHouse;
@@ -68,6 +78,8 @@ export type MemberProfile = {
   qualification: Qualification; languagesCsv?: string | null; hunarsCsv?: string | null;
   occupation?: string | null; subOccupation?: string | null; subOccupation2?: string | null;
   quranSanad?: string | null; qadambosiSharaf: boolean; raudatTaheraZiyarat: boolean; karbalaZiyarat: boolean; asharaMubarakaCount: number;
+  // Hajj + Umrah (v2)
+  hajjStatus: HajjStatus; hajjYear?: number | null; umrahCount: number;
   dataVerificationStatus: VerificationStatus; dataVerifiedOn?: string | null;
   photoVerificationStatus: VerificationStatus; photoVerifiedOn?: string | null;
   photoUrl?: string | null;
