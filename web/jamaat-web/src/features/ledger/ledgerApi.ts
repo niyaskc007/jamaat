@@ -164,7 +164,8 @@ export const dashboardApi = {
   receivablesAging: async () => (await api.get<ReceivablesAgingDto>('/api/v1/dashboard/receivables-aging')).data,
   memberEngagement: async (months = 12) =>
     (await api.get<MemberEngagementDto>('/api/v1/dashboard/member-engagement', { params: { months } })).data,
-  compliance: async () => (await api.get<ComplianceDashboardDto>('/api/v1/dashboard/compliance')).data,
+  compliance: async (days = 30) =>
+    (await api.get<ComplianceDashboardDto>('/api/v1/dashboard/compliance', { params: { days } })).data,
 };
 
 export type QhStatusBucket = { status: number; label: string; count: number; outstanding: number };
@@ -183,10 +184,16 @@ export type QhPortfolioDto = {
   repaymentTrend: QhMonthlyPoint[];
   topBorrowers: QhBorrowerRow[];
   upcomingInstallments: QhUpcomingInstallment[];
+  averageLoanSize: number; averageInstallments: number;
+  goldBackedTotal: number; goldBackedCount: number;
+  bySchemeMix: QhStatusBucket[];
+  overdueInstallmentsTotal: number; overduePrincipal: number;
 };
 
 export type AgingBucket = { label: string; count: number; amount: number };
 export type OldestObligationRow = { kind: string; reference: string; memberName: string; dueDate: string; daysOverdue: number; amount: number };
+export type ChequePipelinePoint = { status: number; statusLabel: string; count: number; amount: number };
+export type UpcomingMaturityRow = { receiptId: string; receiptNumber: string; memberName: string; maturityDate: string; outstanding: number };
 export type ReceivablesAgingDto = {
   currency: string;
   commitmentsOutstanding: number; commitmentsOverdueCount: number;
@@ -195,6 +202,9 @@ export type ReceivablesAgingDto = {
   commitmentBuckets: AgingBucket[];
   returnableBuckets: AgingBucket[];
   oldestObligations: OldestObligationRow[];
+  chequePipeline: ChequePipelinePoint[];
+  upcomingMaturities: UpcomingMaturityRow[];
+  commitmentsByFund: NamedCountPoint[];
 };
 
 export type MemberMonthlyPoint = { year: number; month: number; count: number };
@@ -203,12 +213,19 @@ export type MemberEngagementDto = {
   verifiedMembers: number; verificationPendingMembers: number; verificationNotStartedMembers: number; verificationRejectedMembers: number;
   newThisMonth: number; newThisYear: number;
   newMemberTrend: MemberMonthlyPoint[];
+  genderSplit: NamedCountPoint[];
+  maritalSplit: NamedCountPoint[];
+  ageBrackets: NamedCountPoint[];
+  hajjSplit: NamedCountPoint[];
+  misaqSplit: NamedCountPoint[];
+  sectorSplit: NamedCountPoint[];
+  familyRoleSplit: NamedCountPoint[];
 };
 
 export type DailyCountPoint = { date: string; count: number };
 export type NamedCountPoint = { label: string; count: number };
 export type ComplianceDashboardDto = {
-  auditEvents30d: number;
+  auditEventsTotal: number;
   openErrors: number;
   pendingChangeRequests: number;
   pendingVoucherApprovals: number;
@@ -216,7 +233,13 @@ export type ComplianceDashboardDto = {
   unverifiedMembers: number;
   hasOpenPeriod: boolean;
   openPeriodName: string | null;
-  auditTrend30d: DailyCountPoint[];
+  periodOpenDays: number | null;
+  auditTrend: DailyCountPoint[];
   errorsBySeverity: NamedCountPoint[];
   changeRequestsByStatus: NamedCountPoint[];
+  topUsersByAudit: NamedCountPoint[];
+  topEntitiesByAudit: NamedCountPoint[];
+  errorTrend: DailyCountPoint[];
+  errorsBySource: NamedCountPoint[];
+  windowDays: number;
 };

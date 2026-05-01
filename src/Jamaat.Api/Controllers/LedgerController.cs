@@ -477,8 +477,10 @@ public sealed class DashboardController(IDashboardService svc) : ControllerBase
     public async Task<IActionResult> MemberEngagement([FromQuery] int months = 12, CancellationToken ct = default)
         => Ok(await svc.MemberEngagementAsync(months, ct));
 
-    /// <summary>Compliance + audit dashboard - audit volume, error counts, queues.</summary>
+    /// <summary>Compliance + audit dashboard - audit volume, error counts, queues.
+    /// `days` controls the audit/error trend window (clamped 1..365, default 30).</summary>
     [HttpGet("compliance")]
     [Authorize(Policy = "admin.audit")]
-    public async Task<IActionResult> Compliance(CancellationToken ct) => Ok(await svc.ComplianceAsync(ct));
+    public async Task<IActionResult> Compliance([FromQuery] int days = 30, CancellationToken ct = default)
+        => Ok(await svc.ComplianceAsync(days, ct));
 }

@@ -78,8 +78,9 @@ public interface IDashboardService
     /// Backs the /dashboards/member-engagement page.</summary>
     Task<MemberEngagementDto> MemberEngagementAsync(int months, CancellationToken ct = default);
 
-    /// <summary>Audit volume + error counts + queues. Backs the /dashboards/compliance page.</summary>
-    Task<ComplianceDashboardDto> ComplianceAsync(CancellationToken ct = default);
+    /// <summary>Audit volume + error counts + queues. Backs the /dashboards/compliance page.
+    /// `days` controls the audit/error trend window.</summary>
+    Task<ComplianceDashboardDto> ComplianceAsync(int days = 30, CancellationToken ct = default);
 }
 
 public sealed record QhPortfolioDto(
@@ -90,7 +91,11 @@ public sealed record QhPortfolioDto(
     IReadOnlyList<QhStatusBucket> ByStatus,
     IReadOnlyList<QhMonthlyPoint> RepaymentTrend,
     IReadOnlyList<QhBorrowerRow> TopBorrowers,
-    IReadOnlyList<QhUpcomingInstallment> UpcomingInstallments);
+    IReadOnlyList<QhUpcomingInstallment> UpcomingInstallments,
+    decimal AverageLoanSize, int AverageInstallments,
+    decimal GoldBackedTotal, int GoldBackedCount,
+    IReadOnlyList<QhStatusBucket> BySchemeMix,
+    int OverdueInstallmentsTotal, decimal OverduePrincipal);
 
 public sealed record QhStatusBucket(int Status, string Label, int Count, decimal Outstanding);
 public sealed record QhMonthlyPoint(int Year, int Month, decimal Disbursed, decimal Repaid);
@@ -105,21 +110,32 @@ public sealed record ReceivablesAgingDto(
     decimal ChequesPledgedAmount, int ChequesPledgedCount,
     IReadOnlyList<AgingBucket> CommitmentBuckets,
     IReadOnlyList<AgingBucket> ReturnableBuckets,
-    IReadOnlyList<OldestObligationRow> OldestObligations);
+    IReadOnlyList<OldestObligationRow> OldestObligations,
+    IReadOnlyList<ChequePipelinePoint> ChequePipeline,
+    IReadOnlyList<UpcomingMaturityRow> UpcomingMaturities,
+    IReadOnlyList<NamedCountPoint> CommitmentsByFund);
 
 public sealed record AgingBucket(string Label, int Count, decimal Amount);
 public sealed record OldestObligationRow(string Kind, string Reference, string MemberName, DateOnly DueDate, int DaysOverdue, decimal Amount);
+public sealed record UpcomingMaturityRow(Guid ReceiptId, string ReceiptNumber, string MemberName, DateOnly MaturityDate, decimal Outstanding);
 
 public sealed record MemberEngagementDto(
     int TotalMembers, int ActiveMembers, int InactiveMembers, int DeceasedMembers, int SuspendedMembers,
     int VerifiedMembers, int VerificationPendingMembers, int VerificationNotStartedMembers, int VerificationRejectedMembers,
     int NewThisMonth, int NewThisYear,
-    IReadOnlyList<MemberMonthlyPoint> NewMemberTrend);
+    IReadOnlyList<MemberMonthlyPoint> NewMemberTrend,
+    IReadOnlyList<NamedCountPoint> GenderSplit,
+    IReadOnlyList<NamedCountPoint> MaritalSplit,
+    IReadOnlyList<NamedCountPoint> AgeBrackets,
+    IReadOnlyList<NamedCountPoint> HajjSplit,
+    IReadOnlyList<NamedCountPoint> MisaqSplit,
+    IReadOnlyList<NamedCountPoint> SectorSplit,
+    IReadOnlyList<NamedCountPoint> FamilyRoleSplit);
 
 public sealed record MemberMonthlyPoint(int Year, int Month, int Count);
 
 public sealed record ComplianceDashboardDto(
-    int AuditEvents30d,
+    int AuditEventsTotal,
     int OpenErrors,
     int PendingChangeRequests,
     int PendingVoucherApprovals,
@@ -127,9 +143,15 @@ public sealed record ComplianceDashboardDto(
     int UnverifiedMembers,
     bool HasOpenPeriod,
     string? OpenPeriodName,
-    IReadOnlyList<DailyCountPoint> AuditTrend30d,
+    int? PeriodOpenDays,
+    IReadOnlyList<DailyCountPoint> AuditTrend,
     IReadOnlyList<NamedCountPoint> ErrorsBySeverity,
-    IReadOnlyList<NamedCountPoint> ChangeRequestsByStatus);
+    IReadOnlyList<NamedCountPoint> ChangeRequestsByStatus,
+    IReadOnlyList<NamedCountPoint> TopUsersByAudit,
+    IReadOnlyList<NamedCountPoint> TopEntitiesByAudit,
+    IReadOnlyList<DailyCountPoint> ErrorTrend,
+    IReadOnlyList<NamedCountPoint> ErrorsBySource,
+    int WindowDays);
 
 public sealed record DailyCountPoint(DateOnly Date, int Count);
 public sealed record NamedCountPoint(string Label, int Count);

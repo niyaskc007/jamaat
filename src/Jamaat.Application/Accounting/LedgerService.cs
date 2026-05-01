@@ -839,10 +839,33 @@ public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domai
             .Take(20)
             .ToList();
 
+        var disbursedLoans = loans.Where(l => l.AmountDisbursed > 0).ToList();
+        var avgLoanSize = disbursedLoans.Count == 0 ? 0m : disbursedLoans.Average(l => l.AmountDisbursed);
+        var avgInstallments = disbursedLoans.Count == 0 ? 0
+            : (int)Math.Round(disbursedLoans.Average(l => l.Installments.Count == 0 ? l.InstalmentsApproved : l.Installments.Count));
+        var goldBacked = loans.Where(l => (l.GoldAmount ?? 0m) > 0m || (l.GoldWeightGrams ?? 0m) > 0m).ToList();
+        var goldBackedTotal = goldBacked.Sum(l => l.GoldAmount ?? 0m);
+        var goldBackedCount = goldBacked.Count;
+
+        var bySchemeMix = loans.GroupBy(l => l.Scheme)
+            .Select(g => new QhStatusBucket((int)g.Key, g.Key.ToString(), g.Count(), g.Sum(l => l.AmountOutstanding)))
+            .OrderBy(b => b.Status)
+            .ToList();
+
+        var overdueInstallmentsTotal = loans.SelectMany(l => l.Installments).Count(i =>
+            i.Status == QarzanHasanaInstallmentStatus.Overdue
+            || (i.Status == QarzanHasanaInstallmentStatus.Pending && i.DueDate < today));
+        var overduePrincipal = loans.SelectMany(l => l.Installments)
+            .Where(i => i.Status == QarzanHasanaInstallmentStatus.Overdue
+                || (i.Status == QarzanHasanaInstallmentStatus.Pending && i.DueDate < today))
+            .Sum(i => i.RemainingAmount);
+
         return new QhPortfolioDto(
             currency, loans.Count, activeCount, completedCount, defaultedCount, inApprovalCount,
             totalDisbursed, totalRepaid, totalOutstanding, defaultRate,
-            byStatus, repaymentTrend, topBorrowers, upcoming);
+            byStatus, repaymentTrend, topBorrowers, upcoming,
+            avgLoanSize, avgInstallments, goldBackedTotal, goldBackedCount, bySchemeMix,
+            overdueInstallmentsTotal, overduePrincipal);
     }
 
     public async Task<ReceivablesAgingDto> ReceivablesAgingAsync(CancellationToken ct = default)
@@ -943,12 +966,57 @@ public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domai
                 .GroupBy(r => r.Currency).OrderByDescending(g => g.Count())
                 .Select(g => g.Key).FirstOrDefaultAsync(ct) ?? "AED";
 
+        // Cheque pipeline by status. Mirrors what the operations dashboard already shows but
+        // contextualised here as part of the receivables picture - cheques are receivables in
+        // flight until cleared.
+        var pdcGroups = await db.PostDatedCheques.AsNoTracking()
+            .GroupBy(p => p.Status)
+            .Select(g => new { Status = (int)g.Key, Count = g.Count(), Amount = g.Sum(p => p.Amount) })
+            .ToListAsync(ct);
+        var pdcLabels = new Dictionary<int, string>
+        {
+            [1] = "Pledged", [2] = "Deposited", [3] = "Cleared", [4] = "Bounced", [5] = "Cancelled",
+        };
+        var chequePipeline = pdcGroups
+            .Select(p => new ChequePipelinePoint(p.Status, pdcLabels.TryGetValue(p.Status, out var l) ? l : $"#{p.Status}", p.Count, p.Amount))
+            .OrderBy(p => p.Status)
+            .ToList();
+
+        // Upcoming maturities - returnable receipts maturing in the next 30 days that still
+        // have outstanding balance. Counterpart to the overdue list - the "what's about to
+        // come due" pipeline.
+        var horizon = today.AddDays(30);
+        var upcomingMaturities = openReturnables
+            .Where(r => r.MaturityDate.HasValue && r.MaturityDate.Value > today && r.MaturityDate.Value <= horizon)
+            .Select(r => new UpcomingMaturityRow(
+                r.Id, r.ReceiptNumber ?? "-", r.MemberNameSnapshot,
+                r.MaturityDate!.Value, r.AmountTotal - r.AmountReturned))
+            .OrderBy(r => r.MaturityDate)
+            .Take(15)
+            .ToList();
+
+        // Commitments by fund. Helps spot which fund's recovery queue is heaviest.
+        var commitmentFundIds = openCommitments.Select(c => c.FundTypeId).Distinct().ToList();
+        var commitmentFunds = commitmentFundIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.Funds.AsNoTracking().Where(f => commitmentFundIds.Contains(f.Id))
+                .ToDictionaryAsync(f => f.Id, f => f.NameEnglish, ct);
+        var commitmentsByFund = openCommitments
+            .GroupBy(c => c.FundTypeId)
+            .Select(g => new NamedCountPoint(
+                commitmentFunds.TryGetValue(g.Key, out var n) ? n : g.First().FundNameSnapshot,
+                g.Count()))
+            .OrderByDescending(p => p.Count)
+            .Take(8)
+            .ToList();
+
         return new ReceivablesAgingDto(
             currency,
             commitmentsOutstanding, commitmentsOverdueCount,
             returnablesOutstanding, returnablesOverdueCount,
             chequesPledgedAmount, chequesPledgedCount,
-            commitmentBuckets, returnableBuckets, oldestTop);
+            commitmentBuckets, returnableBuckets, oldestTop,
+            chequePipeline, upcomingMaturities, commitmentsByFund);
     }
 
     private static IReadOnlyList<AgingBucket> BuildBuckets(IEnumerable<(int DaysOverdue, decimal Amount)> rows)
@@ -981,6 +1049,13 @@ public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domai
                 m.Status,
                 Verification = m.DataVerificationStatus,
                 Created = m.CreatedAtUtc,
+                m.Gender,
+                m.MaritalStatus,
+                m.HajjStatus,
+                m.MisaqStatus,
+                m.FamilyRole,
+                m.SectorId,
+                m.DateOfBirth,
             })
             .ToListAsync(ct);
 
@@ -1003,6 +1078,58 @@ public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domai
         var newThisMonth = snapshot.Count(x => x.Created >= monthStart.ToDateTime(TimeOnly.MinValue));
         var newThisYear = snapshot.Count(x => x.Created >= yearStart.ToDateTime(TimeOnly.MinValue));
 
+        var genderSplit = snapshot.GroupBy(x => x.Gender)
+            .Select(g => new NamedCountPoint(g.Key.ToString(), g.Count()))
+            .OrderByDescending(p => p.Count).ToList();
+        var maritalSplit = snapshot.GroupBy(x => x.MaritalStatus)
+            .Select(g => new NamedCountPoint(g.Key.ToString(), g.Count()))
+            .OrderByDescending(p => p.Count).ToList();
+        var hajjSplit = snapshot.GroupBy(x => x.HajjStatus)
+            .Select(g => new NamedCountPoint(g.Key.ToString(), g.Count()))
+            .OrderByDescending(p => p.Count).ToList();
+        var misaqSplit = snapshot.GroupBy(x => x.MisaqStatus)
+            .Select(g => new NamedCountPoint(g.Key.ToString(), g.Count()))
+            .OrderByDescending(p => p.Count).ToList();
+
+        // Family-role distribution. Use the FamilyRoleLabel domain helper... but the enum
+        // shape lives in the domain so we just use .ToString() here. Members with no role
+        // captured land in "Unspecified".
+        var familyRoleSplit = snapshot
+            .GroupBy(x => x.FamilyRole.HasValue ? x.FamilyRole.Value.ToString() : "Unspecified")
+            .Select(g => new NamedCountPoint(g.Key, g.Count()))
+            .OrderByDescending(p => p.Count)
+            .Take(10)
+            .ToList();
+
+        // Age brackets. DOB is optional; rows missing DOB go in "Unknown".
+        string ageBracket(DateOnly? dob)
+        {
+            if (!dob.HasValue) return "Unknown";
+            var age = today.Year - dob.Value.Year - (today < dob.Value.AddYears(today.Year - dob.Value.Year) ? 1 : 0);
+            if (age < 18) return "Under 18";
+            if (age < 30) return "18-29";
+            if (age < 45) return "30-44";
+            if (age < 60) return "45-59";
+            return "60+";
+        }
+        var ageOrder = new[] { "Under 18", "18-29", "30-44", "45-59", "60+", "Unknown" };
+        var ageBrackets = snapshot.GroupBy(x => ageBracket(x.DateOfBirth))
+            .Select(g => new NamedCountPoint(g.Key, g.Count()))
+            .OrderBy(p => Array.IndexOf(ageOrder, p.Label))
+            .ToList();
+
+        // Sector split - resolve names in one query rather than N+1.
+        var sectorIds = snapshot.Where(x => x.SectorId.HasValue).Select(x => x.SectorId!.Value).Distinct().ToList();
+        var sectorNames = sectorIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.Sectors.AsNoTracking().Where(s => sectorIds.Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id, s => s.Name, ct);
+        var sectorSplit = snapshot
+            .GroupBy(x => x.SectorId.HasValue && sectorNames.TryGetValue(x.SectorId.Value, out var n) ? n : "Unassigned")
+            .Select(g => new NamedCountPoint(g.Key, g.Count()))
+            .OrderByDescending(p => p.Count)
+            .ToList();
+
         return new MemberEngagementDto(
             snapshot.Count,
             countByStatus(MemberStatus.Active),
@@ -1014,17 +1141,20 @@ public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domai
             countByVerif(VerificationStatus.NotStarted),
             countByVerif(VerificationStatus.Rejected),
             newThisMonth, newThisYear,
-            trend);
+            trend,
+            genderSplit, maritalSplit, ageBrackets, hajjSplit, misaqSplit, sectorSplit, familyRoleSplit);
     }
 
-    public async Task<ComplianceDashboardDto> ComplianceAsync(CancellationToken ct = default)
+    public async Task<ComplianceDashboardDto> ComplianceAsync(int days = 30, CancellationToken ct = default)
     {
+        if (days <= 0) days = 30;
+        if (days > 365) days = 365;
         var today = clock.Today;
-        var since30 = today.AddDays(-29);
-        var since30Utc = since30.ToDateTime(TimeOnly.MinValue);
+        var since = today.AddDays(-(days - 1));
+        var sinceUtc = since.ToDateTime(TimeOnly.MinValue);
 
-        var auditCount30 = await db.AuditLogs.AsNoTracking()
-            .CountAsync(a => a.AtUtc >= since30Utc, ct);
+        var auditCount = await db.AuditLogs.AsNoTracking()
+            .CountAsync(a => a.AtUtc >= sinceUtc, ct);
         var openErrors = await db.ErrorLogs.AsNoTracking()
             .CountAsync(e => e.Status == ErrorStatus.Reported, ct);
         var pendingChangeRequests = await db.MemberChangeRequests.AsNoTracking()
@@ -1039,20 +1169,35 @@ public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domai
         var openPeriod = await db.Periods.AsNoTracking()
             .Where(p => p.Status == PeriodStatus.Open)
             .OrderByDescending(p => p.StartDate)
-            .Select(p => new { p.Name })
+            .Select(p => new { p.Name, p.StartDate })
             .FirstOrDefaultAsync(ct);
+        int? periodOpenDays = openPeriod is null ? null : Math.Max(0, today.DayNumber - openPeriod.StartDate.DayNumber);
 
-        // 30-day audit volume per day. Materialise narrow then group/fill in memory so the
-        // chart has a contiguous x-axis even on quiet days.
+        // Daily audit volume. Materialise narrow then group/fill in memory so the chart has
+        // a contiguous x-axis even on quiet days.
         var auditRaw = await db.AuditLogs.AsNoTracking()
-            .Where(a => a.AtUtc >= since30Utc)
-            .Select(a => a.AtUtc)
+            .Where(a => a.AtUtc >= sinceUtc)
+            .Select(a => new { a.AtUtc, a.UserName, a.EntityName })
             .ToListAsync(ct);
-        var byDate = auditRaw.GroupBy(d => DateOnly.FromDateTime(d.UtcDateTime))
+        var byDate = auditRaw.GroupBy(x => DateOnly.FromDateTime(x.AtUtc.UtcDateTime))
             .ToDictionary(g => g.Key, g => g.Count());
-        var auditTrend = new List<DailyCountPoint>(30);
-        for (var d = since30; d <= today; d = d.AddDays(1))
+        var auditTrend = new List<DailyCountPoint>(days);
+        for (var d = since; d <= today; d = d.AddDays(1))
             auditTrend.Add(new DailyCountPoint(d, byDate.TryGetValue(d, out var c) ? c : 0));
+
+        var topUsers = auditRaw
+            .Where(x => !string.IsNullOrWhiteSpace(x.UserName) && x.UserName != "system")
+            .GroupBy(x => x.UserName)
+            .Select(g => new NamedCountPoint(g.Key, g.Count()))
+            .OrderByDescending(p => p.Count)
+            .Take(8)
+            .ToList();
+        var topEntities = auditRaw
+            .GroupBy(x => x.EntityName)
+            .Select(g => new NamedCountPoint(g.Key, g.Count()))
+            .OrderByDescending(p => p.Count)
+            .Take(8)
+            .ToList();
 
         var errorBuckets = await db.ErrorLogs.AsNoTracking()
             .Where(e => e.Status == ErrorStatus.Reported)
@@ -1064,6 +1209,27 @@ public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domai
             .OrderByDescending(b => b.Count)
             .ToList();
 
+        var errorBySource = await db.ErrorLogs.AsNoTracking()
+            .Where(e => e.Status == ErrorStatus.Reported)
+            .GroupBy(e => e.Source)
+            .Select(g => new { Source = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        var errorsBySource = errorBySource
+            .Select(b => new NamedCountPoint(b.Source.ToString(), b.Count))
+            .OrderByDescending(b => b.Count)
+            .ToList();
+
+        // Error trend over the same window. Same materialise-then-fill pattern as audits.
+        var errorRaw = await db.ErrorLogs.AsNoTracking()
+            .Where(e => e.OccurredAtUtc >= sinceUtc)
+            .Select(e => e.OccurredAtUtc)
+            .ToListAsync(ct);
+        var errorByDate = errorRaw.GroupBy(d => DateOnly.FromDateTime(d.UtcDateTime))
+            .ToDictionary(g => g.Key, g => g.Count());
+        var errorTrend = new List<DailyCountPoint>(days);
+        for (var d = since; d <= today; d = d.AddDays(1))
+            errorTrend.Add(new DailyCountPoint(d, errorByDate.TryGetValue(d, out var c) ? c : 0));
+
         var changeReqBuckets = await db.MemberChangeRequests.AsNoTracking()
             .GroupBy(r => r.Status)
             .Select(g => new { Status = g.Key, Count = g.Count() })
@@ -1074,10 +1240,11 @@ public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domai
             .ToList();
 
         return new ComplianceDashboardDto(
-            auditCount30, openErrors, pendingChangeRequests, pendingVoucherApprovals,
+            auditCount, openErrors, pendingChangeRequests, pendingVoucherApprovals,
             draftReceipts, unverifiedMembers,
-            openPeriod is not null, openPeriod?.Name,
-            auditTrend, errorsBySeverity, changeRequestsByStatus);
+            openPeriod is not null, openPeriod?.Name, periodOpenDays,
+            auditTrend, errorsBySeverity, changeRequestsByStatus,
+            topUsers, topEntities, errorTrend, errorsBySource, days);
     }
 }
 
