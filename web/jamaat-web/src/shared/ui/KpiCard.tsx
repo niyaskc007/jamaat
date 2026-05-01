@@ -8,14 +8,23 @@ type Props = {
   label: string;
   value: number | null | undefined;
   format?: 'money' | 'number';
+  /// Currency for `format='money'`. Defaults to AED. Pass the per-tile value so multi-currency
+  /// dashboards (e.g. tenants with INR or KWD) render correctly without a hardcoded fallback.
+  currency?: string;
+  /// Inline suffix appended after the value (e.g. "%", "/100"). Rendered with the same large
+  /// numeric typography so it reads as part of the figure rather than a footer.
+  suffix?: ReactNode;
+  /// Single small line rendered below the value - typically the data row that the figure
+  /// summarises (e.g. the top performer's name, the source of an outlier).
+  caption?: ReactNode;
   deltaPercent?: number | null;
   sparkline?: number[];
   accent?: string; // hex for icon chip bg
 };
 
-export function KpiCard({ icon, label, value, format = 'money', deltaPercent, sparkline, accent = 'var(--jm-primary-500)' }: Props) {
+export function KpiCard({ icon, label, value, format = 'money', currency = 'AED', suffix, caption, deltaPercent, sparkline, accent = 'var(--jm-primary-500)' }: Props) {
   const hasData = value !== null && value !== undefined;
-  const formatted = !hasData ? '-' : format === 'money' ? compactMoney(value) : new Intl.NumberFormat('en-IN').format(value);
+  const formatted = !hasData ? '-' : format === 'money' ? compactMoney(value, currency) : new Intl.NumberFormat('en-IN').format(value);
 
   const deltaColor =
     deltaPercent === null || deltaPercent === undefined
@@ -66,7 +75,15 @@ export function KpiCard({ icon, label, value, format = 'money', deltaPercent, sp
             }}
           >
             {formatted}
+            {suffix !== undefined && hasData && (
+              <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--jm-gray-500)', marginInlineStart: 4 }}>
+                {suffix}
+              </span>
+            )}
           </div>
+          {caption !== undefined && (
+            <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockEnd: 4 }}>{caption}</div>
+          )}
           {deltaPercent !== undefined && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: deltaColor }}>
               {deltaPercent !== null && deltaPercent >= 0 && <ArrowUpOutlined style={{ fontSize: 10 }} />}

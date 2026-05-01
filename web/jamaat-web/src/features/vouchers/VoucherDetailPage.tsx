@@ -4,6 +4,7 @@ import { Card, Descriptions, Tag, Table, Button, Space, Spin, Alert, App as Antd
 import {
   PrinterOutlined, ArrowLeftOutlined, CheckCircleFilled, StopOutlined, RollbackOutlined,
   WalletOutlined, BankOutlined, FileDoneOutlined, CalendarOutlined, BookOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -58,6 +59,9 @@ export function VoucherDetailPage() {
     1: { bg: '#FEF3C7', color: '#92400E' }, 2: { bg: '#FEF3C7', color: '#D97706' },
     3: { bg: '#DBEAFE', color: '#1E40AF' }, 4: { bg: '#D1FAE5', color: '#065F46' },
     5: { bg: '#E5E9EF', color: '#475569' }, 6: { bg: '#FEE2E2', color: '#991B1B' },
+    // PendingClearance shares the amber palette with Draft - paused awaiting an external event,
+    // not a final state.
+    7: { bg: '#FEF3C7', color: '#92400E' },
   };
 
   const isPaid = data.status === 4;
@@ -87,6 +91,31 @@ export function VoucherDetailPage() {
           </Space>
         }
       />
+
+      {/* PendingClearance banner: a future-dated cheque is in flight. The voucher has full
+          line + payment data captured but no number, no GL post - the linked PostDatedCheque
+          drives the eventual MarkPaid (clear) or Cancel (bounce) transition. */}
+      {data.status === 7 && (
+        <Card size="small" style={{ borderColor: '#FCD34D', background: '#FFFBEB' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <ClockCircleOutlined style={{ color: '#B45309', fontSize: 18 }} />
+            <div style={{ flex: 1, minInlineSize: 280 }}>
+              <strong style={{ color: '#92400E' }}>Awaiting cheque clearance</strong>
+              <div style={{ color: '#92400E', fontSize: 12, marginBlockStart: 2 }}>
+                Cheque {data.chequeNumber ? <strong>{data.chequeNumber}</strong> : null}
+                {data.drawnOnBank ? <> drawn on <strong>{data.drawnOnBank}</strong></> : null}
+                {data.chequeDate ? <>, dated {dayjs(data.chequeDate).format('DD MMM YYYY')}</> : null}.
+                The voucher is held in 'Pending clearance' - no number and no GL post until the cheque
+                is marked Cleared from the Cheques workbench. If it bounces, the voucher is cancelled
+                with no GL impact.
+              </div>
+            </div>
+            <Button icon={<ClockCircleOutlined />} onClick={() => navigate('/cheques')}>
+              Open Cheques workbench
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* KPI strip - 4 tiles. Surfaces voucher#, amount, status, paid-on at a glance so the
           approver/auditor doesn't have to scan the descriptions card to find the basics. */}

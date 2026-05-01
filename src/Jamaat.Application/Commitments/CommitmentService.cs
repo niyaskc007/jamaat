@@ -75,10 +75,34 @@ public sealed class CommitmentService(
             .Select(f => new { f.Code, f.NameEnglish }).FirstOrDefaultAsync(ct);
 
         var dto = MapRow(c, memberIts, familyCode, fund?.Code ?? c.FundNameSnapshot, fund?.NameEnglish ?? c.FundNameSnapshot);
+
+        // Look up the most-recent confirmed receipt that contributed a payment to each
+        // installment, so the UI can render "Last payment" as a clickable link to that receipt.
+        // One DB roundtrip rather than N: GroupBy + Max(receiptDate) per installment id, then
+        // join back to the receipt to get the number. Skip cancelled/reversed receipts because
+        // their allocations have been rolled back - showing them would be misleading.
+        var instIds = c.Installments.Select(i => i.Id).ToList();
+        var lastReceiptPerInst = instIds.Count == 0
+            ? new Dictionary<Guid, (Guid Id, string Number)>()
+            : (await db.Receipts.AsNoTracking()
+                .Where(r => r.Status == Domain.Enums.ReceiptStatus.Confirmed)
+                .SelectMany(r => r.Lines, (r, l) => new { r.Id, r.ReceiptNumber, r.ReceiptDate, l.CommitmentInstallmentId })
+                .Where(x => x.CommitmentInstallmentId.HasValue && instIds.Contains(x.CommitmentInstallmentId.Value))
+                .ToListAsync(ct))
+              .GroupBy(x => x.CommitmentInstallmentId!.Value)
+              .ToDictionary(
+                  g => g.Key,
+                  g => g.OrderByDescending(x => x.ReceiptDate).Select(x => (Id: x.Id, Number: x.ReceiptNumber ?? "-")).First());
+
         var installments = c.Installments.OrderBy(i => i.InstallmentNo)
-            .Select(i => new CommitmentInstallmentDto(
-                i.Id, i.InstallmentNo, i.DueDate, i.ScheduledAmount, i.PaidAmount, i.RemainingAmount,
-                i.LastPaymentDate, i.Status, i.WaiverReason, i.WaivedAtUtc, i.WaivedByUserName))
+            .Select(i =>
+            {
+                var lastReceipt = lastReceiptPerInst.TryGetValue(i.Id, out var rec) ? ((Guid?)rec.Id, (string?)rec.Number) : (null, null);
+                return new CommitmentInstallmentDto(
+                    i.Id, i.InstallmentNo, i.DueDate, i.ScheduledAmount, i.PaidAmount, i.RemainingAmount,
+                    i.LastPaymentDate, i.Status, i.WaiverReason, i.WaivedAtUtc, i.WaivedByUserName,
+                    lastReceipt.Item1, lastReceipt.Item2);
+            })
             .ToList();
 
         var proof = c.AgreementAcceptedAtUtc is null ? null

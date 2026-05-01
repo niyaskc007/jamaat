@@ -31,6 +31,7 @@ public sealed class JamaatDbContextFacadeImpl(JamaatDbContext db) : JamaatDbCont
     public override DbSet<Commitment> Commitments => db.Commitments;
     public override DbSet<CommitmentAgreementTemplate> CommitmentAgreementTemplates => db.CommitmentAgreementTemplates;
     public override DbSet<Family> Families => db.Families;
+    public override DbSet<FamilyMemberLink> FamilyMemberLinks => db.FamilyMemberLinks;
     public override DbSet<Tenant> Tenants => db.Tenants;
     public override DbSet<Sector> Sectors => db.Sectors;
     public override DbSet<SubSector> SubSectors => db.SubSectors;

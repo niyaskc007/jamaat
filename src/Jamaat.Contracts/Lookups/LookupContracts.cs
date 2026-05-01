@@ -25,4 +25,7 @@ public static class LookupCategories
     public const string Language = "Language";
     public const string Idara = "Idara";
     public const string QuranSanad = "QuranSanad";
+    /// Event category lookup. Seeded with codes "0".."7" matching the historical EventCategory enum;
+    /// admins can add more on the Lookups master-data tab using the next available numeric code.
+    public const string EventCategory = "EventCategory";
 }

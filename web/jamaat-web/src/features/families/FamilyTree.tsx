@@ -1,223 +1,419 @@
-import { Card, Empty, Tag, Space, Typography, Spin } from 'antd';
-import { UserOutlined, HeartOutlined, ApartmentOutlined } from '@ant-design/icons';
+import { useState } from 'react';
+import { Card, Empty, Tag, Space, Spin, Button } from 'antd';
+import {
+  UserOutlined, HeartOutlined, ApartmentOutlined, BranchesOutlined,
+  DownOutlined, UpOutlined,
+} from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { membersApi } from '../members/membersApi';
-import { memberProfileApi, type MemberProfile } from '../members/profile/memberProfileApi';
-import type { FamilyMember } from './familiesApi';
+import { familiesApi, type FamilyTreePerson } from './familiesApi';
 
-/// Auto-derived relationship tree for a family. The model already captures Father/Mother/Spouse
-/// ITS numbers on every member profile, so we walk the head's profile + each family member's
-/// ITS refs to draw a 3-row layout: parents → head + spouse → children.
+/// Extended family tree for a household. Walks parents up via the head's ITS pointers and
+/// descendants down via reverse-ITS lookup + household-roster fallback, crossing household
+/// boundaries: a son who has spun off into his own family still appears under his father's
+/// tree, with a "lives in F-002" tag linking to the new household.
 ///
-/// Anyone listed by ITS but not part of *this* family (e.g. an in-law) is shown with a
-/// muted tag - we resolve their name via the global members lookup so the tree still reads
-/// well even when relatives sit in other families.
-export function FamilyTree({ familyId, headMemberId, members }: {
-  familyId: string;
-  headMemberId?: string | null;
-  members: FamilyMember[];
-}) {
+/// When a descendant has spun off into their own family, a "View family" button on their
+/// card lets the user expand the linked family inline. The expand model is **mutually
+/// exclusive with the outer-tree descendants of that branch** — when Idris's family is open,
+/// his children move INTO the F-00010 box and disappear from the outer tree's "Grandchild"
+/// row. When closed, the grandchildren are back in the outer tree. So Test Child1 only ever
+/// shows up in one place at a time, depending on whether his father's family is expanded.
+export function FamilyTree({ familyId }: { familyId: string }) {
   const navigate = useNavigate();
-  // The head's *full* profile carries the ITS refs (Father/Mother/Spouse). Family list rows
-  // only have the basic family-tab columns, so we fetch the head profile separately.
-  const headQ = useQuery({
-    queryKey: ['member-profile-for-tree', headMemberId],
-    queryFn: () => headMemberId ? memberProfileApi.get(headMemberId) : Promise.resolve(null),
-    enabled: !!headMemberId,
+  const treeQ = useQuery({
+    queryKey: ['family-extended-tree', familyId],
+    queryFn: () => familiesApi.extendedTree(familyId),
+    enabled: !!familyId,
   });
 
-  if (!headMemberId) {
+  const cardHeader = (
+    <Space><ApartmentOutlined /> Family tree</Space>
+  );
+
+  if (treeQ.isLoading || !treeQ.data) {
     return (
-      <Card title={<Space><ApartmentOutlined /> Family tree</Space>} size="small" style={{ border: '1px solid var(--jm-border)' }}>
-        <Empty description="No head set on this family - assign a head to render the tree." />
-      </Card>
-    );
-  }
-  if (headQ.isLoading || !headQ.data) {
-    return (
-      <Card title={<Space><ApartmentOutlined /> Family tree</Space>} size="small" style={{ border: '1px solid var(--jm-border)' }}>
+      <Card title={cardHeader} size="small" style={{ border: '1px solid var(--jm-border)' }}>
         <div style={{ paddingBlock: 24, textAlign: 'center' }}><Spin /></div>
       </Card>
     );
   }
 
-  const head = headQ.data;
+  const tree = treeQ.data;
+  if (!tree.head) {
+    return (
+      <Card title={cardHeader} size="small" style={{ border: '1px solid var(--jm-border)' }}>
+        <Empty description="No head set on this family - assign a head to render the tree." />
+      </Card>
+    );
+  }
+
+  const hasAnyDescendant = tree.head.descendants.length > 0;
+  const hasAncestor = !!(tree.father || tree.mother);
+  const onOpenMember = (id: string) => navigate(`/members/${id}`);
+
   return (
-    <Card title={<Space><ApartmentOutlined /> Family tree</Space>} size="small" style={{ border: '1px solid var(--jm-border)' }}>
-      <FamilyTreeBody head={head} familyMembers={members} familyId={familyId} onOpenMember={(id) => navigate(`/members/${id}`)} />
+    <Card
+      title={cardHeader}
+      size="small"
+      style={{ border: '1px solid var(--jm-border)' }}
+      extra={hasAnyDescendant ? (
+        <Tag color="default" style={{ margin: 0 }}>
+          <BranchesOutlined style={{ marginInlineEnd: 4 }} />
+          Lineage spans households
+        </Tag>
+      ) : undefined}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, paddingBlock: 8 }}>
+        {/* Parents (head's father + mother). Resolved via head's Father/Mother ITS, may live
+            in any family. Drawn as a couple bracket bar that drops down to the head row. */}
+        {hasAncestor && (
+          <>
+            <CoupleRow
+              left={tree.father ?? null}
+              right={tree.mother ?? null}
+              familyId={familyId}
+              onOpenMember={onOpenMember}
+            />
+            <DropConnector />
+          </>
+        )}
+
+        {/* Head + spouse pair. Highlighted - this is the focus of the family. */}
+        <CoupleRow
+          left={tree.head}
+          right={tree.spouse ?? null}
+          familyId={familyId}
+          highlightLeft
+          onOpenMember={onOpenMember}
+        />
+
+        {/* Descendants under the head couple. Each child's card has a tail connecting up to a
+            shared sibling bar, which itself has a tail up to the head/spouse pair. */}
+        {hasAnyDescendant && (
+          <>
+            <DropConnector />
+            <SiblingRow>
+              {tree.head.descendants.map((d) => (
+                <DescendantBranch key={d.memberId} person={d} familyId={familyId} onOpenMember={onOpenMember} />
+              ))}
+            </SiblingRow>
+          </>
+        )}
+
+        {!hasAncestor && !hasAnyDescendant && !tree.spouse && (
+          <Empty
+            description={
+              <div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
+                <div>The tree is empty for this family.</div>
+                <div style={{ marginBlockStart: 6 }}>
+                  Add a Son / Daughter / Father / Mother via <strong>Add member</strong>, or set Father / Mother / Spouse ITS
+                  on the head's profile - the tree builds itself from those relationships.
+                </div>
+              </div>
+            }
+          />
+        )}
+      </div>
     </Card>
   );
 }
 
-function FamilyTreeBody({ head, familyMembers, familyId, onOpenMember }: {
-  head: MemberProfile;
-  familyMembers: FamilyMember[];
+/// A row showing a married couple - or a single person when one half is missing. Used for
+/// parents (top), the head + spouse (middle), and any couple in a recursive sub-tree.
+function CoupleRow({ left, right, familyId, highlightLeft, onOpenMember }: {
+  left: FamilyTreePerson | null;
+  right: FamilyTreePerson | null;
+  familyId: string;
+  /// When true, the left card gets the green "current focus" highlight - used for the head.
+  highlightLeft?: boolean;
+  onOpenMember: (id: string) => void;
+}) {
+  if (!left && !right) return null;
+  return (
+    <div style={{ display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'center' }}>
+      {left && <PersonCard person={left} familyId={familyId} highlight={!!highlightLeft} onOpenMember={onOpenMember} />}
+      {left && right && (
+        <span style={{ color: 'var(--jm-gray-400)', fontSize: 16 }}><HeartOutlined /></span>
+      )}
+      {right && <PersonCard person={right} familyId={familyId} onOpenMember={onOpenMember} />}
+    </div>
+  );
+}
+
+/// Wrapper that turns its children (descendant branches) into a siblings row joined by a
+/// horizontal bar. The bar is a CSS pseudo-element drawn through the row at vertical center;
+/// each child card renders its own short stub up to that bar via DescendantBranch's top stub.
+/// Falls back to a simple flex row when there's only one child (no bar needed).
+function SiblingRow({ children }: { children: React.ReactNode }) {
+  const items = Array.isArray(children) ? children.filter(Boolean) : [children];
+  const isMultiple = items.length > 1;
+
+  return (
+    <div style={{
+      position: 'relative',
+      display: 'flex',
+      gap: 24,
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      paddingBlockStart: 16,
+      maxInlineSize: 1100,
+    }}>
+      {/* Horizontal sibling bar. Only drawn when there are 2+ siblings - a single child sits
+          directly under the parents and doesn't need the spreader. */}
+      {isMultiple && (
+        <div style={{
+          position: 'absolute',
+          insetBlockStart: 0,
+          insetInlineStart: '50%',
+          transform: 'translateX(-50%)',
+          inlineSize: 'calc(100% - 96px)',
+          blockSize: 2,
+          background: 'var(--jm-border-strong, #CBD5E1)',
+        }} />
+      )}
+      {children}
+    </div>
+  );
+}
+
+/// One descendant subtree: the person's card on top with a stub up to the sibling bar, then
+/// either:
+///   - their own children inline (when the linked-family expansion is collapsed), or
+///   - the linked-family expansion box (when expanded) — which itself contains the same
+///     descendants AND the linked family's spouse + sibling-of-the-couple etc.
+/// The two are mutually exclusive: a member is shown in one or the other, never both, so
+/// Test Child1 doesn't appear twice on screen.
+function DescendantBranch({ person, familyId, onOpenMember }: {
+  person: FamilyTreePerson;
   familyId: string;
   onOpenMember: (id: string) => void;
 }) {
-  // Resolve the parents + spouse by ITS number. They may or may not be in *this* family -
-  // a married woman's father will typically be in her parents' family. We fetch up to ~500
-  // members and resolve in-memory so we don't fan out N round-trips for large families.
-  const refsItsList = [head.fatherItsNumber, head.motherItsNumber, head.spouseItsNumber]
-    .filter((s): s is string => !!s);
-
-  const memberLookupQ = useQuery({
-    queryKey: ['members-tree-lookup'],
-    queryFn: () => membersApi.list({ pageSize: 500 }),
-  });
-
-  const findByIts = (its: string) =>
-    memberLookupQ.data?.items.find((m) => m.itsNumber === its);
-
-  const father = head.fatherItsNumber ? findByIts(head.fatherItsNumber) : undefined;
-  const mother = head.motherItsNumber ? findByIts(head.motherItsNumber) : undefined;
-  const spouse = head.spouseItsNumber ? findByIts(head.spouseItsNumber) : undefined;
-
-  // Use the FamilyRole on each family-member row to slot people into the right tree level.
-  // The role is a labelling field set when the member was added; we group by it so siblings
-  // don't end up labelled as "Child" and grand-relatives are surfaced in their own row.
-  // Roles ref: 1=Head, 2=Spouse, 3=Father, 4=Mother, 5=Son, 6=Daughter, 7=Brother, 8=Sister,
-  //  9=GrandFather, 10=GrandMother, 11=GrandSon, 12=GrandDaughter, 13=SonInLaw,
-  //  14=DaughterInLaw, 15=Uncle, 16=Aunt, 17=Nephew, 18=Niece, 99=Other.
-  const exclude = new Set([head.id, spouse?.id].filter(Boolean) as string[]);
-  const inFamily = familyMembers.filter((m) => !exclude.has(m.id));
-
-  const childRoles = new Set<number>([5, 6, 13, 14]);          // Son / Daughter / SonInLaw / DaughterInLaw
-  const siblingRoles = new Set<number>([7, 8]);                 // Brother / Sister
-  const grandchildRoles = new Set<number>([11, 12]);            // GrandSon / GrandDaughter
-  const olderRoles = new Set<number>([3, 4, 9, 10]);            // Father / Mother / Grandparents - handled via ITS above
-  const otherRoles = new Set<number>([15, 16, 17, 18, 99]);     // Uncle / Aunt / Nephew / Niece / Other
-
-  const children = inFamily.filter((m) => childRoles.has(m.familyRole ?? 99));
-  const siblings = inFamily.filter((m) => siblingRoles.has(m.familyRole ?? 99));
-  const grandchildren = inFamily.filter((m) => grandchildRoles.has(m.familyRole ?? 99));
-  const others = inFamily.filter((m) => otherRoles.has(m.familyRole ?? 99) && !olderRoles.has(m.familyRole ?? 99));
-
-  // Empty state: nothing to draw beyond the head itself.
-  const hasAny = father || mother || spouse || children.length > 0
-    || siblings.length > 0 || grandchildren.length > 0 || others.length > 0;
-  if (!hasAny) {
-    return (
-      <Empty description="No related members captured yet. Set Father / Mother / Spouse ITS on the member's profile to build the tree." />
-    );
-  }
+  const hasKids = person.descendants.length > 0;
+  const livesElsewhere = !person.isInThisFamily && !!person.currentFamilyId && person.currentFamilyId !== familyId;
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, paddingBlock: 8 }}>
-      {/* Parents row (resolved via head's ITS refs) */}
-      {(father || mother) && (
-        <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-          {father ? <PersonCard label="Father" name={father.fullName} its={father.itsNumber} onClick={() => onOpenMember(father.id)} /> : <PersonCardPlaceholder label="Father" its={head.fatherItsNumber ?? null} />}
-          {mother ? <PersonCard label="Mother" name={mother.fullName} its={mother.itsNumber} onClick={() => onOpenMember(mother.id)} /> : head.motherItsNumber ? <PersonCardPlaceholder label="Mother" its={head.motherItsNumber} /> : null}
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, paddingInline: 4, position: 'relative' }}>
+      {/* Stub from card top up to the sibling bar (when this branch sits in a SiblingRow with
+          multiple siblings). When alone or top-level, the stub still draws but harmless. */}
+      <div style={{
+        inlineSize: 2,
+        blockSize: 16,
+        background: 'var(--jm-border-strong, #CBD5E1)',
+      }} />
+
+      <PersonCard
+        person={person}
+        familyId={familyId}
+        onOpenMember={onOpenMember}
+        canExpandFamily={livesElsewhere}
+        isExpanded={expanded}
+        onToggleExpand={() => setExpanded((v) => !v)}
+      />
+
+      {/* When expanded: pull this person's descendants INTO the expansion. Outer tree drops
+          the inline grandchild row below to avoid showing the same people in two places. */}
+      {expanded && person.currentFamilyId && (
+        <ExpandedFamilyView
+          linkedFamilyId={person.currentFamilyId}
+          familyCode={person.currentFamilyCode ?? ''}
+          familyName={person.currentFamilyName ?? ''}
+          onOpenMember={onOpenMember}
+        />
       )}
-      {(father || mother) && <Connector />}
 
-      {/* Self + spouse row */}
-      <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-        <PersonCard label="Head" name={head.fullName} its={head.itsNumber} highlight onClick={() => onOpenMember(head.id)} />
-        {spouse && (
-          <>
-            <span style={{ color: 'var(--jm-gray-400)', fontSize: 18 }}><HeartOutlined /></span>
-            <PersonCard label="Spouse" name={spouse.fullName} its={spouse.itsNumber} onClick={() => onOpenMember(spouse.id)} />
-          </>
-        )}
-      </div>
-
-      {/* Siblings row - same generation as the head */}
-      {siblings.length > 0 && (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', maxInlineSize: 720, marginBlockStart: 4 }}>
-          {siblings.map((s) => (
-            <PersonCard key={s.id} label={s.familyRole === 7 ? 'Brother' : 'Sister'} name={s.fullName} its={s.itsNumber} onClick={() => onOpenMember(s.id)} />
-          ))}
-        </div>
-      )}
-
-      {/* Children row */}
-      {children.length > 0 && (
+      {/* When collapsed: descendants show inline as siblings of one another beneath this card.
+          Standard genealogy-tree layout. */}
+      {!expanded && hasKids && (
         <>
-          <Connector />
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', maxInlineSize: 720 }}>
-            {children.map((c) => (
-              <PersonCard key={c.id}
-                label={c.familyRole === 5 ? 'Son' : c.familyRole === 6 ? 'Daughter' : c.familyRole === 13 ? 'Son-in-Law' : 'Daughter-in-Law'}
-                name={c.fullName} its={c.itsNumber} onClick={() => onOpenMember(c.id)} />
+          <DropConnector />
+          <SiblingRow>
+            {person.descendants.map((d) => (
+              <DescendantBranch key={d.memberId} person={d} familyId={familyId} onOpenMember={onOpenMember} />
             ))}
-          </div>
+          </SiblingRow>
         </>
-      )}
-
-      {/* Grandchildren row */}
-      {grandchildren.length > 0 && (
-        <>
-          <Connector />
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', maxInlineSize: 720 }}>
-            {grandchildren.map((g) => (
-              <PersonCard key={g.id} label={g.familyRole === 11 ? 'Grandson' : 'Granddaughter'}
-                name={g.fullName} its={g.itsNumber} onClick={() => onOpenMember(g.id)} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* Other / extended-family row - kept separate so the main tree stays clean */}
-      {others.length > 0 && (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', maxInlineSize: 720, marginBlockStart: 8, paddingBlockStart: 12, borderBlockStart: '1px dashed var(--jm-border)' }}>
-          {others.map((o) => (
-            <PersonCard key={o.id}
-              label={o.familyRole === 15 ? 'Uncle' : o.familyRole === 16 ? 'Aunt' : o.familyRole === 17 ? 'Nephew' : o.familyRole === 18 ? 'Niece' : 'Other'}
-              name={o.fullName} its={o.itsNumber} onClick={() => onOpenMember(o.id)} />
-          ))}
-        </div>
       )}
     </div>
   );
 }
 
-function PersonCard({ label, name, its, highlight, onClick }: { label: string; name: string; its: string; highlight?: boolean; onClick?: () => void }) {
+/// Lazy-loaded inline view of a linked family's full tree. Renders the linked household
+/// exactly the way <FamilyTree> would render it as a top-level page, just inside a tinted
+/// Card to make the recursion boundary obvious. Includes the head, spouse, and every
+/// descendant generation in the linked family - the user explicitly wants these grouped
+/// together when they click "View family" on the parent card.
+function ExpandedFamilyView({ linkedFamilyId, familyCode, familyName, onOpenMember }: {
+  linkedFamilyId: string;
+  familyCode: string;
+  familyName: string;
+  onOpenMember: (id: string) => void;
+}) {
+  const treeQ = useQuery({
+    queryKey: ['family-extended-tree', linkedFamilyId],
+    queryFn: () => familiesApi.extendedTree(linkedFamilyId),
+  });
+
+  const cardStyle = {
+    marginBlockStart: 8,
+    inlineSize: '100%',
+    minInlineSize: 280,
+    borderColor: 'var(--jm-primary-500)',
+    borderInlineStartWidth: 3,
+    background: 'var(--jm-surface-muted, #F8FAFC)',
+  } as const;
+
+  if (treeQ.isLoading) {
+    return (
+      <Card size="small" style={cardStyle} styles={{ body: { padding: 12, textAlign: 'center' } }}>
+        <Spin size="small" />
+      </Card>
+    );
+  }
+  if (!treeQ.data) return null;
+
+  const tree = treeQ.data;
+  const hasContent = !!(tree.head || tree.spouse);
+
+  return (
+    <Card size="small" style={cardStyle} styles={{ body: { padding: 12 } }}>
+      <div style={{
+        fontSize: 10, color: 'var(--jm-primary-600, #0B6E63)',
+        textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700,
+        marginBlockEnd: 8, textAlign: 'center',
+      }}>
+        <BranchesOutlined style={{ marginInlineEnd: 4 }} />
+        {familyCode}{familyName ? ` · ${familyName}` : ''}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+        {/* Linked family's couple - head + spouse. Head is highlighted because they're the
+            focus of this sub-tree. */}
+        {(tree.head || tree.spouse) && (
+          <CoupleRow
+            left={tree.head ?? null}
+            right={tree.spouse ?? null}
+            familyId={linkedFamilyId}
+            highlightLeft
+            onOpenMember={onOpenMember}
+          />
+        )}
+
+        {/* Linked family's children - rendered in the linked family's context (familyId =
+            linkedFamilyId) so each child's `livesElsewhere` check uses the linked family as
+            the baseline. Children whose currentFamilyId === linkedFamilyId don't get a
+            recursive "View family" button, avoiding same-family loops. */}
+        {tree.head && tree.head.descendants.length > 0 && (
+          <>
+            <DropConnector />
+            <SiblingRow>
+              {tree.head.descendants.map((d) => (
+                <DescendantBranch key={d.memberId} person={d} familyId={linkedFamilyId} onOpenMember={onOpenMember} />
+              ))}
+            </SiblingRow>
+          </>
+        )}
+
+        {!hasContent && (
+          <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', paddingBlock: 8, textAlign: 'center' }}>
+            No head set on <strong>{familyCode}</strong> yet.
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function PersonCard({ person, familyId, highlight, onOpenMember, canExpandFamily, isExpanded, onToggleExpand }: {
+  person: FamilyTreePerson;
+  familyId: string;
+  highlight?: boolean;
+  onOpenMember: (id: string) => void;
+  /// True for descendants who've spun off into their own family - shows the inline-expand toggle.
+  canExpandFamily?: boolean;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
+}) {
+  /// A descendant who's spun off into their own family carries a "→ F-002" tag so the user
+  /// understands the lineage edge crosses households. Clicking the tag NAVIGATES to that
+  /// family's full page; clicking the inline-expand button keeps them on this page.
+  const livesElsewhere = !person.isInThisFamily && person.currentFamilyId && person.currentFamilyId !== familyId;
+  const navigate = useNavigate();
+
+  // Inline spouse badge - useful when the spouse isn't being shown alongside the card already.
+  const showSpouseBadge = !!person.spouseName;
+
   return (
     <button
-      onClick={onClick}
+      type="button"
+      onClick={() => onOpenMember(person.memberId)}
       style={{
         background: highlight ? 'rgba(11,110,99,0.08)' : '#FFFFFF',
         border: highlight ? '1px solid var(--jm-primary-500)' : '1px solid var(--jm-border)',
         borderRadius: 8,
         padding: '8px 12px',
-        minInlineSize: 160,
+        minInlineSize: 180,
         textAlign: 'center',
         cursor: 'pointer',
         boxShadow: 'var(--jm-shadow-1)',
       }}
     >
-      <Tag color={highlight ? 'green' : 'default'} style={{ marginBlockEnd: 6 }}>{label}</Tag>
+      <Tag color={highlight ? 'green' : 'default'} style={{ marginBlockEnd: 6 }}>{person.relation}</Tag>
       <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--jm-gray-900)' }}>
         <UserOutlined style={{ marginInlineEnd: 4, color: 'var(--jm-gray-500)' }} />
-        {name}
+        {person.fullName}
       </div>
-      <div className="jm-tnum" style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>ITS {its}</div>
+      <div className="jm-tnum" style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>ITS {person.itsNumber}</div>
+
+      {showSpouseBadge && (
+        <div style={{
+          fontSize: 11, color: 'var(--jm-gray-600)',
+          marginBlockStart: 6, paddingBlockStart: 4,
+          borderBlockStart: '1px dashed var(--jm-border)',
+        }}>
+          <HeartOutlined style={{ fontSize: 10, color: '#E11D48', marginInlineEnd: 4 }} />
+          {person.spouseName}
+        </div>
+      )}
+
+      {livesElsewhere && person.currentFamilyCode && (
+        <div style={{ display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center', marginBlockStart: 6, flexWrap: 'wrap' }}>
+          {/* Existing navigation tag - opens the linked family in its own page. */}
+          <Tag
+            color="purple"
+            style={{ margin: 0, fontSize: 10, cursor: 'pointer' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/families?focus=${person.currentFamilyId}`);
+            }}
+          >
+            → {person.currentFamilyCode}
+          </Tag>
+          {/* Inline-expand toggle. Lazy-loads the linked family's tree below this card without
+              navigating away. */}
+          {canExpandFamily && onToggleExpand && (
+            <Button
+              type="text"
+              size="small"
+              style={{ fontSize: 10, padding: '0 4px', height: 18, color: 'var(--jm-gray-600)' }}
+              icon={isExpanded ? <UpOutlined style={{ fontSize: 9 }} /> : <DownOutlined style={{ fontSize: 9 }} />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpand();
+              }}
+            >
+              {isExpanded ? 'Hide family' : 'View family'}
+            </Button>
+          )}
+        </div>
+      )}
     </button>
   );
 }
 
-function PersonCardPlaceholder({ label, its }: { label: string; its: string | null }) {
-  return (
-    <div style={{
-      background: 'var(--jm-surface-muted, #F5F5F5)',
-      border: '1px dashed var(--jm-border-strong, #CBD5E1)',
-      borderRadius: 8,
-      padding: '8px 12px',
-      minInlineSize: 160,
-      textAlign: 'center',
-      color: 'var(--jm-gray-500)',
-    }}>
-      <Tag style={{ marginBlockEnd: 6 }}>{label}</Tag>
-      <div style={{ fontSize: 12 }}>{its ? `ITS ${its} · not in directory` : '-'}</div>
-      <Typography.Text type="secondary" style={{ fontSize: 11 }}>{its ? 'Add this member to the system to link.' : 'Not captured.'}</Typography.Text>
-    </div>
-  );
-}
-
-function Connector() {
+/// Vertical 2-px line connecting one row of the tree to the next. Used between the parents
+/// row, the head row, and the descendants block.
+function DropConnector() {
   return <div style={{ inlineSize: 2, blockSize: 16, background: 'var(--jm-border-strong, #CBD5E1)' }} />;
 }

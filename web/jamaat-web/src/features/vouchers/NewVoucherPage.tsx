@@ -71,7 +71,17 @@ export function NewVoucherPage() {
     if (!payTo.trim()) { setSubmitError('Pay to is required'); return; }
     const clean = lines.filter((l) => l.expenseTypeId && l.amount > 0);
     if (clean.length === 0) { setSubmitError('Add at least one line with an expense type and amount'); return; }
-    if (paymentMode === 2 && (!chequeNumber || !chequeDate)) { setSubmitError('Cheque number and date are required'); return; }
+    if (paymentMode === 2) {
+      if (!chequeNumber) { setSubmitError('Cheque number is required for cheque payments.'); return; }
+      if (!chequeDate) { setSubmitError('Cheque date is required for cheque payments.'); return; }
+      // For post-dated cheques, drawn-on bank is required - the voucher is held in
+      // PendingClearance and the cheques workbench groups by drawee bank for the deposit run.
+      const today = dayjs().startOf('day');
+      if (chequeDate.isAfter(today, 'day') && !drawnOnBank.trim()) {
+        setSubmitError('Drawn-on bank is required for a post-dated cheque (cheque date is in the future).');
+        return;
+      }
+    }
     mutation.mutate({
       voucherDate: voucherDate.format('YYYY-MM-DD'), payTo,
       payeeItsNumber: payeeIts || undefined, purpose: purpose || undefined,
@@ -199,15 +209,38 @@ export function NewVoucherPage() {
                     options={banksQuery.data?.items.map((b) => ({ value: b.id, label: `${b.name} · ${b.accountNumber}` })) ?? []} />
                 </Form.Item>
               )}
-              {paymentMode === 2 && (
-                <>
-                  <Form.Item label="Cheque number" required tooltip="Cheque serial as printed. Used in the cheque-wise reconciliation report."><Input value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} className="jm-tnum" /></Form.Item>
-                  <Form.Item label="Cheque date" required tooltip="Date printed on the cheque - may be later than the voucher date for post-dated cheques.">
-                    <DatePicker value={chequeDate} onChange={setChequeDate} format="DD MMM YYYY" style={{ inlineSize: '100%' }} />
-                  </Form.Item>
-                  <Form.Item label="Drawn on bank" tooltip="Free-text label for cheques drawn from a bank we don't track in master data (e.g., the recipient's bank)."><Input value={drawnOnBank} onChange={(e) => setDrawnOnBank(e.target.value)} /></Form.Item>
-                </>
-              )}
+              {paymentMode === 2 && (() => {
+                const isFutureCheque = !!chequeDate && chequeDate.isAfter(dayjs().startOf('day'), 'day');
+                return (
+                  <>
+                    <Form.Item label="Cheque number" required
+                      tooltip="Cheque serial as printed. Used in the cheque-wise reconciliation report.">
+                      <Input value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} className="jm-tnum"
+                        status={!chequeNumber ? 'error' : undefined} />
+                    </Form.Item>
+                    <Form.Item label="Cheque date" required
+                      tooltip="Date printed on the cheque. If this is in the future, the voucher is held in 'Pending clearance' and the cheque is tracked on the Cheques workbench until it clears.">
+                      <DatePicker value={chequeDate} onChange={setChequeDate} format="DD MMM YYYY" style={{ inlineSize: '100%' }}
+                        status={!chequeDate ? 'error' : undefined} />
+                    </Form.Item>
+                    <Form.Item label="Drawn on bank" required={isFutureCheque}
+                      tooltip="The payee's bank that will receive the cheque. Required when the cheque is post-dated - the workbench groups by drawee bank for the deposit run.">
+                      <Input value={drawnOnBank} onChange={(e) => setDrawnOnBank(e.target.value)}
+                        placeholder="e.g. Emirates NBD"
+                        status={isFutureCheque && !drawnOnBank.trim() ? 'error' : undefined} />
+                    </Form.Item>
+                    {isFutureCheque && (
+                      <Alert
+                        type="info"
+                        showIcon
+                        message="This is a post-dated cheque"
+                        description="The voucher will be held in 'Pending clearance' until the cheque clears. No voucher number is assigned and no ledger posting happens until then. Track and clear it from the Cheques workbench."
+                        style={{ marginBlockEnd: 16 }}
+                      />
+                    )}
+                  </>
+                );
+              })()}
               <Form.Item label="Remarks" tooltip="Internal note shown on the voucher PDF. Useful for justification, audit trail, or instructions to the bank teller."><Input.TextArea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} /></Form.Item>
             </Form>
           </Card>

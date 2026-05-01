@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Card, Tabs, Space, Button, Form, Input, InputNumber, Select, DatePicker, Switch, Tag, Row, Col,
-  App as AntdApp, Upload, Spin, Result, Table, Empty, Modal, Alert,
+  App as AntdApp, Upload, Spin, Result, Table, Empty, Modal, Alert, QRCode,
 } from 'antd';
 import type { TableProps } from 'antd';
 import {
   SettingOutlined, HighlightOutlined, ScheduleOutlined, TeamOutlined, FormOutlined,
   UploadOutlined, CalendarOutlined, PlusOutlined, DeleteOutlined, CheckCircleOutlined, CloseCircleOutlined, ScanOutlined, LinkOutlined,
-  LayoutOutlined, ShareAltOutlined,
+  LayoutOutlined, ShareAltOutlined, CopyOutlined, DownloadOutlined,
 } from '@ant-design/icons';
 import { PageDesigner } from './sections/PageDesigner';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -16,11 +16,15 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { formatDate, formatDateTime } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
+import { ImageUploadField } from '../../shared/ui/ImageUploadField';
+import { ColorOrGradientPicker } from '../../shared/ui/ColorOrGradientPicker';
+import { LocationPickerField } from '../../shared/ui/LocationPickerField';
 import {
   eventsApi, eventRegistrationsApi, EventCategoryLabel,
   RegistrationStatusLabel, RegistrationStatusColor, AgeBandLabel,
   type Event, type EventCategory, type EventRegistration, type RegistrationStatus,
 } from './eventsApi';
+import { useEventCategories, categoryLabelOf } from './useEventCategories';
 
 export function EventDetailPage() {
   const { id = '' } = useParams();
@@ -31,6 +35,8 @@ export function EventDetailPage() {
   const { data: event, isLoading } = useQuery({
     queryKey: ['event', id], queryFn: () => eventsApi.get(id), enabled: !!id,
   });
+  const categoriesQ = useEventCategories();
+  const categoryOptions = (categoriesQ.data ?? []).map((c) => ({ value: c.code, label: c.name }));
 
   const portalUrl = event ? `${window.location.origin}/portal/events/${event.slug}` : '';
 
@@ -41,13 +47,18 @@ export function EventDetailPage() {
     message.success('Saved.');
     qc.setQueryData(['event', id], e);
     void qc.invalidateQueries({ queryKey: ['events'] });
+    // Page Designer's live preview reads through portal-preview, NOT through the admin `event`
+    // query - so without this invalidate, the preview would keep showing stale data after
+    // agenda / branding / share / overview saves (e.g. an Agenda section would say "Agenda will
+    // be posted soon" even after the user just added agenda items in the Agenda tab).
+    void qc.invalidateQueries({ queryKey: ['portal-preview', e.slug] });
   };
 
   return (
     <div>
       <PageHeader
         title={event.name}
-        subtitle={`${EventCategoryLabel[event.category]} · ${formatDate(event.eventDate)}${event.eventDateHijri ? ` · ${event.eventDateHijri}` : ''}${event.place ? ` · ${event.place}` : ''}`}
+        subtitle={`${event.categoryName ?? categoryLabelOf(categoriesQ.data, event.category) ?? EventCategoryLabel[event.category] ?? `Category ${event.category}`} · ${formatDate(event.eventDate)}${event.eventDateHijri ? ` · ${event.eventDateHijri}` : ''}${event.place ? ` · ${event.place}` : ''}`}
         actions={
           <Space>
             <Button icon={<LinkOutlined />}
@@ -59,9 +70,15 @@ export function EventDetailPage() {
         }
       />
 
-      {/* Cover banner preview */}
+      {/* Cover banner preview - uses <img> + onError so a stale/broken URL doesn't leave
+         a 180px-tall blank rectangle. Hidden entirely when no cover is set. */}
       {event.coverImageUrl && (
-        <div style={{ blockSize: 180, borderRadius: 12, overflow: 'hidden', marginBlockEnd: 16, background: `center/cover no-repeat url(${event.coverImageUrl})` }} />
+        <img
+          src={event.coverImageUrl}
+          alt=""
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+          style={{ inlineSize: '100%', blockSize: 180, objectFit: 'cover', borderRadius: 12, marginBlockEnd: 16, display: 'block' }}
+        />
       )}
 
       <div style={{ display: 'flex', gap: 8, marginBlockEnd: 16, flexWrap: 'wrap' }}>
@@ -75,8 +92,9 @@ export function EventDetailPage() {
 
       <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
         <Tabs defaultActiveKey="overview"
+          tabBarStyle={{ paddingInline: 16, marginBlockEnd: 0 }}
           items={[
-            { key: 'overview', label: <span><SettingOutlined /> Overview</span>, children: <OverviewTab event={event} onSaved={onSaved} /> },
+            { key: 'overview', label: <span><SettingOutlined /> Overview</span>, children: <OverviewTab event={event} onSaved={onSaved} categoryOptions={categoryOptions} /> },
             { key: 'branding', label: <span><HighlightOutlined /> Branding</span>, children: <BrandingTab event={event} onSaved={onSaved} /> },
             { key: 'share', label: <span><ShareAltOutlined /> Share &amp; SEO</span>, children: <ShareTab event={event} onSaved={onSaved} /> },
             { key: 'registration', label: <span><FormOutlined /> Registration</span>, children: <RegistrationSettingsTab event={event} onSaved={onSaved} /> },
@@ -100,7 +118,10 @@ function Statistic({ label, value, color }: { label: string; value: number; colo
 
 // ---- Overview --------------------------------------------------------------
 
-function OverviewTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => void }) {
+function OverviewTab({ event, onSaved, categoryOptions }: {
+  event: Event; onSaved: (e: Event) => void;
+  categoryOptions: { value: number; label: string }[];
+}) {
   const [form] = Form.useForm();
   const { message } = AntdApp.useApp();
   const mut = useMutation({
@@ -139,8 +160,8 @@ function OverviewTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => 
         }}>
         <Row gutter={16}>
           <Col span={16}><Form.Item label="Slug" help={`Public URL path. Read-only - computed from the name.`}><Input value={event.slug} disabled /></Form.Item></Col>
-          <Col span={8}><Form.Item label="Category" name="category">
-            <Select options={Object.entries(EventCategoryLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
+          <Col span={8}><Form.Item label="Category" name="category" help="Manage under Master Data ▸ Lookups (EventCategory).">
+            <Select options={categoryOptions} />
           </Form.Item></Col>
           <Col span={12}><Form.Item label="Name" name="name" rules={[{ required: true }]}><Input /></Form.Item></Col>
           <Col span={12}><Form.Item label="Name (Arabic)" name="nameArabic"><Input dir="rtl" /></Form.Item></Col>
@@ -153,7 +174,14 @@ function OverviewTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => 
           <Col span={12}><Form.Item label="Starts at" name="startsAtUtc"><DatePicker showTime style={{ inlineSize: '100%' }} /></Form.Item></Col>
           <Col span={12}><Form.Item label="Ends at" name="endsAtUtc"><DatePicker showTime style={{ inlineSize: '100%' }} /></Form.Item></Col>
           <Col span={12}><Form.Item label="Venue name" name="place"><Input /></Form.Item></Col>
-          <Col span={12}><Form.Item label="Venue address" name="venueAddress"><Input /></Form.Item></Col>
+          <Col span={12}><Form.Item label="Venue address" name="venueAddress" help="Multi-line. Used on the public portal and in share previews.">
+            <Input.TextArea rows={3} />
+          </Form.Item></Col>
+          <Col span={24}>
+            <Form.Item label="Pin venue on map" help="Search by address, click anywhere on the map, or drag the marker. Latitude / longitude below fill in automatically.">
+              <VenueMapPicker form={form} />
+            </Form.Item>
+          </Col>
           <Col span={12}><Form.Item label="Latitude" name="venueLatitude"><InputNumber style={{ inlineSize: '100%' }} step={0.000001} /></Form.Item></Col>
           <Col span={12}><Form.Item label="Longitude" name="venueLongitude"><InputNumber style={{ inlineSize: '100%' }} step={0.000001} /></Form.Item></Col>
           <Col span={12}><Form.Item label="Contact phone" name="contactPhone"><Input /></Form.Item></Col>
@@ -166,6 +194,44 @@ function OverviewTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => 
         <Button type="primary" loading={mut.isPending} onClick={() => mut.mutate(form.getFieldsValue())}>Save changes</Button>
       </div>
     </div>
+  );
+}
+
+// Cover preview that handles broken/missing image URLs gracefully and re-mounts whenever the
+// URL changes (so a successful re-upload clears any prior "broken" state and the browser
+// refetches even when the server URL is the same).
+function CoverImagePreview({ src }: { src?: string | null }) {
+  const [broken, setBroken] = useState(false);
+  // Reset broken whenever the URL changes; React would otherwise keep the prior img element.
+  useEffect(() => { setBroken(false); }, [src]);
+  if (!src) {
+    return <div style={{ blockSize: 160, borderRadius: 8, background: 'var(--jm-surface-muted)', display: 'grid', placeItems: 'center', color: 'var(--jm-gray-400)' }}>No cover</div>;
+  }
+  if (broken) {
+    return <div style={{ blockSize: 160, borderRadius: 8, background: '#FEF2F2', border: '1px dashed #DC2626', display: 'grid', placeItems: 'center', color: '#DC2626', fontSize: 13, padding: 8, textAlign: 'center' }}>Cover image not reachable. Try uploading again.</div>;
+  }
+  return (
+    <img
+      key={src}
+      src={src}
+      alt=""
+      onError={() => setBroken(true)}
+      style={{ inlineSize: '100%', blockSize: 160, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--jm-border)', display: 'block' }}
+    />
+  );
+}
+
+// Bridges the shared LocationPickerField to the AntD Form's two latitude / longitude fields.
+// Uses Form.useWatch so the marker stays in sync if the user edits the numeric inputs by hand.
+function VenueMapPicker({ form }: { form: ReturnType<typeof Form.useForm>[0] }) {
+  const lat = Form.useWatch('venueLatitude', form) as number | null | undefined;
+  const lng = Form.useWatch('venueLongitude', form) as number | null | undefined;
+  return (
+    <LocationPickerField
+      latitude={lat ?? null}
+      longitude={lng ?? null}
+      onChange={(la, ln) => form.setFieldsValue({ venueLatitude: la, venueLongitude: ln })}
+    />
   );
 }
 
@@ -193,9 +259,7 @@ function BrandingTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => 
       <Row gutter={24}>
         <Col span={12}>
           <Card size="small" title="Cover image" style={{ border: '1px solid var(--jm-border)' }}>
-            {event.coverImageUrl
-              ? <div style={{ blockSize: 160, borderRadius: 8, background: `center/cover no-repeat url(${event.coverImageUrl})`, border: '1px solid var(--jm-border)' }} />
-              : <div style={{ blockSize: 160, borderRadius: 8, background: 'var(--jm-surface-muted)', display: 'grid', placeItems: 'center', color: 'var(--jm-gray-400)' }}>No cover</div>}
+            <CoverImagePreview src={event.coverImageUrl} />
             <Upload maxCount={1} showUploadList={false} accept="image/*" beforeUpload={(file) => { uploadMut.mutate(file); return false; }}>
               <Button icon={<UploadOutlined />} loading={uploadMut.isPending} style={{ marginBlockStart: 12 }}>Upload new cover</Button>
             </Upload>
@@ -205,13 +269,18 @@ function BrandingTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => 
           <Card size="small" title="Colors + logo" style={{ border: '1px solid var(--jm-border)' }}>
             <Form layout="vertical">
               <Form.Item label="Primary color" help="Applied to buttons + accents on the public portal page.">
-                <Input type="color" value={primary} onChange={(e) => setPrimary(e.target.value.toUpperCase())} />
+                <ColorOrGradientPicker value={primary} onChange={(v) => setPrimary(v ?? '#0E5C40')} mode="solid" />
               </Form.Item>
               <Form.Item label="Accent color">
-                <Input type="color" value={accent} onChange={(e) => setAccent(e.target.value.toUpperCase())} />
+                <ColorOrGradientPicker value={accent} onChange={(v) => setAccent(v ?? '#B45309')} mode="solid" />
               </Form.Item>
-              <Form.Item label="Logo URL (optional)">
-                <Input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="Paste a URL to your event logo (transparent PNG preferred)" />
+              <Form.Item label="Logo (optional)">
+                <ImageUploadField
+                  value={logoUrl || null}
+                  onChange={(url) => setLogoUrl(url ?? '')}
+                  upload={(file) => eventsApi.uploadAsset(event.id, file).then((r) => r.url)}
+                  previewHeight={80}
+                />
               </Form.Item>
             </Form>
           </Card>
@@ -224,7 +293,7 @@ function BrandingTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => 
               color: '#fff',
             }}>
               {logoUrl && <img src={logoUrl} alt="Logo" style={{ blockSize: 44, marginBlockEnd: 12 }} />}
-              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.85 }}>{EventCategoryLabel[event.category]}</div>
+              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.85 }}>{event.categoryName ?? EventCategoryLabel[event.category] ?? `Category ${event.category}`}</div>
               <div style={{ fontSize: 28, fontWeight: 600, marginBlockStart: 6 }}>{event.name}</div>
               {event.tagline && <div style={{ fontSize: 14, opacity: 0.9, marginBlockStart: 4 }}>{event.tagline}</div>}
               <div style={{ marginBlockStart: 12, fontSize: 13, opacity: 0.85 }}>
@@ -421,6 +490,23 @@ function RegistrationsTab({ event }: { event: Event }) {
   );
 }
 
+// AntD Form clones into custom inputs and injects value/onChange - the picker honours
+// that shape so the share-image upload integrates with the rest of the form's submit flow.
+function ShareImagePicker({ value, onChange, eventId, fallback }: {
+  value?: string | null; onChange?: (v: string | null) => void;
+  eventId: string; fallback: string | null;
+}) {
+  const effective = value || fallback;
+  return (
+    <ImageUploadField
+      value={effective}
+      onChange={(url) => onChange?.(url)}
+      upload={(file) => eventsApi.uploadAsset(eventId, file).then((r) => r.url)}
+      previewHeight={140}
+    />
+  );
+}
+
 // ---- Share & SEO ----------------------------------------------------------
 
 function ShareTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => void }) {
@@ -455,8 +541,8 @@ function ShareTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => voi
             <Form.Item label="Share description" name="shareDescription" help="A short one-liner (up to ~160 chars). Shows under the title in share previews.">
               <Input.TextArea rows={3} maxLength={160} showCount placeholder={event.tagline ?? 'Write something inviting…'} />
             </Form.Item>
-            <Form.Item label="Share image URL" name="shareImageUrl" help="1200×630 recommended. Defaults to the event's cover image.">
-              <Input placeholder={event.coverImageUrl ?? ''} />
+            <Form.Item label="Share image" name="shareImageUrl" help="1200×630 recommended. Defaults to the event's cover image.">
+              <ShareImagePicker eventId={event.id} fallback={event.coverImageUrl ?? null} />
             </Form.Item>
             <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBlockStart: 12, borderBlockStart: '1px solid var(--jm-border)' }}>
               <Button type="primary" loading={mut.isPending} onClick={() => mut.mutate(form.getFieldsValue())}>Save share settings</Button>
@@ -478,8 +564,82 @@ function ShareTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => voi
           <Alert type="info" showIcon style={{ marginBlockStart: 12 }}
             message={<span>Public URL: <code>/portal/events/{event.slug}</code></span>}
             description="Social scrapers (WhatsApp, Twitter, LinkedIn) read the meta tags rendered on that URL. If you don't see a preview, clear the scraper's cache (WhatsApp: forget chat; Twitter: Card Validator)." />
+          <ShareToolkit slug={event.slug} eventName={event.name} />
         </Col>
       </Row>
     </div>
+  );
+}
+
+// QR code + embed snippet for the public portal URL. Lives below the link-preview mock so the
+// admin can pull a poster-ready QR or paste an iframe into a partner site without leaving Jamaat.
+function ShareToolkit({ slug, eventName }: { slug: string; eventName: string }) {
+  const { message } = AntdApp.useApp();
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const publicUrl = `${origin}/portal/events/${slug}`;
+  const embedSnippet = `<iframe src="${publicUrl}" width="100%" height="720" frameborder="0" loading="lazy" title="${eventName}"></iframe>`;
+
+  const copy = (text: string, label: string) => {
+    void navigator.clipboard.writeText(text)
+      .then(() => message.success(`${label} copied.`))
+      .catch(() => message.error(`Couldn't copy ${label}.`));
+  };
+
+  // Pulls the SVG QR off the DOM and offers it as a downloadable PNG. AntD renders the QR as
+  // a canvas by default, so we read the bitmap directly from the canvas element.
+  const downloadQr = () => {
+    const canvas = document.querySelector('#jm-share-qr canvas') as HTMLCanvasElement | null;
+    if (!canvas) { message.error('QR not ready yet.'); return; }
+    const link = document.createElement('a');
+    link.download = `${slug}-qr.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
+
+  return (
+    <Card size="small" title="Share toolkit" style={{ marginBlockStart: 12, border: '1px solid var(--jm-border)' }}>
+      <Space direction="vertical" size={16} style={{ inlineSize: '100%' }}>
+        {/* Public URL with copy button */}
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBlockEnd: 6 }}>Public URL</div>
+          <Space.Compact style={{ inlineSize: '100%' }}>
+            <Input readOnly value={publicUrl} style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }} />
+            <Button icon={<CopyOutlined />} onClick={() => copy(publicUrl, 'URL')}>Copy</Button>
+          </Space.Compact>
+        </div>
+
+        {/* QR code + download */}
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBlockEnd: 6 }}>QR code</div>
+          <Space align="start">
+            <div id="jm-share-qr" style={{ padding: 8, background: '#FFF', border: '1px solid var(--jm-border)', borderRadius: 8 }}>
+              <QRCode value={publicUrl} size={140} bordered={false} />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--jm-gray-600)', maxInlineSize: 220 }}>
+                Print this on flyers, posters, or display screens. Anyone scanning lands on the public registration page.
+              </div>
+              <Space style={{ marginBlockStart: 8 }}>
+                <Button size="small" icon={<DownloadOutlined />} onClick={downloadQr}>Download PNG</Button>
+                <Button size="small" icon={<CopyOutlined />} onClick={() => copy(publicUrl, 'URL')}>Copy URL</Button>
+              </Space>
+            </div>
+          </Space>
+        </div>
+
+        {/* Embed code */}
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBlockEnd: 6 }}>Embed code</div>
+          <Input.TextArea readOnly value={embedSnippet} rows={3}
+            style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 12 }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBlockStart: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
+              Paste this on a partner site to embed the registration page.
+            </span>
+            <Button size="small" icon={<CopyOutlined />} onClick={() => copy(embedSnippet, 'Embed code')}>Copy</Button>
+          </div>
+        </div>
+      </Space>
+    </Card>
   );
 }

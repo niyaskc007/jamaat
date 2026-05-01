@@ -1,8 +1,12 @@
 import { api } from '../../shared/api/client';
 import type { PagedResult } from '../members/membersApi';
 
-export type EventCategory = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
-export const EventCategoryLabel: Record<EventCategory, string> = {
+// EventCategory codes are sourced from the EventCategory lookup table (master data).
+// The seeded values 0..7 match the original C# enum; admins can add new ones via Master Data ▸ Lookups.
+// Use `useEventCategories()` for the live list; use `EventCategoryLabel` only as a static fallback
+// when the lookup hasn't loaded yet (or on the public portal where /lookups is not callable).
+export type EventCategory = number;
+export const EventCategoryLabel: Record<number, string> = {
   0: 'Other', 1: 'Urs', 2: 'Miladi', 3: 'Shahadat', 4: 'Night',
   5: 'Ashara Mubaraka', 6: 'Religious', 7: 'Community',
 };
@@ -31,6 +35,7 @@ export type Event = {
   slug: string;
   name: string; nameArabic?: string | null; tagline?: string | null;
   category: EventCategory;
+  categoryName?: string | null;
   eventDate: string; eventDateHijri?: string | null;
   startsAtUtc?: string | null; endsAtUtc?: string | null;
   place?: string | null; venueAddress?: string | null;
@@ -156,6 +161,13 @@ export const eventsApi = {
     fd.append('file', file);
     return (await api.post(`/api/v1/events/${id}/cover-upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
   },
+  // Generic asset upload - any field that wants an image (logo, hero bg, gallery, speaker, sponsor, share preview)
+  // posts here and stores the returned URL onto its own field.
+  uploadAsset: async (id: string, file: File): Promise<{ assetId: string; url: string }> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return (await api.post(`/api/v1/events/${id}/assets/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
+  },
 
   listRegistrations: async (eventId: string, q: { page?: number; pageSize?: number; status?: RegistrationStatus; search?: string }): Promise<PagedResult<EventRegistration>> =>
     (await api.get(`/api/v1/events/${eventId}/registrations`, { params: q })).data,
@@ -211,7 +223,8 @@ export const eventRegistrationsApi = {
 // Public portal - anonymous where noted.
 export type PortalEventSummary = {
   id: string; slug: string; name: string; tagline?: string | null;
-  category: EventCategory; eventDate: string; eventDateHijri?: string | null;
+  category: EventCategory; categoryName?: string | null;
+  eventDate: string; eventDateHijri?: string | null;
   startsAtUtc?: string | null; endsAtUtc?: string | null;
   place?: string | null; coverImageUrl?: string | null;
   primaryColor?: string | null; accentColor?: string | null;

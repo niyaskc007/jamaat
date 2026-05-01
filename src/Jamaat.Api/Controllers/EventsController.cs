@@ -10,7 +10,7 @@ namespace Jamaat.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/events")]
-public sealed class EventsController(IEventService svc, IEventRegistrationService regSvc, IPhotoStorage photoStorage) : ControllerBase
+public sealed class EventsController(IEventService svc, IEventRegistrationService regSvc, IPhotoStorage photoStorage, IEventAssetStorage assetStorage) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "event.view")]
@@ -76,11 +76,12 @@ public sealed class EventsController(IEventService svc, IEventRegistrationServic
         // Store under a derived "event" key (reuse member photo storage by xor-ing an event marker)
         var key = Guid.Parse(id.ToString("N")[..8] + Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee").ToString("N")[8..]);
         await using var stream = file.OpenReadStream();
-        var url = await photoStorage.StoreAsync(key, stream, file.ContentType, ct);
-        // The returned URL points at /api/v1/members/{id}/profile/photo/file - remap to an event-specific URL
-        // that resolves through the same storage key.
-        var publicUrl = $"/api/v1/events/{id}/cover/file";
-        var r = await svc.UpdateBrandingAsync(id, new UpdateEventBrandingDto(publicUrl, null, null, null), ct);
+        await photoStorage.StoreAsync(key, stream, file.ContentType, ct);
+        // Append a cache-buster so the browser refetches when the same URL is reused after a re-upload.
+        var publicUrl = $"/api/v1/events/{id}/cover/file?v={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+        // SetCoverImageAsync only touches CoverImageUrl - prevents the prior bug where uploading a
+        // cover wiped the user's logo, primary colour, and accent colour.
+        var r = await svc.SetCoverImageAsync(id, publicUrl, ct);
         return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }
 
@@ -90,6 +91,33 @@ public sealed class EventsController(IEventService svc, IEventRegistrationServic
     {
         var key = Guid.Parse(id.ToString("N")[..8] + Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee").ToString("N")[8..]);
         var opened = await photoStorage.OpenAsync(key, ct);
+        if (opened is null) return NotFound();
+        return File(opened.Value.Content, opened.Value.ContentType);
+    }
+
+    // Generic asset upload - returns a stable URL the caller can save into any image/logo/photo field on a section.
+    // Each upload gets its own asset Guid so a single event can host many uploads (logo, hero bg, gallery, sponsor logos…).
+    [HttpPost("{id:guid}/assets/upload")]
+    [Authorize(Policy = "event.manage")]
+    [RequestSizeLimit(10 * 1024 * 1024)]
+    public async Task<IActionResult> UploadAsset(Guid id, [FromForm] IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return ErrorMapper.ToActionResult(this, Error.Validation("asset.empty", "File is required."));
+        if (!(file.ContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ?? false))
+            return ErrorMapper.ToActionResult(this, Error.Validation("asset.invalid_type", "Only image uploads are accepted."));
+
+        var assetId = Guid.NewGuid();
+        await using var stream = file.OpenReadStream();
+        var url = await assetStorage.StoreAsync(id, assetId, stream, file.ContentType, ct);
+        return Ok(new { assetId, url });
+    }
+
+    [HttpGet("{id:guid}/assets/{assetId:guid}/file")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetAssetFile(Guid id, Guid assetId, CancellationToken ct)
+    {
+        var opened = await assetStorage.OpenAsync(id, assetId, ct);
         if (opened is null) return NotFound();
         return File(opened.Value.Content, opened.Value.ContentType);
     }

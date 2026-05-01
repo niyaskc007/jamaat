@@ -21,6 +21,7 @@ public sealed class ReceiptConfiguration : IEntityTypeConfiguration<Receipt>
         b.Property(x => x.BaseAmountTotal).HasColumnType("decimal(18,2)");
         b.Property(x => x.PaymentMode).HasConversion<int>();
         b.Property(x => x.ChequeNumber).HasMaxLength(64);
+        b.Property(x => x.DrawnOnBank).HasMaxLength(200);
         b.Property(x => x.PaymentReference).HasMaxLength(200);
         b.Property(x => x.Remarks).HasMaxLength(1000);
         b.Property(x => x.FamilyNameSnapshot).HasMaxLength(200);
@@ -49,6 +50,9 @@ public sealed class ReceiptConfiguration : IEntityTypeConfiguration<Receipt>
         b.HasIndex(x => new { x.TenantId, x.Status });
         b.HasIndex(x => new { x.TenantId, x.FamilyId });
         b.HasIndex(x => new { x.TenantId, x.Intention });
+        // Filtered index on the PDC link - matters for the "still awaiting clearance" worklist
+        // that the cheques workbench cross-references.
+        b.HasIndex(x => x.PendingPostDatedChequeId).HasFilter("[PendingPostDatedChequeId] IS NOT NULL");
 
         b.HasOne<Member>().WithMany().HasForeignKey(x => x.MemberId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<BankAccount>().WithMany().HasForeignKey(x => x.BankAccountId).OnDelete(DeleteBehavior.Restrict);

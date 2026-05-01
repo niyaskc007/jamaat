@@ -4,9 +4,14 @@ export type PaymentMode = 1 | 2 | 4 | 8 | 16 | 32;
 export const PaymentModeLabel: Record<number, string> = {
   1: 'Cash', 2: 'Cheque', 4: 'Bank Transfer', 8: 'Card', 16: 'Online', 32: 'UPI',
 };
-export type VoucherStatus = 1 | 2 | 3 | 4 | 5 | 6;
+/// 1=Draft, 2=PendingApproval, 3=Approved, 4=Paid, 5=Cancelled, 6=Reversed,
+/// 7=PendingClearance (held until a future-dated cheque clears - no number, no GL post until then).
+export type VoucherStatus = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export const VoucherStatusLabel: Record<VoucherStatus, string> = {
-  1: 'Draft', 2: 'Pending Approval', 3: 'Approved', 4: 'Paid', 5: 'Cancelled', 6: 'Reversed',
+  1: 'Draft', 2: 'Pending Approval', 3: 'Approved', 4: 'Paid', 5: 'Cancelled', 6: 'Reversed', 7: 'Pending clearance',
+};
+export const VoucherStatusColor: Record<VoucherStatus, string> = {
+  1: 'default', 2: 'gold', 3: 'blue', 4: 'green', 5: 'red', 6: 'volcano', 7: 'gold',
 };
 
 export type VoucherLine = {
@@ -26,6 +31,8 @@ export type Voucher = {
   paidByUserName?: string | null; paidAtUtc?: string | null;
   createdAtUtc: string;
   lines: VoucherLine[];
+  /// Set when status === PendingClearance: the linked PostDatedCheque tracking the future-dated cheque.
+  pendingPostDatedChequeId?: string | null;
 };
 
 export type VoucherListItem = {

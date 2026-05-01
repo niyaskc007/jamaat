@@ -1,5 +1,8 @@
+using Jamaat.Application.Members.Reliability;
 using Jamaat.Application.Receipts;
+using Jamaat.Application.Vouchers;
 using Jamaat.Contracts.Receipts;
+using Jamaat.Contracts.Vouchers;
 using Jamaat.Domain.Entities;
 using Jamaat.Domain.Enums;
 using Jamaat.Domain.ValueObjects;
@@ -66,6 +69,15 @@ public static class DevDataSeeder
         db.Members.AddRange(members);
         await db.SaveChangesAsync(ct);
         logger.LogInformation("DevDataSeeder: seeded {Count} members.", members.Count);
+
+        // The AuditInterceptor stamps CreatedAtUtc=now on every Added entity, so the seeded
+        // members all look brand-new. The reliability scorer then refuses to grade them
+        // (under the 90-day tenure floor) and the admin dashboard reports everyone as Unrated.
+        // Backdate via raw SQL to a 4-24 month spread so we end up with a realistic tenure
+        // distribution and a populated grade chart.
+        await db.Database.ExecuteSqlRawAsync(
+            "UPDATE dbo.[Member] SET CreatedAtUtc = DATEADD(month, -(4 + ABS(CHECKSUM(Id)) % 21), SYSDATETIMEOFFSET()) WHERE TenantId = {0}",
+            tenantId);
 
         // --- Families ---------------------------------------------------------
         // Grab first ~18 members and group them into 6 families of 3 each.
@@ -139,26 +151,65 @@ public static class DevDataSeeder
         logger.LogInformation("DevDataSeeder: seeded {Count} fund enrollments.", enrollments.Count);
 
         // --- Commitments ------------------------------------------------------
+        // Build each commitment through its full lifecycle in-memory (Draft -> ReplaceSchedule ->
+        // AcceptAgreement -> Active, plus a few back-paid past-due installments) BEFORE handing the
+        // entity to EF. Doing this on a yet-untracked aggregate makes EF emit INSERTs for the
+        // commitment + all owned installments in one shot - the alternative (save Draft, reload,
+        // mutate) trips the OwnsMany change-tracker into UPDATE-of-non-existent-row errors.
         var commitments = new List<Commitment>();
+        var todayDate = DateOnly.FromDateTime(DateTime.UtcNow);
         for (var i = 0; i < 5 && i < members.Count; i++)
         {
             var fund = fundTypes[i % fundTypes.Count];
             var member = members[members.Count - 1 - i]; // pick tail so they differ from enrollments
             var total = (i + 1) * 1200m;
+            const int n = 12;
+            // Backdate startDate so half the installments fall before today and half after; the
+            // Receivables Aging dashboard then shows non-empty buckets in both halves.
+            var startDate = todayDate.AddMonths(-(n / 2));
             var c = new Commitment(
                 Guid.NewGuid(), tenantId, $"C-{i + 1:D3}",
                 CommitmentPartyType.Member, member.Id, null,
                 member.FullName, fund.Id, fund.NameEnglish,
                 "AED", total,
-                CommitmentFrequency.Monthly, 12,
-                DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-rng.Next(0, 60))),
+                CommitmentFrequency.Monthly, n,
+                startDate,
                 allowPartialPayments: true,
                 allowAutoAdvance: false);
+
+            var perInst = Math.Round(total / n, 2);
+            var schedule = new List<CommitmentInstallment>();
+            for (var k = 0; k < n; k++)
+                schedule.Add(new CommitmentInstallment(Guid.NewGuid(), k + 1, startDate.AddMonths(k), perInst));
+            c.ReplaceSchedule(schedule);
+
+            c.AcceptAgreement(
+                templateId: null, templateVersion: null, renderedText: "Seeded agreement (dev).",
+                userId: Guid.Empty, userName: "dev-seed", at: DateTimeOffset.UtcNow,
+                ipAddress: "127.0.0.1", userAgent: "dev-seed",
+                method: AgreementAcceptanceMethod.Admin);
+
+            // Pay a varying number of past-due installments. The last paid one is partial half the
+            // time so the InstallmentStatus column shows a Pending/Partial/Paid mix.
+            var pastDue = c.Installments.Where(x => x.DueDate <= todayDate).OrderBy(x => x.InstallmentNo).ToList();
+            if (pastDue.Count > 0)
+            {
+                var toPay = rng.Next(1, pastDue.Count + 1);
+                for (var k = 0; k < toPay; k++)
+                {
+                    var inst = pastDue[k];
+                    var partial = k == toPay - 1 && rng.Next(2) == 0;
+                    var amt = partial ? Math.Round(inst.ScheduledAmount / 2m, 2) : inst.ScheduledAmount;
+                    c.RecordPaymentOnInstallment(inst.Id, amt, inst.DueDate.AddDays(rng.Next(0, 5)));
+                }
+            }
+            c.RefreshOverdueStatuses(todayDate);
+
             commitments.Add(c);
         }
         db.Commitments.AddRange(commitments);
         await db.SaveChangesAsync(ct);
-        logger.LogInformation("DevDataSeeder: seeded {Count} commitments.", commitments.Count);
+        logger.LogInformation("DevDataSeeder: seeded {Count} commitments with schedules + agreements + back-pay.", commitments.Count);
 
         // --- Events -----------------------------------------------------------
         var events = new List<Event>
@@ -264,6 +315,233 @@ public static class DevDataSeeder
             if (r.IsSuccess) seeded++; else failed++;
         }
         logger.LogInformation("DevDataSeeder: seeded {Seeded} confirmed receipts ({Failed} failed).", seeded, failed);
+    }
+
+    /// Runs the second-pass enrichments after <see cref="SeedAsync"/> + <see cref="SeedReceiptsAsync"/> have
+    /// laid the foundation: mints a realistic spread of QH loans across the lifecycle, raises a
+    /// handful of expense vouchers via the real <see cref="IVoucherService"/> (so they post to the
+    /// ledger), and snapshots every member's reliability profile from the actual journal data. Each
+    /// sub-step is independently idempotent.
+    public static async Task EnrichDevDataAsync(IServiceProvider sp, Guid tenantId, ILogger logger, CancellationToken ct)
+    {
+        using var scope = sp.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<JamaatDbContext>();
+        var tenantCtx = scope.ServiceProvider.GetRequiredService<TenantContext>();
+        tenantCtx.SetTenant(tenantId);
+
+        await SeedQhLoansAsync(db, tenantId, logger, ct);
+        await SeedVouchersAsync(scope.ServiceProvider, logger, ct);
+        await SeedReliabilitySnapshotsAsync(scope.ServiceProvider, logger, ct);
+    }
+
+    /// Seed ten Qarzan Hasana loans spread across the lifecycle so the QH Portfolio dashboard's
+    /// status pie, repayment trend, top-borrowers table, and upcoming-installments list all
+    /// surface non-trivial data. We drive each loan through its real domain methods so the
+    /// resulting rows are indistinguishable from operator-created loans.
+    private static async Task SeedQhLoansAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
+    {
+        var existing = await db.QarzanHasanaLoans.CountAsync(ct);
+        if (existing >= 5)
+        {
+            logger.LogDebug("SeedQhLoansAsync: skipped - {Count} loans already exist.", existing);
+            return;
+        }
+
+        var members = await db.Members.AsNoTracking().Take(20).ToListAsync(ct);
+        if (members.Count < 4)
+        {
+            logger.LogWarning("SeedQhLoansAsync: need at least 4 members for borrower + guarantors.");
+            return;
+        }
+
+        // (amountRequested, amountApproved, n, monthsAgo, paidCount, partialNext, stopAt, label)
+        // stopAt: 1=PendingLevel1, 2=PendingLevel2, 3=Approved (schedule set), 4=Active+Disbursed, 5=Completed
+        var profiles = new (decimal Req, decimal App, int N, int MonthsAgo, int PaidCount, decimal PartialNext, int StopAt, string Label)[]
+        {
+            (8000m, 7000m, 12, 8, 7, 0m, 4, "Active-on-track"),
+            (5000m, 5000m, 10, 5, 4, 250m, 4, "Active-partial"),
+            (12000m, 10000m, 12, 12, 12, 0m, 5, "Completed"),
+            (6000m, 6000m, 12, 6, 3, 0m, 4, "Active-with-overdue"),
+            (4000m, 4000m, 8, 3, 3, 0m, 4, "Active-current"),
+            (10000m, 10000m, 12, 1, 1, 0m, 4, "Active-just-disbursed"),
+            (15000m, 15000m, 12, 0, 0, 0m, 3, "Approved-not-disbursed"),
+            (3000m, 0m, 6, 0, 0, 0m, 1, "PendingLevel1"),
+            (7000m, 7000m, 10, 0, 0, 0m, 2, "PendingLevel2"),
+            (9000m, 9000m, 12, 4, 2, 0m, 4, "Active-newer"),
+        };
+
+        var schemes = new[] { QarzanHasanaScheme.MohammadiScheme, QarzanHasanaScheme.HussainScheme, QarzanHasanaScheme.Other };
+
+        var rng = new Random(9090);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var loans = new List<QarzanHasanaLoan>();
+
+        for (var i = 0; i < profiles.Length; i++)
+        {
+            var p = profiles[i];
+            var borrower = members[i % members.Count];
+            var g1 = members[(i + 1) % members.Count];
+            var g2 = members[(i + 2) % members.Count];
+            if (g1.Id == borrower.Id) g1 = members[(i + 3) % members.Count];
+            if (g2.Id == borrower.Id || g2.Id == g1.Id) g2 = members[(i + 4) % members.Count];
+
+            var startDate = today.AddMonths(-p.MonthsAgo);
+            var loan = new QarzanHasanaLoan(Guid.NewGuid(), tenantId, $"QH-{i + 1:D4}",
+                borrower.Id, schemes[i % schemes.Length], p.Req, p.N, "AED", startDate, g1.Id, g2.Id);
+            loan.UpdateDraft(
+                amountRequested: p.Req, installmentsRequested: p.N,
+                cashflowUrl: null, goldSlipUrl: null, goldAmount: null, startDate: startDate,
+                guarantor1: g1.Id, guarantor2: g2.Id, familyId: null,
+                purpose: "Household / business need (dev seed)",
+                repaymentPlan: "Monthly salary deduction",
+                sourceOfIncome: "Primary employment + spouse income",
+                otherObligations: null,
+                monthlyIncome: 5000m, monthlyExpenses: 3500m, monthlyExistingEmis: 0m,
+                goldWeightGrams: null, goldPurityKarat: null, goldHeldAt: null,
+                incomeSources: "SALARY");
+            loan.AcknowledgeGuarantors("dev-seed", DateTimeOffset.UtcNow);
+
+            if (p.StopAt >= 1)
+            {
+                loan.Submit();
+            }
+            if (p.StopAt >= 2)
+            {
+                loan.ApproveLevel1(Guid.Empty, "dev-seed-l1",
+                    DateTimeOffset.UtcNow.AddDays(-rng.Next(1, 15)),
+                    p.App, p.N, "Seeded L1 approval");
+            }
+            if (p.StopAt >= 3)
+            {
+                loan.ApproveLevel2(Guid.Empty, "dev-seed-l2",
+                    DateTimeOffset.UtcNow.AddDays(-rng.Next(0, 5)),
+                    "Seeded L2 approval");
+
+                var perInst = Math.Round(p.App / p.N, 2);
+                var schedule = new List<QarzanHasanaInstallment>();
+                for (var k = 0; k < p.N; k++)
+                    schedule.Add(new QarzanHasanaInstallment(Guid.NewGuid(), k + 1, startDate.AddMonths(k), perInst));
+                loan.SetSchedule(schedule);
+            }
+            if (p.StopAt >= 4)
+            {
+                loan.MarkDisbursed(voucherId: null, disbursedOn: startDate);
+                var insts = loan.Installments.OrderBy(x => x.InstallmentNo).ToList();
+                for (var k = 0; k < p.PaidCount && k < insts.Count; k++)
+                {
+                    var inst = insts[k];
+                    loan.RecordRepayment(inst.Id, inst.ScheduledAmount, inst.DueDate.AddDays(rng.Next(-2, 5)));
+                }
+                if (p.PartialNext > 0 && p.PaidCount < insts.Count)
+                {
+                    var inst = insts[p.PaidCount];
+                    loan.RecordRepayment(inst.Id, p.PartialNext, inst.DueDate.AddDays(rng.Next(-2, 5)));
+                }
+            }
+
+            loans.Add(loan);
+        }
+
+        db.QarzanHasanaLoans.AddRange(loans);
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("SeedQhLoansAsync: seeded {Count} QH loans across mixed lifecycle states.", loans.Count);
+    }
+
+    /// Raise a handful of expense vouchers through <see cref="IVoucherService"/> so the Treasury /
+    /// Compliance dashboards have non-zero pending counts and the ledger has matching debit entries.
+    /// We deliberately use the service (not direct entity inserts) because numbering, FX, ledger
+    /// posting, and notifications are all triggered there.
+    private static async Task SeedVouchersAsync(IServiceProvider sp, ILogger logger, CancellationToken ct)
+    {
+        var db = sp.GetRequiredService<JamaatDbContext>();
+        var existing = await db.Vouchers.CountAsync(ct);
+        if (existing >= 5)
+        {
+            logger.LogDebug("SeedVouchersAsync: skipped - {Count} vouchers already exist.", existing);
+            return;
+        }
+
+        var expenseTypes = await db.ExpenseTypes.AsNoTracking().Where(e => e.IsActive).ToListAsync(ct);
+        if (expenseTypes.Count == 0)
+        {
+            logger.LogWarning("SeedVouchersAsync: no active ExpenseTypes - skipping.");
+            return;
+        }
+        var bankAccountId = await db.BankAccounts.AsNoTracking().Where(b => b.IsActive).Select(b => (Guid?)b.Id).FirstOrDefaultAsync(ct);
+
+        var svc = sp.GetRequiredService<IVoucherService>();
+        var rng = new Random(6363);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var profiles = new (PaymentMode Mode, int DaysAgo, int LineCount, decimal MinAmt, decimal MaxAmt, string PayTo, string Purpose)[]
+        {
+            (PaymentMode.Cash, 3, 1, 200m, 800m, "Hakimi Provisions", "Iftari supplies"),
+            (PaymentMode.Cash, 8, 1, 100m, 400m, "Local courier", "Document delivery"),
+            (PaymentMode.Cheque, 12, 2, 600m, 2200m, "Al Madina Catering", "Monthly Niyaz catering"),
+            (PaymentMode.Cheque, 20, 1, 1500m, 4500m, "Saifee Property Management", "Hall rent - Urs Mubarak"),
+            (PaymentMode.BankTransfer, 5, 2, 300m, 1800m, "Hakim Audio Visual", "AV equipment hire"),
+            (PaymentMode.BankTransfer, 15, 1, 800m, 3200m, "Burhani Maintenance", "Masjid plumbing repairs"),
+            (PaymentMode.Cash, 1, 1, 50m, 250m, "Petty cash topup", "Office consumables"),
+            (PaymentMode.Cheque, 2, 1, 2000m, 6000m, "Mufaddal Travel", "Member relief travel"),
+        };
+
+        var seeded = 0;
+        var failed = 0;
+        for (var i = 0; i < profiles.Length; i++)
+        {
+            var p = profiles[i];
+            var date = today.AddDays(-p.DaysAgo);
+            var lines = new List<CreateVoucherLineDto>();
+            for (var k = 0; k < p.LineCount; k++)
+            {
+                var et = expenseTypes[(i + k) % expenseTypes.Count];
+                var amount = Math.Round(p.MinAmt + (decimal)rng.NextDouble() * (p.MaxAmt - p.MinAmt), 2);
+                lines.Add(new CreateVoucherLineDto(et.Id, amount, $"Seeded line {k + 1}"));
+            }
+            var dto = new CreateVoucherDto(
+                VoucherDate: date,
+                PayTo: p.PayTo,
+                PayeeItsNumber: null,
+                Purpose: p.Purpose,
+                PaymentMode: p.Mode,
+                BankAccountId: p.Mode == PaymentMode.Cash ? null : bankAccountId,
+                ChequeNumber: p.Mode == PaymentMode.Cheque ? $"DEV{2000 + i}" : null,
+                ChequeDate: p.Mode == PaymentMode.Cheque ? date : null,
+                DrawnOnBank: p.Mode == PaymentMode.Cheque ? "ENBD" : null,
+                PaymentDate: p.Mode == PaymentMode.Cash ? date : null,
+                Remarks: null,
+                Lines: lines,
+                Currency: null);
+            var r = await svc.CreateAsync(dto, ct);
+            if (r.IsSuccess) seeded++; else failed++;
+        }
+        logger.LogInformation("SeedVouchersAsync: seeded {Seeded} vouchers ({Failed} failed).", seeded, failed);
+    }
+
+    /// Snapshot every member's reliability profile by calling the real
+    /// <see cref="IReliabilityService.RecomputeAsync"/>. We use the service, not fabricated JSON,
+    /// so the seeded snapshots reflect actual contribution / commitment / loan history. After this
+    /// runs the admin Reliability dashboard's grade distribution + top-reliable + needs-attention
+    /// sections all light up.
+    private static async Task SeedReliabilitySnapshotsAsync(IServiceProvider sp, ILogger logger, CancellationToken ct)
+    {
+        var db = sp.GetRequiredService<JamaatDbContext>();
+        var svc = sp.GetRequiredService<IReliabilityService>();
+        var memberIds = await db.Members.AsNoTracking().Select(m => m.Id).ToListAsync(ct);
+        if (memberIds.Count == 0)
+        {
+            logger.LogDebug("SeedReliabilitySnapshotsAsync: no members - nothing to snapshot.");
+            return;
+        }
+
+        var ok = 0;
+        var failed = 0;
+        foreach (var memberId in memberIds)
+        {
+            var r = await svc.RecomputeAsync(memberId, ct);
+            if (r.IsSuccess) ok++; else failed++;
+        }
+        logger.LogInformation("SeedReliabilitySnapshotsAsync: computed {Ok} snapshots ({Failed} failed).", ok, failed);
     }
 
     /// Name pool - Bohra/Arabic-leaning first names + common family surnames seen in the community.

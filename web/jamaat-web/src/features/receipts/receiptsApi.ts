@@ -4,9 +4,14 @@ export type PaymentMode = 1 | 2 | 4 | 8 | 16 | 32;
 export const PaymentModeLabel: Record<number, string> = {
   1: 'Cash', 2: 'Cheque', 4: 'Bank Transfer', 8: 'Card', 16: 'Online', 32: 'UPI',
 };
-export type ReceiptStatus = 1 | 2 | 3 | 4;
+/// 1=Draft, 2=Confirmed, 3=Cancelled, 4=Reversed, 5=PendingClearance (held until a future-dated
+/// cheque clears - no number, no GL post until then).
+export type ReceiptStatus = 1 | 2 | 3 | 4 | 5;
 export const ReceiptStatusLabel: Record<ReceiptStatus, string> = {
-  1: 'Draft', 2: 'Confirmed', 3: 'Cancelled', 4: 'Reversed',
+  1: 'Draft', 2: 'Confirmed', 3: 'Cancelled', 4: 'Reversed', 5: 'Pending clearance',
+};
+export const ReceiptStatusColor: Record<ReceiptStatus, string> = {
+  1: 'default', 2: 'green', 3: 'red', 4: 'volcano', 5: 'gold',
 };
 
 export type ReceiptLine = {
@@ -40,9 +45,12 @@ export type Receipt = {
   amountTotal: number; currency: string;
   fxRate: number; baseCurrency: string; baseAmountTotal: number;
   paymentMode: PaymentMode; chequeNumber?: string | null; chequeDate?: string | null;
+  drawnOnBank?: string | null;
   bankAccountId?: string | null; bankAccountName?: string | null;
   paymentReference?: string | null; remarks?: string | null;
   status: ReceiptStatus; confirmedAtUtc?: string | null; confirmedByUserName?: string | null;
+  /// Set when status === PendingClearance: the linked PostDatedCheque tracking the future-dated cheque.
+  pendingPostDatedChequeId?: string | null;
   createdAtUtc: string;
   lines: ReceiptLine[];
   // Batch-2 returnable-contribution fields
@@ -87,6 +95,9 @@ export type CreateReceipt = {
   currency?: string;
   paymentMode: PaymentMode; bankAccountId?: string | null;
   chequeNumber?: string; chequeDate?: string;
+  /// Contributor's drawee bank. Required when chequeDate is in the future (post-dated cheque
+  /// tracking); optional otherwise (kept for bank reconciliation).
+  drawnOnBank?: string;
   paymentReference?: string; remarks?: string;
   lines: CreateReceiptLine[];
   familyId?: string;

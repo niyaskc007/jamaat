@@ -63,6 +63,10 @@ export function ReceiptDetailPage() {
   const statusCfg: Record<ReceiptStatus, { bg: string; color: string }> = {
     1: { bg: '#FEF3C7', color: '#92400E' }, 2: { bg: '#D1FAE5', color: '#065F46' },
     3: { bg: '#E5E9EF', color: '#475569' }, 4: { bg: '#FEE2E2', color: '#991B1B' },
+    // PendingClearance shares the amber palette with Draft (also a non-final state) - tells the
+    // viewer "this is paused awaiting something external" without overlapping the green Confirmed
+    // colour that means money is in the GL.
+    5: { bg: '#FEF3C7', color: '#92400E' },
   };
 
   return (
@@ -102,6 +106,31 @@ export function ReceiptDetailPage() {
                 Approve & post
               </Button>
             )}
+          </div>
+        </Card>
+      )}
+
+      {/* PendingClearance banner: a future-dated cheque is in flight. The receipt has full
+          line + payment data captured but no number, no GL post, no allocations - the linked
+          PostDatedCheque drives the eventual confirm-or-cancel transition. */}
+      {data.status === 5 && (
+        <Card size="small" style={{ marginBlockEnd: 16, borderColor: '#FCD34D', background: '#FFFBEB' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <ClockCircleOutlined style={{ color: '#B45309', fontSize: 18 }} />
+            <div style={{ flex: 1, minInlineSize: 280 }}>
+              <strong style={{ color: '#92400E' }}>Awaiting cheque clearance</strong>
+              <div style={{ color: '#92400E', fontSize: 12, marginBlockStart: 2 }}>
+                Cheque {data.chequeNumber ? <strong>{data.chequeNumber}</strong> : null}
+                {data.drawnOnBank ? <> drawn on <strong>{data.drawnOnBank}</strong></> : null}
+                {data.chequeDate ? <>, dated {dayjs(data.chequeDate).format('DD MMM YYYY')}</> : null}.
+                The receipt is held in 'Pending clearance' - no number, no GL post, no commitment / QH
+                allocation - until the cheque is marked Cleared from the Cheques workbench. If it bounces,
+                the receipt is cancelled with no GL impact.
+              </div>
+            </div>
+            <Button icon={<ClockCircleOutlined />} onClick={() => navigate('/cheques')}>
+              Open Cheques workbench
+            </Button>
           </div>
         </Card>
       )}

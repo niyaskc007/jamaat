@@ -50,6 +50,10 @@ export function NewReceiptPage() {
   const [bankAccountId, setBankAccountId] = useState<string | undefined>();
   const [chequeNumber, setChequeNumber] = useState('');
   const [chequeDate, setChequeDate] = useState<Dayjs | null>(null);
+  /// Contributor's drawee bank, kept on the receipt for reconciliation. Required when the
+  /// cheque is post-dated (chequeDate > today) because the cheques workbench groups by bank
+  /// for the daily deposit run.
+  const [drawnOnBank, setDrawnOnBank] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
   const [remarks, setRemarks] = useState('');
   const [lines, setLines] = useState<Line[]>([{ _id: crypto.randomUUID(), fundTypeId: '', amount: 0 }]);
@@ -336,6 +340,13 @@ export function NewReceiptPage() {
       if (!chequeNumber.trim()) { setSubmitError('Cheque number is required for cheque payments.'); return; }
       if (!chequeDate) { setSubmitError('Cheque date is required for cheque payments.'); return; }
       if (!bankAccountId) { setSubmitError('Pick the bank account this cheque will be deposited into.'); return; }
+      // For post-dated cheques the drawn-on bank is required - the receipt is held in
+      // PendingClearance and the cheques workbench groups by drawee bank for the deposit run.
+      const today = dayjs().startOf('day');
+      if (chequeDate.isAfter(today, 'day') && !drawnOnBank.trim()) {
+        setSubmitError("Drawn-on bank is required for a post-dated cheque (cheque date is in the future).");
+        return;
+      }
     }
     const isDigitalMode = paymentMode === 4 || paymentMode === 8 || paymentMode === 16 || paymentMode === 32;
     if (isDigitalMode) {
@@ -351,6 +362,7 @@ export function NewReceiptPage() {
       bankAccountId: paymentMode === 1 ? null : (bankAccountId ?? null),
       chequeNumber: paymentMode === 2 ? chequeNumber : undefined,
       chequeDate: paymentMode === 2 ? chequeDate?.format('YYYY-MM-DD') : undefined,
+      drawnOnBank: paymentMode === 2 && drawnOnBank.trim() ? drawnOnBank.trim() : undefined,
       paymentReference: paymentReference || undefined,
       remarks: remarks || undefined,
       lines: cleanLines.map(({ _id: _omit, ...rest }) => rest),
@@ -700,18 +712,36 @@ export function NewReceiptPage() {
                     options={banksQuery.data?.items.map((b) => ({ value: b.id, label: `${b.name} · ${b.accountNumber}` })) ?? []} />
                 </Form.Item>
               )}
-              {paymentMode === 2 && (
-                <>
-                  <Form.Item label="Cheque number" required tooltip="Cheque serial number as printed. Used for the bank deposit summary report.">
-                    <Input value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} className="jm-tnum"
-                      status={!chequeNumber.trim() ? 'error' : undefined} />
-                  </Form.Item>
-                  <Form.Item label="Cheque date" required tooltip="The date printed on the cheque - may differ from the receipt date if the member issued a post-dated cheque.">
-                    <DatePicker value={chequeDate} onChange={setChequeDate} format="DD MMM YYYY" style={{ inlineSize: '100%' }}
-                      status={!chequeDate ? 'error' : undefined} />
-                  </Form.Item>
-                </>
-              )}
+              {paymentMode === 2 && (() => {
+                const isFutureCheque = !!chequeDate && chequeDate.isAfter(dayjs().startOf('day'), 'day');
+                return (
+                  <>
+                    <Form.Item label="Cheque number" required tooltip="Cheque serial number as printed. Used for the bank deposit summary report.">
+                      <Input value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} className="jm-tnum"
+                        status={!chequeNumber.trim() ? 'error' : undefined} />
+                    </Form.Item>
+                    <Form.Item label="Cheque date" required tooltip="The date printed on the cheque. If this is in the future, the receipt is held in 'Pending clearance' and the cheque is tracked on the Cheques workbench until it clears.">
+                      <DatePicker value={chequeDate} onChange={setChequeDate} format="DD MMM YYYY" style={{ inlineSize: '100%' }}
+                        status={!chequeDate ? 'error' : undefined} />
+                    </Form.Item>
+                    <Form.Item label="Drawn on bank" required={isFutureCheque}
+                      tooltip="The contributor's bank that issued the cheque (different from the deposit account above). Required when the cheque is post-dated.">
+                      <Input value={drawnOnBank} onChange={(e) => setDrawnOnBank(e.target.value)}
+                        placeholder="e.g. Emirates NBD"
+                        status={isFutureCheque && !drawnOnBank.trim() ? 'error' : undefined} />
+                    </Form.Item>
+                    {isFutureCheque && (
+                      <Alert
+                        type="info"
+                        showIcon
+                        message="This is a post-dated cheque"
+                        description="The receipt will be held in 'Pending clearance' until the cheque clears. No receipt number is assigned and no ledger posting happens until then. Track and clear it from the Cheques workbench."
+                        style={{ marginBlockEnd: 16 }}
+                      />
+                    )}
+                  </>
+                );
+              })()}
               {(() => {
                 const isDigital = paymentMode === 4 || paymentMode === 8 || paymentMode === 16 || paymentMode === 32;
                 const refRequired = isDigital;

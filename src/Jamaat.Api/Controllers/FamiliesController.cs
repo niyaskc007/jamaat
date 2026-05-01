@@ -129,12 +129,43 @@ public sealed class FamiliesController(IFamilyService svc, IExcelExporter excel)
         return r.IsSuccess ? NoContent() : Problem(r.Error);
     }
 
+    /// <summary>Remove an extended-kinship link without affecting the linked member's household.</summary>
+    [HttpDelete("{id:guid}/links/{linkId:guid}")]
+    [Authorize(Policy = "family.update")]
+    public async Task<IActionResult> RemoveLink(Guid id, Guid linkId, CancellationToken ct)
+    {
+        var r = await svc.RemoveLinkAsync(id, linkId, ct);
+        return r.IsSuccess ? NoContent() : Problem(r.Error);
+    }
+
     [HttpPost("{id:guid}/transfer-headship")]
     [Authorize(Policy = "family.update")]
     public async Task<IActionResult> TransferHeadship(Guid id, [FromBody] TransferHeadshipDto dto, CancellationToken ct)
     {
         var r = await svc.TransferHeadshipAsync(id, dto, ct);
         return r.IsSuccess ? NoContent() : Problem(r.Error);
+    }
+
+    /// <summary>Spin a member out of this family into a new household. The spun-off member becomes
+    /// the new family's head; lineage ITS pointers are preserved so the extended tree threads back.</summary>
+    [HttpPost("{id:guid}/spin-off")]
+    [Authorize(Policy = "family.create")]
+    public async Task<IActionResult> SpinOff(Guid id, [FromBody] SpinOffFamilyDto dto, CancellationToken ct)
+    {
+        var r = await svc.SpinOffAsync(id, dto, ct);
+        return r.IsSuccess
+            ? CreatedAtAction(nameof(Get), new { id = r.Value.Id }, r.Value)
+            : Problem(r.Error);
+    }
+
+    /// <summary>Extended tree rooted at this family's head. Walks parents up + descendants down,
+    /// crossing household boundaries via ITS pointers so spun-off branches still appear here.</summary>
+    [HttpGet("{id:guid}/extended-tree")]
+    [Authorize(Policy = "family.view")]
+    public async Task<IActionResult> ExtendedTree(Guid id, CancellationToken ct)
+    {
+        var r = await svc.GetExtendedTreeAsync(id, ct);
+        return r.IsSuccess ? Ok(r.Value) : Problem(r.Error);
     }
 
     private IActionResult Problem(Error err) => err.Type switch

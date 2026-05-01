@@ -145,6 +145,8 @@ public static class DependencyInjection
         // Photo storage (local file-system default; swap for Azure Blob later)
         services.Configure<PhotoStorageOptions>(config.GetSection(PhotoStorageOptions.SectionName));
         services.AddSingleton<IPhotoStorage, LocalFileSystemPhotoStorage>();
+        services.Configure<EventAssetStorageOptions>(config.GetSection(EventAssetStorageOptions.SectionName));
+        services.AddSingleton<IEventAssetStorage, LocalFileSystemEventAssetStorage>();
         services.Configure<Application.Receipts.ReceiptDocumentStorageOptions>(
             config.GetSection(Application.Receipts.ReceiptDocumentStorageOptions.SectionName));
         services.AddSingleton<Application.Receipts.IReceiptDocumentStorage, Storage.LocalFileSystemReceiptDocumentStorage>();

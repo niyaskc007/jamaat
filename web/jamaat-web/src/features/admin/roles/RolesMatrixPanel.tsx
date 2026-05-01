@@ -1,9 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Card, Checkbox, Table, Tag, Spin, Alert, App as AntdApp, Space, Typography, Tooltip } from 'antd';
+import { Card, Checkbox, Table, Tag, Spin, Alert, App as AntdApp, Space, Typography, Tooltip, Tabs } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircleTwoTone, SafetyCertificateOutlined } from '@ant-design/icons';
+import { CheckCircleTwoTone, SafetyCertificateOutlined, AppstoreOutlined, CalendarOutlined } from '@ant-design/icons';
 import { rolesApi, groupPermissions, type Role } from './rolesApi';
 import { extractProblem } from '../../../shared/api/client';
+
+/// Resource prefixes that belong to the Events surface. Anything not in this set is rendered
+/// under "Core system" — keeps the long permission list digestible while making event-specific
+/// roles (volunteers, registrars, page designers) easy to find.
+const EVENT_RESOURCES = new Set(['event']);
 
 /// Role × Permission matrix. Each row = one permission; each column = one role.
 /// Toggling a checkbox calls add/remove on the role and propagates to users in that role
@@ -17,6 +22,7 @@ export function RolesMatrixPanel() {
   const rolesQ = useQuery({ queryKey: ['roles-detailed'], queryFn: rolesApi.list });
 
   const [pending, setPending] = useState<Set<string>>(new Set()); // key = `${role}::${perm}`
+  const [scope, setScope] = useState<'core' | 'events'>('core');
 
   const toggleMut = useMutation({
     mutationFn: async ({ role, perm, on }: { role: string; perm: string; on: boolean }) => {
@@ -32,6 +38,10 @@ export function RolesMatrixPanel() {
   });
 
   const groups = useMemo(() => permsQ.data ? groupPermissions(permsQ.data) : [], [permsQ.data]);
+  const filteredGroups = useMemo(() =>
+    groups.filter((g) => scope === 'events' ? EVENT_RESOURCES.has(g.resource) : !EVENT_RESOURCES.has(g.resource)),
+    [groups, scope],
+  );
   const roleByName = useMemo(() => {
     const m = new Map<string, Role>();
     for (const r of rolesQ.data ?? []) m.set(r.name, r);
@@ -46,10 +56,16 @@ export function RolesMatrixPanel() {
   // Build a flat row per permission (with a leading group-label row separator handled via grouping).
   type Row = { kind: 'header'; resource: string } | { kind: 'perm'; permission: string };
   const rows: Row[] = [];
-  for (const g of groups) {
+  for (const g of filteredGroups) {
     rows.push({ kind: 'header', resource: g.resource });
     for (const p of g.permissions) rows.push({ kind: 'perm', permission: p });
   }
+
+  // Forcing scroll.x to the actual sum prevents the role columns being clipped on narrower
+  // viewports - the sticky first column stays put while everything else scrolls horizontally.
+  const PERM_COL = 320;
+  const ROLE_COL = 140;
+  const tableWidth = PERM_COL + ROLE_COL * roleNames.length;
 
   return (
     <div>
@@ -66,6 +82,17 @@ export function RolesMatrixPanel() {
         }
       />
 
+      <Tabs
+        size="small"
+        activeKey={scope}
+        onChange={(k) => setScope(k as 'core' | 'events')}
+        items={[
+          { key: 'core', label: <span><AppstoreOutlined /> Core system</span> },
+          { key: 'events', label: <span><CalendarOutlined /> Events</span> },
+        ]}
+        style={{ marginBlockEnd: 8 }}
+      />
+
       <Card size="small" style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
         <Table
           rowKey={(r) => (r.kind === 'header' ? `h:${r.resource}` : `p:${r.permission}`)}
@@ -73,12 +100,13 @@ export function RolesMatrixPanel() {
           pagination={false}
           dataSource={rows}
           sticky
+          scroll={{ x: tableWidth }}
           columns={[
             {
               title: 'Permission',
               key: 'permission',
               fixed: 'left',
-              width: 280,
+              width: PERM_COL,
               render: (_, row) =>
                 row.kind === 'header' ? (
                   <span style={{ fontWeight: 600, color: 'var(--jm-gray-700)', textTransform: 'capitalize' }}>
@@ -95,7 +123,7 @@ export function RolesMatrixPanel() {
               title: <Tag color={rn === 'Administrator' ? 'gold' : 'blue'} style={{ margin: 0 }}>{rn}</Tag>,
               key: rn,
               align: 'center' as const,
-              width: 130,
+              width: ROLE_COL,
               render: (_: unknown, row: Row) => {
                 if (row.kind === 'header') return null;
                 const role = roleByName.get(rn);
@@ -119,6 +147,7 @@ export function RolesMatrixPanel() {
             })),
           ]}
           rowClassName={(r) => (r.kind === 'header' ? 'jm-roles-matrix-header-row' : '')}
+          locale={{ emptyText: scope === 'events' ? 'No event permissions yet.' : 'No core permissions match.' }}
         />
       </Card>
 

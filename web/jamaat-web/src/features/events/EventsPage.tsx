@@ -11,6 +11,7 @@ import { useAuth } from '../../shared/auth/useAuth';
 import { formatDate, formatDateTime } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
 import { eventsApi, EventCategoryLabel, type Event, type EventCategory, type EventScan } from './eventsApi';
+import { useEventCategories, categoryLabelOf } from './useEventCategories';
 
 export function EventsPage() {
   const qc = useQueryClient();
@@ -31,6 +32,8 @@ export function EventsPage() {
     queryFn: () => eventsApi.list({ page, pageSize: 25, search, category }),
     placeholderData: keepPreviousData,
   });
+  const categoriesQ = useEventCategories();
+  const categoryOptions = (categoriesQ.data ?? []).map((c) => ({ value: c.code, label: c.name }));
 
   const delMut = useMutation({
     mutationFn: (id: string) => eventsApi.remove(id),
@@ -46,7 +49,8 @@ export function EventsPage() {
       </div>
     ) },
     { title: 'Name', dataIndex: 'name', render: (v: string, row) => <div><a style={{ fontWeight: 500, color: 'var(--jm-gray-900)' }} onClick={() => navigate(`/events/${row.id}`)}>{v}</a>{row.nameArabic && <div dir="rtl" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.nameArabic}</div>}</div> },
-    { title: 'Category', dataIndex: 'category', width: 140, render: (c: EventCategory) => <Tag color="blue">{EventCategoryLabel[c]}</Tag> },
+    { title: 'Category', dataIndex: 'category', width: 140,
+      render: (c: EventCategory, row) => <Tag color="blue">{row.categoryName ?? categoryLabelOf(categoriesQ.data, c) ?? EventCategoryLabel[c] ?? `Category ${c}`}</Tag> },
     { title: 'Place', dataIndex: 'place', width: 200, render: (v: string | null) => v ?? '-' },
     { title: 'Attendees', dataIndex: 'scanCount', width: 110,
       render: (v: number, row) => <Button type="link" size="small" onClick={() => setScansFor(row)}>{v} scanned</Button> },
@@ -62,7 +66,13 @@ export function EventsPage() {
           { key: 'del', icon: <DeleteOutlined />, danger: true, label: 'Delete / deactivate',
             onClick: () => modal.confirm({ title: 'Remove event?', onOk: () => delMut.mutateAsync(row.id) }) },
         ];
-        return <Dropdown menu={{ items }} trigger={['click']}><Button type="text" icon={<MoreOutlined />} /></Dropdown>;
+        return (
+          <span onClick={(e) => e.stopPropagation()}>
+            <Dropdown menu={{ items }} trigger={['click']}>
+              <Button type="text" icon={<MoreOutlined />} />
+            </Dropdown>
+          </span>
+        );
       }
     },
   ];
@@ -92,11 +102,16 @@ export function EventsPage() {
             onChange={(e) => setSearch(e.target.value)} onPressEnter={() => setPage(1)} style={{ inlineSize: 240 }} />
           <Select allowClear placeholder="Category" style={{ inlineSize: 180 }} value={category}
             onChange={(v) => setCategory(v as EventCategory | undefined)}
-            options={Object.entries(EventCategoryLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
+            options={categoryOptions} />
           <div style={{ flex: 1 }} />
           <Button icon={<ReloadOutlined />} onClick={() => refetch()} loading={isFetching && !isLoading} />
         </div>
         <Table rowKey="id" size="middle" loading={isLoading} columns={cols} dataSource={data?.items ?? []}
+          // Whole-row click navigates to the event detail / management page.
+          onRow={(row) => ({
+            onClick: () => navigate(`/events/${(row as { id: string }).id}`),
+            style: { cursor: 'pointer' },
+          })}
           onChange={(p) => setPage(p.current ?? 1)}
           pagination={{ current: page, pageSize: 25, total: data?.total ?? 0 }}
           locale={{ emptyText: empty ? (
@@ -112,14 +127,17 @@ export function EventsPage() {
       </Card>
       )}
 
-      <EventDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} event={editing} />
+      <EventDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} event={editing} categoryOptions={categoryOptions} />
       {scanOpen && <ScanModal event={scanOpen} onClose={() => setScanOpen(null)} />}
       {scansFor && <ScansModal event={scansFor} onClose={() => setScansFor(null)} />}
     </div>
   );
 }
 
-function EventDrawer({ open, onClose, event }: { open: boolean; onClose: () => void; event: Event | null }) {
+function EventDrawer({ open, onClose, event, categoryOptions }: {
+  open: boolean; onClose: () => void; event: Event | null;
+  categoryOptions: { value: number; label: string }[];
+}) {
   const qc = useQueryClient();
   const { message } = AntdApp.useApp();
   const [form] = Form.useForm();
@@ -164,8 +182,8 @@ function EventDrawer({ open, onClose, event }: { open: boolean; onClose: () => v
         <Form.Item label="Tagline" name="tagline" help="Short subtitle shown on the event card.">
           <Input placeholder="e.g., Night of Mercy, 1447H" />
         </Form.Item>
-        <Form.Item label="Category" name="category">
-          <Select options={Object.entries(EventCategoryLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
+        <Form.Item label="Category" name="category" help="Manage the list under Master Data ▸ Lookups (category: EventCategory).">
+          <Select options={categoryOptions} />
         </Form.Item>
         <Form.Item label="Event date" name="eventDate" rules={[{ required: true }]}>
           <DatePicker style={{ inlineSize: '100%' }} />

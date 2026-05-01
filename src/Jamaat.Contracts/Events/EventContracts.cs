@@ -20,7 +20,10 @@ public sealed record EventDto(
     bool IsActive, string? Notes,
     int ScanCount, int RegistrationCount, int ConfirmedCount, int CheckedInCount, int WaitlistedCount,
     IReadOnlyList<EventAgendaItemDto> Agenda,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc,
+    // Resolved name for the EventCategory lookup matching this event's Category code. Null when no
+    // matching lookup row exists (e.g. legacy data with a code that's been deleted).
+    string? CategoryName = null);
 
 public sealed record EventAgendaItemDto(
     Guid Id, int SortOrder, string Title, TimeOnly? StartTime, TimeOnly? EndTime,
@@ -127,7 +130,8 @@ public sealed record PortalEventSummaryDto(
     DateOnly EventDate, string? EventDateHijri,
     DateTimeOffset? StartsAtUtc, DateTimeOffset? EndsAtUtc,
     string? Place, string? CoverImageUrl, string? PrimaryColor, string? AccentColor,
-    bool RegistrationsOpenNow, int? SeatsRemaining);
+    bool RegistrationsOpenNow, int? SeatsRemaining,
+    string? CategoryName = null);
 
 public sealed record PortalEventDetailDto(
     PortalEventSummaryDto Summary,

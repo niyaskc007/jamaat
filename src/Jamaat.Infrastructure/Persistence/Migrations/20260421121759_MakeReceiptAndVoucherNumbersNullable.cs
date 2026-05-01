@@ -10,6 +10,16 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropIndex(
+                name: "IX_Voucher_TenantId_VoucherNumber",
+                schema: "txn",
+                table: "Voucher");
+
+            migrationBuilder.DropIndex(
+                name: "IX_Receipt_TenantId_ReceiptNumber",
+                schema: "txn",
+                table: "Receipt");
+
             migrationBuilder.AlterColumn<string>(
                 name: "VoucherNumber",
                 schema: "txn",
@@ -31,6 +41,22 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                 oldClrType: typeof(string),
                 oldType: "nvarchar(32)",
                 oldMaxLength: 32);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Voucher_TenantId_VoucherNumber",
+                schema: "txn",
+                table: "Voucher",
+                columns: new[] { "TenantId", "VoucherNumber" },
+                unique: true,
+                filter: "[VoucherNumber] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Receipt_TenantId_ReceiptNumber",
+                schema: "txn",
+                table: "Receipt",
+                columns: new[] { "TenantId", "ReceiptNumber" },
+                unique: true,
+                filter: "[ReceiptNumber] IS NOT NULL");
         }
 
         /// <inheritdoc />

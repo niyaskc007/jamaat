@@ -213,7 +213,7 @@ public sealed class ReceiptService(
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
         var receipt = new Receipt(Guid.NewGuid(), tenant.TenantId, dto.ReceiptDate, member.Id, member.ItsNumber.Value, member.FullName, txnCurrency);
-        receipt.SetPayment(dto.PaymentMode, dto.BankAccountId, dto.ChequeNumber, dto.ChequeDate, dto.PaymentReference);
+        receipt.SetPayment(dto.PaymentMode, dto.BankAccountId, dto.ChequeNumber, dto.ChequeDate, dto.DrawnOnBank, dto.PaymentReference);
         receipt.SetRemarks(dto.Remarks);
         receipt.SetContributionIntention(dto.Intention, dto.NiyyathNote, dto.MaturityDate, dto.AgreementReference);
         receipt.RefreshMaturityState(clock.Today);
@@ -259,6 +259,38 @@ public sealed class ReceiptService(
             return await MapAsync(draft!, ct);
         }
 
+        // --- Future-dated cheque branch ----------------------------------------------------
+        // PDC unification: a future-dated cheque is a promise, not money received. We hold the
+        // receipt in PendingClearance, create a PostDatedCheque tracking row, and DEFER every
+        // side effect (no installment allocation, no QH repayment, no numbering, no GL posting).
+        // The PostDatedCheque clearing transition replays the deferred work via
+        // ConfirmPendingAsync; bouncing cancels the receipt with no GL impact.
+        if (dto.PaymentMode == PaymentMode.Cheque
+            && dto.ChequeDate is DateOnly cd
+            && cd > clock.Today)
+        {
+            if (string.IsNullOrWhiteSpace(dto.ChequeNumber))
+                return Error.Validation("cheque.number_required", "Cheque number is required for a post-dated cheque.");
+            if (string.IsNullOrWhiteSpace(dto.DrawnOnBank))
+                return Error.Validation("cheque.bank_required", "Drawn-on bank is required for a post-dated cheque.");
+
+            var pdc = PostDatedCheque.ForReceipt(
+                Guid.NewGuid(), tenant.TenantId, receipt.Id, member.Id,
+                dto.ChequeNumber!, cd, dto.DrawnOnBank!,
+                receipt.AmountTotal, txnCurrency);
+
+            receipt.MarkPendingClearance(pdc.Id);
+            await repo.AddAsync(receipt, ct);
+            db.PostDatedCheques.Add(pdc);
+            await uow.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+
+            // No confirmation notification yet - the money hasn't actually landed. The cashier
+            // sees the receipt in PendingClearance + the cheques workbench shows the new PDC.
+            var pending = await repo.GetWithLinesAsync(receipt.Id, ct);
+            return await MapAsync(pending!, ct);
+        }
+
         // Apply the payments onto their installments (aggregate tracks PaidAmount + status)
         foreach (var line in dto.Lines.Where(l => l.CommitmentId.HasValue && l.CommitmentInstallmentId.HasValue))
         {
@@ -291,6 +323,100 @@ public sealed class ReceiptService(
 
         var fresh = await repo.GetWithLinesAsync(receipt.Id, ct);
         return await MapAsync(fresh!, ct);
+    }
+
+    /// <summary>Finalize a receipt that's been waiting in <see cref="ReceiptStatus.PendingClearance"/>.
+    /// Called by <c>PostDatedChequeService</c> when the linked cheque clears: replays the deferred
+    /// work that <see cref="CreateAndConfirmAsync"/> skipped (commitment + QH installment allocations,
+    /// receipt numbering, GL posting). Re-validates the linked aggregates because state may have
+    /// changed since the receipt was drafted (e.g. a commitment was cancelled while we held the cheque).</summary>
+    public async Task<Result<ReceiptDto>> ConfirmPendingAsync(Guid receiptId, DateOnly clearedOn, CancellationToken ct = default)
+    {
+        var receipt = await repo.GetWithLinesAsync(receiptId, ct);
+        if (receipt is null) return Error.NotFound("receipt.not_found", "Receipt not found.");
+        if (receipt.Status != ReceiptStatus.PendingClearance)
+            return Error.Business("receipt.not_pending", $"Receipt is {receipt.Status}, not pending clearance.");
+
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        var member = await db.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == receipt.MemberId, ct);
+        if (member is null) return Error.NotFound("member.not_found", "Member not found.");
+
+        // Period at the cheque's clearance date - usually different from the receipt date if the
+        // cheque was held across a period boundary. Use the clear date so the GL entry lands in
+        // the period money actually moved, not when the cheque was drafted.
+        var period = await ResolvePeriodAsync(clearedOn, ct);
+        if (period is null) return Error.Business("period.not_open", "No open financial period covers the clearance date.");
+
+        // Re-load commitments + QH loans referenced by the lines and re-check they're still
+        // payable. This catches the "commitment cancelled while cheque was in flight" case.
+        var commitmentIds = receipt.Lines.Where(l => l.CommitmentId.HasValue).Select(l => l.CommitmentId!.Value).Distinct().ToList();
+        var commitments = commitmentIds.Count == 0
+            ? new Dictionary<Guid, Commitment>()
+            : (await db.Commitments.Include(c => c.Installments).Where(c => commitmentIds.Contains(c.Id)).ToListAsync(ct))
+              .ToDictionary(c => c.Id);
+        foreach (var l in receipt.Lines.Where(l => l.CommitmentId.HasValue))
+        {
+            if (!commitments.TryGetValue(l.CommitmentId!.Value, out var cm))
+                return Error.Business("commitment.gone", $"Commitment {l.CommitmentId} no longer exists.");
+            if (cm.Status is CommitmentStatus.Cancelled or CommitmentStatus.Completed or CommitmentStatus.Paused)
+                return Error.Business("commitment.not_payable", $"Commitment {cm.Code} is {cm.Status} - cancel the cheque and reissue.");
+        }
+        var loanIds = receipt.Lines.Where(l => l.QarzanHasanaLoanId.HasValue).Select(l => l.QarzanHasanaLoanId!.Value).Distinct().ToList();
+        var loans = loanIds.Count == 0
+            ? new Dictionary<Guid, QarzanHasanaLoan>()
+            : (await db.QarzanHasanaLoans.Include(l => l.Installments).Where(l => loanIds.Contains(l.Id)).ToListAsync(ct))
+              .ToDictionary(l => l.Id);
+        foreach (var l in receipt.Lines.Where(l => l.QarzanHasanaLoanId.HasValue))
+        {
+            if (!loans.TryGetValue(l.QarzanHasanaLoanId!.Value, out var loan))
+                return Error.Business("qh.gone", $"Qarzan Hasana loan {l.QarzanHasanaLoanId} no longer exists.");
+            if (loan.Status is not (QarzanHasanaStatus.Active or QarzanHasanaStatus.Disbursed))
+                return Error.Business("qh.not_payable", $"Loan {loan.Code} is {loan.Status} - cancel the cheque and reissue.");
+        }
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        foreach (var l in receipt.Lines.Where(l => l.CommitmentId.HasValue && l.CommitmentInstallmentId.HasValue))
+        {
+            var cm = commitments[l.CommitmentId!.Value];
+            _ = cm.RecordPaymentOnInstallment(l.CommitmentInstallmentId!.Value, l.Amount, clearedOn);
+            db.Commitments.Update(cm);
+        }
+        foreach (var l in receipt.Lines.Where(l => l.QarzanHasanaLoanId.HasValue && l.QarzanHasanaInstallmentId.HasValue))
+        {
+            var loan = loans[l.QarzanHasanaLoanId!.Value];
+            _ = loan.RecordRepayment(l.QarzanHasanaInstallmentId!.Value, l.Amount, clearedOn);
+            db.QarzanHasanaLoans.Update(loan);
+        }
+
+        var (seriesId, number) = await numbering.NextAsync(NumberingScope.Receipt, null, clearedOn.Year, ct);
+        receipt.Confirm(number, period.Id, seriesId,
+            currentUser.UserId ?? Guid.Empty, currentUser.UserName ?? "system", clock.UtcNow);
+        await posting.PostReceiptAsync(receipt, ct);
+        await uow.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        await NotifyReceiptConfirmedAsync(receipt, member, ct);
+        await InvalidateReliabilityAsync(receipt.MemberId, ct);
+
+        var fresh = await repo.GetWithLinesAsync(receipt.Id, ct);
+        return await MapAsync(fresh!, ct);
+    }
+
+    /// <summary>Cancel a receipt held in <see cref="ReceiptStatus.PendingClearance"/>. Used when a
+    /// post-dated cheque bounces - no GL entry was ever made, so cancellation is a pure status
+    /// flip plus reason capture. Caller (PostDatedChequeService) is responsible for the cheque-side
+    /// transition.</summary>
+    public async Task<Result> CancelPendingAsync(Guid receiptId, string reason, CancellationToken ct = default)
+    {
+        var receipt = await repo.GetWithLinesAsync(receiptId, ct);
+        if (receipt is null) return Result.Failure(Error.NotFound("receipt.not_found", "Receipt not found."));
+        if (receipt.Status != ReceiptStatus.PendingClearance)
+            return Result.Failure(Error.Business("receipt.not_pending", $"Receipt is {receipt.Status}, not pending clearance."));
+
+        receipt.Cancel(reason, currentUser.UserId ?? Guid.Empty, clock.UtcNow);
+        await uow.SaveChangesAsync(ct);
+        return Result.Success();
     }
 
     public async Task<Result<ReceiptDto>> ApproveAsync(Guid id, CancellationToken ct = default)
@@ -850,7 +976,8 @@ Jamaat";
                     l.FundEnrollmentId, enrollCode,
                     l.QarzanHasanaLoanId, loanCode, l.QarzanHasanaInstallmentId, qhInstNo);
             }).ToList(),
-            e.Intention, e.NiyyathNote, e.MaturityDate, e.AgreementReference, e.AmountReturned, e.MaturityState, e.AgreementDocumentUrl);
+            e.Intention, e.NiyyathNote, e.MaturityDate, e.AgreementReference, e.AmountReturned, e.MaturityState, e.AgreementDocumentUrl,
+            e.DrawnOnBank, e.PendingPostDatedChequeId);
     }
 
     /// <summary>Best-effort cache invalidation for the affected member's reliability snapshot.

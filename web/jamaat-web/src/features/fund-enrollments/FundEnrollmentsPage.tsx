@@ -118,7 +118,14 @@ export function FundEnrollmentsPage() {
           items.push({ key: 'cancel', icon: <StopOutlined />, label: 'Cancel', danger: true,
             onClick: () => modal.confirm({ title: 'Cancel patronage?', onOk: () => cancelMut.mutateAsync(row.id) }) });
         }
-        return <Dropdown menu={{ items }} trigger={['click']}><Button type="text" icon={<MoreOutlined />} /></Dropdown>;
+        // Stop the row-click handler from firing when the operator opens the actions menu.
+        return (
+          <span onClick={(e) => e.stopPropagation()}>
+            <Dropdown menu={{ items }} trigger={['click']}>
+              <Button type="text" icon={<MoreOutlined />} />
+            </Dropdown>
+          </span>
+        );
       },
     },
   ];
@@ -179,6 +186,12 @@ export function FundEnrollmentsPage() {
 
         <Table<FundEnrollment> rowKey="id" size="middle" loading={isLoading}
           columns={cols} dataSource={data?.items ?? []}
+          // Whole-row click navigates to the patronage detail. The code-cell `<a>` link still
+          // works the same; this just removes the requirement to aim precisely at the link.
+          onRow={(row) => ({
+            onClick: () => navigate(`/fund-enrollments/${row.id}`),
+            style: { cursor: 'pointer' },
+          })}
           onChange={(p) => setPage(p.current ?? 1)}
           rowSelection={canApprove ? {
             selectedRowKeys: selectedIds,

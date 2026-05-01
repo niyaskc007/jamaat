@@ -29,6 +29,7 @@ public sealed class EventPortalService(JamaatDbContextFacade db, IClock clock) :
             .Take(Math.Clamp(max, 1, 100))
             .ToListAsync(ct);
 
+        var categoryMap = await LoadCategoryMapAsync(ct);
         var now = clock.UtcNow;
         var results = new List<PortalEventSummaryDto>(events.Count);
         foreach (var e in events)
@@ -47,9 +48,20 @@ public sealed class EventPortalService(JamaatDbContextFacade db, IClock clock) :
                 e.Id, e.Slug, e.Name, e.Tagline, e.Category,
                 e.EventDate, e.EventDateHijri, e.StartsAtUtc, e.EndsAtUtc,
                 e.Place, e.CoverImageUrl, e.PrimaryColor, e.AccentColor,
-                e.CanAcceptRegistrationsAt(now), remaining));
+                e.CanAcceptRegistrationsAt(now), remaining,
+                categoryMap.TryGetValue((int)e.Category, out var cn) ? cn : null));
         }
         return results;
+    }
+
+    private async Task<Dictionary<int, string>> LoadCategoryMapAsync(CancellationToken ct)
+    {
+        var rows = await db.Lookups.AsNoTracking()
+            .Where(l => l.Category == "EventCategory")
+            .Select(l => new { l.Code, l.Name }).ToListAsync(ct);
+        var map = new Dictionary<int, string>(rows.Count);
+        foreach (var r in rows) if (int.TryParse(r.Code, out var c)) map[c] = r.Name;
+        return map;
     }
 
     public async Task<Result<PortalEventDetailDto>> GetBySlugAsync(string slug, CancellationToken ct = default)
@@ -71,11 +83,13 @@ public sealed class EventPortalService(JamaatDbContextFacade db, IClock clock) :
             remaining = Math.Max(0, cap - taken);
         }
 
+        var categoryMap = await LoadCategoryMapAsync(ct);
         var summary = new PortalEventSummaryDto(
             e.Id, e.Slug, e.Name, e.Tagline, e.Category,
             e.EventDate, e.EventDateHijri, e.StartsAtUtc, e.EndsAtUtc,
             e.Place, e.CoverImageUrl, e.PrimaryColor, e.AccentColor,
-            e.CanAcceptRegistrationsAt(clock.UtcNow), remaining);
+            e.CanAcceptRegistrationsAt(clock.UtcNow), remaining,
+            categoryMap.TryGetValue((int)e.Category, out var cn) ? cn : null);
 
         var agenda = e.Agenda.OrderBy(a => a.SortOrder)
             .Select(a => new EventAgendaItemDto(a.Id, a.SortOrder, a.Title, a.StartTime, a.EndTime, a.Speaker, a.Location, a.Description))

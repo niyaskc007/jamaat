@@ -34,6 +34,7 @@ public abstract class JamaatDbContextFacade
     public abstract DbSet<Commitment> Commitments { get; }
     public abstract DbSet<CommitmentAgreementTemplate> CommitmentAgreementTemplates { get; }
     public abstract DbSet<Family> Families { get; }
+    public abstract DbSet<FamilyMemberLink> FamilyMemberLinks { get; }
     public abstract DbSet<Tenant> Tenants { get; }
     public abstract DbSet<Sector> Sectors { get; }
     public abstract DbSet<SubSector> SubSectors { get; }

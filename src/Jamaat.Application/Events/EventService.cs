@@ -19,6 +19,9 @@ public interface IEventService
     Task<Result<EventDto>> CreateAsync(CreateEventDto dto, CancellationToken ct = default);
     Task<Result<EventDto>> UpdateAsync(Guid id, UpdateEventDto dto, CancellationToken ct = default);
     Task<Result<EventDto>> UpdateBrandingAsync(Guid id, UpdateEventBrandingDto dto, CancellationToken ct = default);
+    /// Changes only the cover image URL and leaves the rest of the branding (logo, colours)
+    /// intact. Called by the cover-upload endpoint after the image bytes are stored.
+    Task<Result<EventDto>> SetCoverImageAsync(Guid id, string? coverImageUrl, CancellationToken ct = default);
     Task<Result<EventDto>> UpdateShareAsync(Guid id, UpdateEventShareDto dto, CancellationToken ct = default);
     Task<Result<EventDto>> UpdateRegistrationSettingsAsync(Guid id, UpdateRegistrationSettingsDto dto, CancellationToken ct = default);
     Task<Result<EventDto>> ReplaceAgendaAsync(Guid id, ReplaceAgendaDto dto, CancellationToken ct = default);
@@ -58,8 +61,9 @@ public sealed class EventService(
             .Include(x => x.Agenda)
             .ToListAsync(ct);
 
+        var categoryMap = await LoadCategoryMapAsync(ct);
         var dtos = new List<EventDto>(items.Count);
-        foreach (var e in items) dtos.Add(await MapAsync(e, ct));
+        foreach (var e in items) dtos.Add(await MapAsync(e, ct, categoryMap));
         return new PagedResult<EventDto>(dtos, total, q.Page, q.PageSize);
     }
 
@@ -67,7 +71,7 @@ public sealed class EventService(
     {
         var e = await db.Events.AsNoTracking().Include(x => x.Agenda).FirstOrDefaultAsync(x => x.Id == id, ct);
         if (e is null) return Error.NotFound("event.not_found", "Event not found.");
-        return await MapAsync(e, ct);
+        return await MapAsync(e, ct, await LoadCategoryMapAsync(ct));
     }
 
     public async Task<Result<EventDto>> GetBySlugAsync(string slug, CancellationToken ct = default)
@@ -75,7 +79,23 @@ public sealed class EventService(
         var normalized = slug.ToLowerInvariant();
         var e = await db.Events.AsNoTracking().Include(x => x.Agenda).FirstOrDefaultAsync(x => x.Slug == normalized, ct);
         if (e is null) return Error.NotFound("event.not_found", "Event not found.");
-        return await MapAsync(e, ct);
+        return await MapAsync(e, ct, await LoadCategoryMapAsync(ct));
+    }
+
+    /// Loads the EventCategory lookup table once and returns a code→name dictionary used by every
+    /// EventDto map. Cheap (<10 rows in practice) and cached per request scope by EF.
+    private async Task<Dictionary<int, string>> LoadCategoryMapAsync(CancellationToken ct)
+    {
+        var rows = await db.Lookups.AsNoTracking()
+            .Where(l => l.Category == "EventCategory")
+            .Select(l => new { l.Code, l.Name })
+            .ToListAsync(ct);
+        var map = new Dictionary<int, string>(rows.Count);
+        foreach (var r in rows)
+        {
+            if (int.TryParse(r.Code, out var code)) map[code] = r.Name;
+        }
+        return map;
     }
 
     // ---- Mutations -------------------------------------------------------
@@ -117,6 +137,15 @@ public sealed class EventService(
         var e = await db.Events.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (e is null) return Error.NotFound("event.not_found", "Event not found.");
         e.UpdateBranding(dto.CoverImageUrl, dto.LogoUrl, dto.PrimaryColor, dto.AccentColor);
+        await uow.SaveChangesAsync(ct);
+        return await GetAsync(e.Id, ct);
+    }
+
+    public async Task<Result<EventDto>> SetCoverImageAsync(Guid id, string? coverImageUrl, CancellationToken ct = default)
+    {
+        var e = await db.Events.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (e is null) return Error.NotFound("event.not_found", "Event not found.");
+        e.SetCoverImageUrl(coverImageUrl);
         await uow.SaveChangesAsync(ct);
         return await GetAsync(e.Id, ct);
     }
@@ -251,8 +280,9 @@ public sealed class EventService(
 
     // ---- Helpers ---------------------------------------------------------
 
-    private async Task<EventDto> MapAsync(Event e, CancellationToken ct)
+    private async Task<EventDto> MapAsync(Event e, CancellationToken ct, Dictionary<int, string>? categoryMap = null)
     {
+        categoryMap ??= await LoadCategoryMapAsync(ct);
         var stats = await db.EventRegistrations.AsNoTracking()
             .Where(r => r.EventId == e.Id)
             .GroupBy(r => r.Status)
@@ -280,7 +310,8 @@ public sealed class EventService(
             e.ContactPhone, e.ContactEmail,
             e.IsActive, e.Notes,
             scanCount, regTotal, confirmed, checkedIn, waitlisted,
-            agenda, e.CreatedAtUtc);
+            agenda, e.CreatedAtUtc,
+            categoryMap.TryGetValue((int)e.Category, out var name) ? name : null);
     }
 
     private static string SlugOrAuto(string? explicitSlug, string name)
@@ -307,7 +338,9 @@ public sealed class CreateEventValidator : AbstractValidator<CreateEventDto>
     public CreateEventValidator()
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.Category).IsInEnum();
+        // Category codes are sourced from the EventCategory lookup table, which admins can extend.
+        // We accept any non-negative int and let the FK validator (if/when added) tighten this.
+        RuleFor(x => (int)x.Category).GreaterThanOrEqualTo(0);
         RuleFor(x => x.Slug).MaximumLength(100).Matches("^[a-z0-9-]*$").When(x => !string.IsNullOrEmpty(x.Slug));
     }
 }
@@ -316,6 +349,6 @@ public sealed class UpdateEventValidator : AbstractValidator<UpdateEventDto>
     public UpdateEventValidator()
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.Category).IsInEnum();
+        RuleFor(x => (int)x.Category).GreaterThanOrEqualTo(0);
     }
 }

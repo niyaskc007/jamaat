@@ -70,6 +70,11 @@ export type Installment = {
   waiverReason?: string | null;
   waivedAtUtc?: string | null;
   waivedByUserName?: string | null;
+  /// Most recent confirmed receipt that contributed a payment to this installment - used to
+  /// render "Last payment" as a clickable link. Null when no receipt has paid the installment
+  /// yet (e.g. seeded data, payment via a different channel).
+  lastPaymentReceiptId?: string | null;
+  lastPaymentReceiptNumber?: string | null;
 };
 
 /// 1=Admin (staff accepted on behalf of party), 2=Self (party accepted via portal).

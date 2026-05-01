@@ -77,9 +77,10 @@ function HeroRender({ content, event }: { content: HeroContent; event: PortalEve
   const overlayGradient = content.overlay !== false
     ? 'linear-gradient(180deg, rgba(0,0,0,0.20), rgba(0,0,0,0.55))'
     : '';
+  // Background priority: explicit image > author-supplied colour/gradient > theme gradient.
   const background = bg
     ? `${overlayGradient ? overlayGradient + ',' : ''} center/cover no-repeat url(${bg})`
-    : `linear-gradient(135deg, var(--portal-primary) 0%, var(--portal-accent) 100%)`;
+    : (content.backgroundColor ?? `linear-gradient(135deg, var(--portal-primary) 0%, var(--portal-accent) 100%)`);
   return (
     <>
       <div style={{

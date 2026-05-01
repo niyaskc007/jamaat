@@ -15,6 +15,14 @@ public interface IReceiptService
     /// of its funds had RequiresApproval set). Re-validates current state, applies
     /// commitment/QH allocations, allocates a number, posts the GL, and marks Confirmed.</summary>
     Task<Result<ReceiptDto>> ApproveAsync(Guid id, CancellationToken ct = default);
+    /// <summary>Finalize a receipt sitting in PendingClearance because a future-dated cheque was
+    /// received. Replays the deferred allocation + numbering + GL posting that
+    /// <see cref="CreateAndConfirmAsync"/> skipped on the future-cheque path. Called by
+    /// <c>PostDatedChequeService</c> when the cheque clears.</summary>
+    Task<Result<ReceiptDto>> ConfirmPendingAsync(Guid receiptId, DateOnly clearedOn, CancellationToken ct = default);
+    /// <summary>Cancel a receipt sitting in PendingClearance because the linked cheque bounced.
+    /// No GL impact since none was made. Called by <c>PostDatedChequeService</c>.</summary>
+    Task<Result> CancelPendingAsync(Guid receiptId, string reason, CancellationToken ct = default);
     /// <summary>Process a return-to-contributor against a confirmed Returnable receipt. Issues a
     /// linked voucher (with a dedicated number), debits the receipt's liability account, credits
     /// the chosen bank/cash account, and increments the receipt's running AmountReturned.</summary>

@@ -7,7 +7,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { extractProblem } from '../../shared/api/client';
 import { formatDate, money } from '../../shared/format/format';
-import { postDatedChequesApi, PdcStatusLabel, PdcStatusColor, type PostDatedCheque, type PostDatedChequeStatus } from '../commitments/postDatedChequesApi';
+import { postDatedChequesApi, PdcStatusLabel, PdcStatusColor, PdcSourceLabel, PdcSourceColor, type PostDatedCheque, type PostDatedChequeStatus } from '../commitments/postDatedChequesApi';
 import { useAuth } from '../../shared/auth/useAuth';
 
 /// Cashier-facing global PDC workbench. Lists every cheque across all commitments, with
@@ -44,7 +44,11 @@ export function PostDatedChequesPage() {
       if (dueIso && r.chequeDate > dueIso) return false;
       if (bank && !r.drawnOnBank.toLowerCase().includes(bank)) return false;
       if (s) {
-        const hay = `${r.chequeNumber} ${r.memberName} ${r.memberItsNumber} ${r.commitmentCode} ${r.partyName}`.toLowerCase();
+        const hay = [
+          r.chequeNumber, r.memberName, r.memberItsNumber,
+          r.commitmentCode, r.partyName,
+          r.sourceReceiptNumber, r.sourceVoucherNumber, r.voucherPayTo,
+        ].filter(Boolean).join(' ').toLowerCase();
         if (!hay.includes(s)) return false;
       }
       return true;
@@ -162,15 +166,57 @@ export function PostDatedChequesPage() {
           pagination={{ pageSize: 50 }}
           columns={[
             { title: 'Cheque #', dataIndex: 'chequeNumber', width: 130, render: (v: string) => <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontWeight: 500 }}>{v}</span> },
-            { title: 'Cheque date', dataIndex: 'chequeDate', width: 120, render: (v: string) => formatDate(v) },
-            { title: 'Drawn on', dataIndex: 'drawnOnBank', width: 180 },
-            { title: 'Member', key: 'm', render: (_, row) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.memberItsNumber}</span> · {row.memberName}</span> },
-            { title: 'Commitment', key: 'c', width: 160, render: (_, row) => (
-              <Button type="link" size="small" style={{ padding: 0 }} onClick={() => navigate(`/commitments/${row.commitmentId}`)}>
-                {row.commitmentCode}
-              </Button>
-            ) },
-            { title: 'For instalment', key: 'inst', width: 120, render: (_, row) => row.installmentNo ? <span className="jm-tnum">#{row.installmentNo}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
+            { title: 'Cheque date', dataIndex: 'chequeDate', width: 110, render: (v: string) => formatDate(v) },
+            { title: 'Drawn on', dataIndex: 'drawnOnBank', width: 160 },
+            // Source: discriminator + linked source-doc identifier. Replaces the old fixed
+            // "Commitment" column - we now have three kinds of source documents and the user
+            // wants to know "which doc is this cheque tracking" at a glance.
+            { title: 'Source', key: 'source', width: 200, render: (_, row) => {
+              if (row.source === 1 && row.commitmentId) {
+                return (
+                  <Space direction="vertical" size={0}>
+                    <Tag color={PdcSourceColor[1]} style={{ margin: 0, fontSize: 10 }}>{PdcSourceLabel[1]}</Tag>
+                    <Button type="link" size="small" style={{ padding: 0, height: 'auto' }}
+                      onClick={() => navigate(`/commitments/${row.commitmentId}`)}>
+                      {row.commitmentCode}{row.installmentNo ? <span className="jm-tnum" style={{ marginInlineStart: 4, color: 'var(--jm-gray-500)' }}>#{row.installmentNo}</span> : null}
+                    </Button>
+                  </Space>
+                );
+              }
+              if (row.source === 2 && row.sourceReceiptId) {
+                return (
+                  <Space direction="vertical" size={0}>
+                    <Tag color={PdcSourceColor[2]} style={{ margin: 0, fontSize: 10 }}>{PdcSourceLabel[2]}</Tag>
+                    <Button type="link" size="small" style={{ padding: 0, height: 'auto' }}
+                      onClick={() => navigate(`/receipts/${row.sourceReceiptId}`)}>
+                      {row.sourceReceiptNumber && row.sourceReceiptNumber !== '-' ? row.sourceReceiptNumber : 'Pending receipt'}
+                    </Button>
+                  </Space>
+                );
+              }
+              if (row.source === 3 && row.sourceVoucherId) {
+                return (
+                  <Space direction="vertical" size={0}>
+                    <Tag color={PdcSourceColor[3]} style={{ margin: 0, fontSize: 10 }}>{PdcSourceLabel[3]}</Tag>
+                    <Button type="link" size="small" style={{ padding: 0, height: 'auto' }}
+                      onClick={() => navigate(`/vouchers/${row.sourceVoucherId}`)}>
+                      {row.sourceVoucherNumber && row.sourceVoucherNumber !== '-' ? row.sourceVoucherNumber : 'Pending voucher'}
+                    </Button>
+                  </Space>
+                );
+              }
+              return <span style={{ color: 'var(--jm-gray-400)' }}>-</span>;
+            } },
+            // Member is set for Commitment + Receipt sources; Voucher rows fall back to PayTo.
+            { title: 'Payee', key: 'm', render: (_, row) => {
+              if (row.memberId) {
+                return <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.memberItsNumber}</span> · {row.memberName}</span>;
+              }
+              if (row.voucherPayTo) {
+                return <span style={{ color: 'var(--jm-gray-700)' }}>{row.voucherPayTo}</span>;
+              }
+              return <span style={{ color: 'var(--jm-gray-400)' }}>-</span>;
+            } },
             { title: 'Amount', dataIndex: 'amount', align: 'right', width: 130, render: (v: number, row) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, row.currency)}</span> },
             { title: 'Status', dataIndex: 'status', width: 130, render: (s: PostDatedChequeStatus, row) => (
               <Space direction="vertical" size={0}>
@@ -179,11 +225,19 @@ export function PostDatedChequesPage() {
                 {s === 4 && row.bounceReason && <span style={{ fontSize: 10, color: '#DC2626' }} title={row.bounceReason}>{row.bounceReason.length > 24 ? row.bounceReason.slice(0, 24) + '…' : row.bounceReason}</span>}
               </Space>
             ) },
-            { title: '', key: 'a', width: 110, render: (_, row) => (
-              <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => navigate(`/commitments/${row.commitmentId}`)}>
-                Open
-              </Button>
-            ) },
+            // Open button routes to the appropriate source document.
+            { title: '', key: 'a', width: 100, render: (_, row) => {
+              const target = row.source === 1 && row.commitmentId ? `/commitments/${row.commitmentId}`
+                : row.source === 2 && row.sourceReceiptId ? `/receipts/${row.sourceReceiptId}`
+                : row.source === 3 && row.sourceVoucherId ? `/vouchers/${row.sourceVoucherId}`
+                : null;
+              if (!target) return null;
+              return (
+                <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => navigate(target)}>
+                  Open
+                </Button>
+              );
+            } },
           ]}
           locale={{ emptyText: <Empty description="No cheques match the filters" image={<BankOutlined style={{ fontSize: 32, color: 'var(--jm-gray-400)' }} />} /> }}
         />

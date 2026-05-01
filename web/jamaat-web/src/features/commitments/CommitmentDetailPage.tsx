@@ -99,12 +99,37 @@ export function CommitmentDetailPage() {
       render: (v: number) => <span className="jm-tnum">{money(v, c.currency)}</span> },
     { title: 'Status', dataIndex: 'status', width: 140,
       render: (s: Installment['status']) => <Tag color={InstallmentStatusColor[s]} style={{ margin: 0 }}>{InstallmentStatusLabel[s]}</Tag> },
-    { title: 'Last payment', dataIndex: 'lastPaymentDate', width: 140,
-      render: (v: string | null | undefined) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
+    { title: 'Last payment', dataIndex: 'lastPaymentDate', width: 160,
+      render: (v: string | null | undefined, row) => {
+        if (!v) return <span style={{ color: 'var(--jm-gray-400)' }}>-</span>;
+        // Link the cell to the receipt that contributed the most recent payment, so the
+        // cashier can trace where the partial-paid amount came from. Falls back to plain
+        // text when there's no receipt link (legacy / seeded payments that bypassed receipts).
+        if (row.lastPaymentReceiptId) {
+          return (
+            <a
+              onClick={(e) => { e.stopPropagation(); navigate(`/receipts/${row.lastPaymentReceiptId}`); }}
+              style={{ display: 'inline-flex', flexDirection: 'column', lineHeight: 1.3 }}
+              title={`Open receipt ${row.lastPaymentReceiptNumber ?? ''}`}
+            >
+              <span>{formatDate(v)}</span>
+              <span style={{ fontSize: 10, fontFamily: "'JetBrains Mono', ui-monospace, monospace", color: 'var(--jm-gray-500)' }}>
+                {row.lastPaymentReceiptNumber ?? '-'}
+              </span>
+            </a>
+          );
+        }
+        return formatDate(v);
+      },
+    },
     {
-      key: 'actions', width: 260, align: 'end',
+      // Action column normalised: every button is `size="small"` + `type="text"` (no border)
+      // so the row height stays uniform whether a row has 1 or 3 actions. Pay still reads as
+      // the primary CTA via colour (primary-500) without the chunky filled button that was
+      // making rows look unevenly weighted.
+      key: 'actions', width: 240, align: 'end',
       render: (_: unknown, row) => (
-        <Space size={4}>
+        <Space size={2}>
           {row.paidAmount > 0 && (
             <Button size="small" type="text" icon={<EyeOutlined />}
               onClick={() => setPaymentsFilterInstNo(row.installmentNo)}
@@ -113,7 +138,8 @@ export function CommitmentDetailPage() {
             </Button>
           )}
           {row.status !== 3 && row.status !== 5 && isActive && (
-            <Button size="small" type="primary" icon={<DollarCircleOutlined />}
+            <Button size="small" type="text" icon={<DollarCircleOutlined />}
+              style={{ color: 'var(--jm-primary-500)' }}
               onClick={() => goToCollectPayment(row.id)}>
               Pay
             </Button>

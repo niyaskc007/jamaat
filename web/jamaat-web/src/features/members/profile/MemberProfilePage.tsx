@@ -7,7 +7,7 @@ import {
 import { useAuth } from '../../../shared/auth/useAuth';
 import { UserOutlined, TeamOutlined, HomeOutlined, BookOutlined, IdcardOutlined, CheckCircleOutlined, PhoneOutlined, GlobalOutlined, HeartOutlined, SafetyCertificateOutlined, FileProtectOutlined, StarOutlined, UploadOutlined, ThunderboltOutlined, WalletOutlined } from '@ant-design/icons';
 import { ReliabilityTab } from '../reliability/ReliabilityTab';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { PageHeader } from '../../../shared/ui/PageHeader';
@@ -37,7 +37,19 @@ export function MemberProfilePage() {
   const { message } = AntdApp.useApp();
   const qc = useQueryClient();
   const { hasPermission } = useAuth();
-  const [activeTab, setActiveTab] = useState('identity');
+  // Tab is URL-driven: ?tab=reliability deep-links from elsewhere (e.g. the admin reliability
+  // dashboard) directly into that tab, instead of always landing on Identity. setSearchParams
+  // mutates the URL on tab change, so reload + back/forward Just Work.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') ?? 'identity';
+  const setActiveTab = (key: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (key === 'identity') next.delete('tab');
+      else next.set('tab', key);
+      return next;
+    }, { replace: true });
+  };
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['member-profile', id], queryFn: () => memberProfileApi.get(id), enabled: !!id,

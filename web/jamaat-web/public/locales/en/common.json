@@ -19,6 +19,7 @@
   },
   "nav": {
     "sectionOperations": "Operations",
+    "sectionInsights": "Insights",
     "sectionAccounting": "Accounting",
     "sectionAdmin": "Administration",
     "dashboard": "Dashboard",

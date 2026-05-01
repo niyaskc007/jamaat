@@ -40,7 +40,13 @@ public sealed record CommitmentInstallmentDto(
     InstallmentStatus Status,
     string? WaiverReason,
     DateTimeOffset? WaivedAtUtc,
-    string? WaivedByUserName);
+    string? WaivedByUserName,
+    /// <summary>The most recent receipt that contributed a payment to this installment.
+    /// Lets the UI render the "Last payment" cell as a clickable link, so the cashier can
+    /// trace where the partial payment came from. Null when no receipt has paid the installment
+    /// yet (e.g. payment came from a direct seed-write that bypassed the receipt service).</summary>
+    Guid? LastPaymentReceiptId = null,
+    string? LastPaymentReceiptNumber = null);
 
 public sealed record CommitmentDetailDto(
     CommitmentDto Commitment,

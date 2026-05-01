@@ -744,14 +744,19 @@ public sealed class DashboardService(Persistence.JamaatDbContextFacade db, Domai
                           .Take(50)
                           .ToListAsync(ct);
 
-        var memberIds = rows.Select(r => r.MemberId).Distinct().ToList();
+        // PDC.MemberId is nullable now (Voucher-source PDCs are paid to non-member vendors and
+        // carry MemberId=null). Drop the nulls when querying the member-name dictionary, then
+        // resolve each row to either the looked-up name, "(non-member payee)", or "(unknown)".
+        var memberIds = rows.Where(r => r.MemberId.HasValue).Select(r => r.MemberId!.Value).Distinct().ToList();
         var memberNames = await db.Members.AsNoTracking()
             .Where(m => memberIds.Contains(m.Id))
             .ToDictionaryAsync(m => m.Id, m => m.FullName, ct);
 
         return rows.Select(r => new UpcomingChequePoint(
             r.Id, r.ChequeNumber, r.ChequeDate, r.Amount,
-            memberNames.GetValueOrDefault(r.MemberId, "(unknown)"),
+            r.MemberId.HasValue
+                ? memberNames.GetValueOrDefault(r.MemberId.Value, "(unknown)")
+                : "(non-member payee)",
             r.Status, r.Currency)).ToList();
     }
 

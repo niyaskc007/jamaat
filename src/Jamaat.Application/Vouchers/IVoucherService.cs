@@ -10,6 +10,11 @@ public interface IVoucherService
     Task<Result<VoucherDto>> GetAsync(Guid id, CancellationToken ct = default);
     Task<Result<VoucherDto>> CreateAsync(CreateVoucherDto dto, CancellationToken ct = default);
     Task<Result<VoucherDto>> ApproveAndPayAsync(Guid id, CancellationToken ct = default);
+    /// <summary>Finalize a voucher in PendingClearance because a future-dated cheque cleared.
+    /// Called by <c>PostDatedChequeService</c>.</summary>
+    Task<Result<VoucherDto>> ConfirmPendingAsync(Guid voucherId, DateOnly clearedOn, CancellationToken ct = default);
+    /// <summary>Cancel a voucher in PendingClearance because the linked cheque bounced.</summary>
+    Task<Result> CancelPendingAsync(Guid voucherId, string reason, CancellationToken ct = default);
     Task<Result<VoucherDto>> CancelAsync(Guid id, CancelVoucherDto dto, CancellationToken ct = default);
     Task<Result<VoucherDto>> ReverseAsync(Guid id, ReverseVoucherDto dto, CancellationToken ct = default);
     Task<Result<byte[]>> RenderPdfAsync(Guid id, CancellationToken ct = default);

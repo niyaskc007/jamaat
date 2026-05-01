@@ -4,6 +4,7 @@ import type { TableColumnsType } from 'antd';
 import { SearchOutlined, ReloadOutlined, BookOutlined } from '@ant-design/icons';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { money, formatDate } from '../../shared/format/format';
@@ -27,6 +28,7 @@ export function LedgerPage() {
 }
 
 function EntriesPanel() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState<LedgerQuery>({ page: 1, pageSize: 50 });
   const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [search, setSearch] = useState('');
@@ -85,6 +87,15 @@ function EntriesPanel() {
         rowKey="id" size="middle" loading={isLoading} columns={columns} dataSource={data?.items ?? []}
         pagination={{ current: query.page, pageSize: query.pageSize, total: data?.total ?? 0, showSizeChanger: true, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
         onChange={(p) => setQuery((q) => ({ ...q, page: p.current ?? 1, pageSize: p.pageSize ?? 50 }))}
+        onRow={(row) => {
+          const target = row.sourceType === 1 ? `/receipts/${row.sourceId}`
+            : row.sourceType === 2 ? `/vouchers/${row.sourceId}`
+            : null;
+          return {
+            onClick: target ? () => navigate(target) : undefined,
+            style: { cursor: target ? 'pointer' : 'default' },
+          };
+        }}
         scroll={{ x: 'max-content' }}
       />
     </Card>

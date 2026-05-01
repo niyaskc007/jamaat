@@ -1,9 +1,13 @@
-import { Card, Row, Col, Tag, Empty, Alert, Table, Statistic } from 'antd';
-import { ThunderboltOutlined, ArrowUpOutlined, ArrowDownOutlined, InfoCircleOutlined } from '@ant-design/icons';
-import { Link } from 'react-router-dom';
+import { Card, Row, Col, Tag, Empty, Alert, Table } from 'antd';
+import {
+  InfoCircleOutlined, TeamOutlined, CheckCircleOutlined,
+  QuestionCircleOutlined, TrophyOutlined,
+} from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { reliabilityApi, GradeColor, GradeLabel, type MemberRank } from '../../members/reliability/reliabilityApi';
 import { PageHeader } from '../../../shared/ui/PageHeader';
+import { KpiCard } from '../../../shared/ui/KpiCard';
 import { useAuth } from '../../../shared/auth/useAuth';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts';
 
@@ -40,38 +44,35 @@ export function ReliabilityDashboard() {
         style={{ marginBlockEnd: 16 }}
       />
 
+      {d && d.totalMembers > 0 && d.rated === 0 && (
+        <Alert
+          type="info"
+          showIcon
+          icon={<InfoCircleOutlined />}
+          message="No reliability scores computed yet"
+          description="Members need at least 90 days of history before they can be graded. The grade chart and ranked tables populate as commitments, contributions, and loan repayments accumulate."
+          style={{ marginBlockEnd: 16 }}
+        />
+      )}
+
       <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
         <Col xs={12} md={6}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
-            <Statistic title="Total members" value={d?.totalMembers ?? 0} prefix={<ThunderboltOutlined />} />
-          </Card>
+          <KpiCard icon={<TeamOutlined />} label="Total members" value={d?.totalMembers ?? null} format="number" accent="#0E7490" />
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
-            <Statistic title="Rated" value={d?.rated ?? 0}
-              prefix={<ArrowUpOutlined style={{ color: '#0E5C40' }} />}
-              valueStyle={{ color: '#0E5C40' }} />
-          </Card>
+          <KpiCard icon={<CheckCircleOutlined />} label="Rated" value={d?.rated ?? null} format="number" accent="#0E5C40" />
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
-            <Statistic title="Unrated" value={d?.unrated ?? 0}
-              prefix={<ArrowDownOutlined style={{ color: '#94A3B8' }} />}
-              valueStyle={{ color: '#94A3B8' }} />
-            <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
-              New members or no activity yet.
-            </div>
-          </Card>
+          <KpiCard icon={<QuestionCircleOutlined />} label="Unrated" value={d?.unrated ?? null} format="number"
+            caption="New members or insufficient history yet." accent="#94A3B8" />
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
-            <Statistic title="Top performer" value={d?.topReliable?.[0]?.totalScore ?? 0} suffix={d?.topReliable?.[0] ? '/100' : ''} />
-            {d?.topReliable?.[0] && (
-              <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
-                {d.topReliable[0].fullName}
-              </div>
-            )}
-          </Card>
+          <KpiCard icon={<TrophyOutlined />} label="Top performer"
+            value={d?.topReliable?.[0]?.totalScore ?? null}
+            format="number"
+            suffix={d?.topReliable?.[0] ? '/100' : undefined}
+            caption={d?.topReliable?.[0]?.fullName}
+            accent="#D97706" />
         </Col>
       </Row>
 
@@ -116,18 +117,27 @@ export function ReliabilityDashboard() {
 }
 
 function RankTable({ rows }: { rows: MemberRank[] }) {
+  const navigate = useNavigate();
+  // Whole-row click takes the operator straight into the member's Reliability tab - this
+  // dashboard is a launcher into per-member detail, so anything else (Identity etc.) is
+  // friction. The deep-link via ?tab=reliability is honoured by MemberProfilePage.
+  const openReliability = (memberId: string) => navigate(`/members/${memberId}?tab=reliability`);
   return (
     <Table<MemberRank> rowKey="memberId" size="small" pagination={false}
       dataSource={rows}
+      onRow={(row) => ({
+        onClick: () => openReliability(row.memberId),
+        style: { cursor: 'pointer' },
+      })}
       columns={[
         {
           title: 'Member',
           dataIndex: 'fullName',
           render: (v: string, row) => (
-            <Link to={`/members/${row.memberId}`}>
-              <div style={{ fontWeight: 500 }}>{v}</div>
+            <div>
+              <div style={{ fontWeight: 500, color: 'var(--jm-primary-600, #0B6E63)' }}>{v}</div>
               <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }} className="jm-tnum">ITS {row.itsNumber}</div>
-            </Link>
+            </div>
           ),
         },
         { title: 'Grade', dataIndex: 'grade', width: 90,

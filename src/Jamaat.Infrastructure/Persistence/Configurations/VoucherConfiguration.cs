@@ -33,6 +33,8 @@ public sealed class VoucherConfiguration : IEntityTypeConfiguration<Voucher>
         b.HasIndex(x => new { x.TenantId, x.VoucherNumber }).IsUnique().HasFilter("[VoucherNumber] IS NOT NULL");
         b.HasIndex(x => new { x.TenantId, x.VoucherDate });
         b.HasIndex(x => new { x.TenantId, x.Status });
+        // Filtered index on the PDC link - matters for the "still awaiting clearance" worklist.
+        b.HasIndex(x => x.PendingPostDatedChequeId).HasFilter("[PendingPostDatedChequeId] IS NOT NULL");
 
         b.HasOne<BankAccount>().WithMany().HasForeignKey(x => x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<FinancialPeriod>().WithMany().HasForeignKey(x => x.FinancialPeriodId).OnDelete(DeleteBehavior.Restrict);

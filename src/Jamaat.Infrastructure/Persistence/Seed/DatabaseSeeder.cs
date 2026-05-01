@@ -195,6 +195,7 @@ public static class DatabaseSeeder
         await SeedBankAndExpenseAsync(db, defaultTenantId, logger, ct);
         await SeedAgreementTemplateAsync(db, defaultTenantId, logger, ct);
         await SeedLookupsAsync(db, defaultTenantId, logger, ct);
+        await EnsureEventCategoryLookupsAsync(db, defaultTenantId, logger, ct);
         await SeedSectorsAsync(db, defaultTenantId, logger, ct);
         await SeedOrganisationsAsync(db, defaultTenantId, logger, ct);
         await SeedTestUsersAsync(userMgr, defaultTenantId, logger, config);
@@ -205,6 +206,7 @@ public static class DatabaseSeeder
         {
             await DevDataSeeder.SeedAsync(db, defaultTenantId, logger, ct);
             await DevDataSeeder.SeedReceiptsAsync(scope.ServiceProvider, defaultTenantId, logger, ct);
+            await DevDataSeeder.EnrichDevDataAsync(scope.ServiceProvider, defaultTenantId, logger, ct);
         }
     }
 
@@ -351,6 +353,40 @@ public static class DatabaseSeeder
         }
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Seeded {Count} lookup entries.", entries.Length);
+    }
+
+    /// Idempotent seed of the EventCategory lookup. Codes are stringified ints matching the
+    /// (historic) EventCategory enum so existing event rows keep working unchanged. Runs on every
+    /// startup so new categories added in code get picked up by databases that already have lookups.
+    private static async Task EnsureEventCategoryLookupsAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
+    {
+        var defaults = new (string code, string name, int order)[]
+        {
+            ("0", "Other", 99),
+            ("1", "Urs", 1),
+            ("2", "Miladi", 2),
+            ("3", "Shahadat", 3),
+            ("4", "Night", 4),
+            ("5", "Ashara Mubaraka", 5),
+            ("6", "Religious", 6),
+            ("7", "Community", 7),
+        };
+        const string category = "EventCategory";
+        var existing = await db.Lookups.Where(l => l.Category == category).Select(l => l.Code).ToListAsync(ct);
+        var added = 0;
+        foreach (var (code, name, order) in defaults)
+        {
+            if (existing.Contains(code, StringComparer.OrdinalIgnoreCase)) continue;
+            var l = new Lookup(Guid.NewGuid(), tenantId, category, code, name);
+            l.Update(name, null, order, null, isActive: true);
+            db.Lookups.Add(l);
+            added++;
+        }
+        if (added > 0)
+        {
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation("Seeded {Count} EventCategory lookups.", added);
+        }
     }
 
     private static async Task SeedSectorsAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
@@ -691,8 +727,19 @@ Accepted on {{today}}.
         "enrollment.view", "enrollment.create", "enrollment.update", "enrollment.approve",
         // Qarzan Hasana
         "qh.view", "qh.create", "qh.approve_l1", "qh.approve_l2", "qh.cancel", "qh.disburse", "qh.waive",
-        // Events
-        "event.view", "event.manage", "event.scan",
+        // Events. Granular split so the events tab in Roles & Permissions can offer real choice
+        // without forcing event.manage everywhere. Existing roles that hold event.manage continue
+        // to imply the sub-permissions (the API still gates on the umbrella keys for backward
+        // compatibility); new roles can opt in to a narrower slice instead.
+        "event.view",                      // see events, registrations, scans
+        "event.manage",                    // umbrella: create, update, delete, branding, agenda, page sections
+        "event.publish",                   // flip isActive / open-close registrations on a published event
+        "event.scan",                      // scan QR / mark check-in at the door
+        "event.checkin",                   // mark a registration as checked-in from the admin grid
+        "event.registration.manage",       // confirm, cancel, waitlist registrations on behalf of attendees
+        "event.export",                    // export attendees / scans to CSV
+        "event.page.design",               // edit page-designer sections (covered by event.manage today)
+        "event.analytics",                 // view per-event analytics dashboard
         // Receipts
         "receipt.view", "receipt.create", "receipt.confirm", "receipt.reprint", "receipt.cancel", "receipt.reverse",
         // Approve a Draft receipt (created against a fund flagged RequiresApproval) so it

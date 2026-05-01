@@ -58,6 +58,7 @@ export type HeroContent = {
   subheading?: string;
   useEventCover?: boolean;       // if true, use the event's coverImageUrl as the background
   backgroundImageUrl?: string;   // explicit override
+  backgroundColor?: string;      // CSS color or gradient - used when there's no image to fall back to
   overlay?: boolean;             // darkens the image so text stays legible
   ctaLabel?: string;
   ctaTarget?: 'register' | string; // 'register' scrolls to the registration section; otherwise treated as URL

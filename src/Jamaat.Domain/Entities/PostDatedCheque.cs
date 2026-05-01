@@ -4,22 +4,24 @@ using Jamaat.Domain.Enums;
 namespace Jamaat.Domain.Entities;
 
 /// <summary>
-/// A post-dated cheque held against a commitment. Captures the cheque metadata at receive
-/// time so it can be tracked through deposit / clearing / bouncing without applying payment
-/// until the cheque actually clears. When it clears, the system issues a normal Receipt that
-/// allocates against the linked <see cref="CommitmentInstallment"/>; until then the
-/// instalment's PaidAmount stays untouched.
+/// A post-dated cheque tracked from receipt to clearance. Polymorphic over its source document:
+/// it can be linked to a <see cref="Commitment"/> (legacy path - clearing issues a new Receipt
+/// against an installment), a <see cref="Receipt"/> held in PendingClearance (clearing confirms
+/// that receipt + posts to GL), or a <see cref="Voucher"/> held in PendingClearance (clearing
+/// approves + pays + posts).
+/// <para>
+/// Why a separate aggregate rather than mutating the source: a Receipt represents money received,
+/// a Voucher represents money paid. A future-dated cheque is a promise on either side. Treating
+/// it as a separate lifecycle lets the GL stay accurate (no posting until cleared) while still
+/// giving cashiers a single workbench to track every cheque they're holding.
+/// </para>
 /// </summary>
-/// <remarks>
-/// Why a separate aggregate rather than mutating the receipt: a Receipt represents money
-/// received by the Jamaat. A PDC is a future promise - issuing a Receipt before the cheque
-/// clears would overstate income. This aggregate carries the cheque's lifecycle distinct
-/// from the ledger; only the <see cref="Cleared"/> transition produces a real Receipt.
-/// </remarks>
 public sealed class PostDatedCheque : AggregateRoot<Guid>, ITenantScoped, IAuditable
 {
     private PostDatedCheque() { }
 
+    /// <summary>Legacy constructor: PDC tracking a commitment installment. Clearing this kind
+    /// of PDC creates a fresh Receipt allocated to the linked installment.</summary>
     public PostDatedCheque(
         Guid id, Guid tenantId,
         Guid commitmentId, Guid? commitmentInstallmentId,
@@ -29,15 +31,14 @@ public sealed class PostDatedCheque : AggregateRoot<Guid>, ITenantScoped, IAudit
     {
         if (commitmentId == Guid.Empty) throw new ArgumentException("CommitmentId required.", nameof(commitmentId));
         if (memberId == Guid.Empty) throw new ArgumentException("MemberId required.", nameof(memberId));
-        if (string.IsNullOrWhiteSpace(chequeNumber)) throw new ArgumentException("Cheque number required.", nameof(chequeNumber));
-        if (string.IsNullOrWhiteSpace(drawnOnBank)) throw new ArgumentException("Drawn-on bank required.", nameof(drawnOnBank));
-        if (amount <= 0) throw new ArgumentException("Amount must be positive.", nameof(amount));
+        AssertChequeFields(chequeNumber, drawnOnBank, amount);
 
         Id = id;
         TenantId = tenantId;
         CommitmentId = commitmentId;
         CommitmentInstallmentId = commitmentInstallmentId;
         MemberId = memberId;
+        Source = PostDatedChequeSource.Commitment;
         ChequeNumber = chequeNumber.Trim();
         ChequeDate = chequeDate;
         DrawnOnBank = drawnOnBank.Trim();
@@ -46,10 +47,81 @@ public sealed class PostDatedCheque : AggregateRoot<Guid>, ITenantScoped, IAudit
         Status = PostDatedChequeStatus.Pledged;
     }
 
+    /// <summary>Factory: PDC backing a Receipt that's been drafted but is sitting in
+    /// PendingClearance until the cheque clears. Receipt + member references are preserved
+    /// so the cheques workbench can still show "who paid" and link to the source receipt.</summary>
+    public static PostDatedCheque ForReceipt(
+        Guid id, Guid tenantId, Guid sourceReceiptId, Guid memberId,
+        string chequeNumber, DateOnly chequeDate, string drawnOnBank,
+        decimal amount, string currency)
+    {
+        if (sourceReceiptId == Guid.Empty) throw new ArgumentException("Source receipt required.", nameof(sourceReceiptId));
+        if (memberId == Guid.Empty) throw new ArgumentException("MemberId required.", nameof(memberId));
+        AssertChequeFields(chequeNumber, drawnOnBank, amount);
+        return new PostDatedCheque
+        {
+            Id = id,
+            TenantId = tenantId,
+            SourceReceiptId = sourceReceiptId,
+            MemberId = memberId,
+            Source = PostDatedChequeSource.Receipt,
+            ChequeNumber = chequeNumber.Trim(),
+            ChequeDate = chequeDate,
+            DrawnOnBank = drawnOnBank.Trim(),
+            Amount = amount,
+            Currency = currency.ToUpperInvariant(),
+            Status = PostDatedChequeStatus.Pledged,
+        };
+    }
+
+    /// <summary>Factory: PDC backing a Voucher held in PendingClearance until the cheque clears.
+    /// Vouchers may be paid to non-members (vendors, contractors), so MemberId is left null;
+    /// the voucher's PayTo string is what shows in the cashier workbench.</summary>
+    public static PostDatedCheque ForVoucher(
+        Guid id, Guid tenantId, Guid sourceVoucherId,
+        string chequeNumber, DateOnly chequeDate, string drawnOnBank,
+        decimal amount, string currency)
+    {
+        if (sourceVoucherId == Guid.Empty) throw new ArgumentException("Source voucher required.", nameof(sourceVoucherId));
+        AssertChequeFields(chequeNumber, drawnOnBank, amount);
+        return new PostDatedCheque
+        {
+            Id = id,
+            TenantId = tenantId,
+            SourceVoucherId = sourceVoucherId,
+            Source = PostDatedChequeSource.Voucher,
+            ChequeNumber = chequeNumber.Trim(),
+            ChequeDate = chequeDate,
+            DrawnOnBank = drawnOnBank.Trim(),
+            Amount = amount,
+            Currency = currency.ToUpperInvariant(),
+            Status = PostDatedChequeStatus.Pledged,
+        };
+    }
+
+    private static void AssertChequeFields(string chequeNumber, string drawnOnBank, decimal amount)
+    {
+        if (string.IsNullOrWhiteSpace(chequeNumber)) throw new ArgumentException("Cheque number required.", nameof(chequeNumber));
+        if (string.IsNullOrWhiteSpace(drawnOnBank)) throw new ArgumentException("Drawn-on bank required.", nameof(drawnOnBank));
+        if (amount <= 0) throw new ArgumentException("Amount must be positive.", nameof(amount));
+    }
+
     public Guid TenantId { get; private set; }
-    public Guid CommitmentId { get; private set; }
+
+    /// <summary>Discriminator: which source document this cheque is tracking.</summary>
+    public PostDatedChequeSource Source { get; private set; }
+
+    // Source pointers - exactly one is non-null per row, matching <see cref="Source"/>.
+    public Guid? CommitmentId { get; private set; }
     public Guid? CommitmentInstallmentId { get; private set; }
-    public Guid MemberId { get; private set; }
+    public Guid? SourceReceiptId { get; private set; }
+    public Guid? SourceVoucherId { get; private set; }
+
+    /// <summary>The contributor / borrower / payee identified as a member, when applicable.
+    /// Set for Commitment- and Receipt-source PDCs; null for Voucher-source PDCs paid to a
+    /// non-member vendor.</summary>
+    public Guid? MemberId { get; private set; }
+
     public string ChequeNumber { get; private set; } = default!;
     public DateOnly ChequeDate { get; private set; }
     public string DrawnOnBank { get; private set; } = default!;
@@ -61,7 +133,8 @@ public sealed class PostDatedCheque : AggregateRoot<Guid>, ITenantScoped, IAudit
     // Lifecycle timestamps + side-effects
     public DateOnly? DepositedOn { get; private set; }
     public DateOnly? ClearedOn { get; private set; }
-    /// <summary>Receipt produced when the cheque cleared. Null until Cleared.</summary>
+    /// <summary>Receipt produced (Commitment-source) or confirmed (Receipt-source) when the cheque
+    /// cleared. Null for Voucher-source PDCs (no receipt is involved on the voucher path).</summary>
     public Guid? ClearedReceiptId { get; private set; }
     public DateOnly? BouncedOn { get; private set; }
     public string? BounceReason { get; private set; }
@@ -94,10 +167,11 @@ public sealed class PostDatedCheque : AggregateRoot<Guid>, ITenantScoped, IAudit
         DepositedOn = on;
     }
 
-    /// <summary>Bank confirmed clearance. The matching Receipt id is recorded so the cheque
-    /// has an audit trail back to the ledger entry. Caller is responsible for issuing the
-    /// Receipt via the standard ReceiptService - this method only flips the lifecycle.</summary>
-    public void MarkCleared(DateOnly on, Guid receiptId)
+    /// <summary>Bank confirmed clearance. The matching Receipt id is recorded so the cheque has
+    /// an audit trail back to the ledger entry. Caller is responsible for the source-side action
+    /// (issue Receipt for Commitment-source; confirm the existing Receipt for Receipt-source;
+    /// pay the Voucher for Voucher-source). For Voucher-source, <paramref name="receiptId"/> is null.</summary>
+    public void MarkCleared(DateOnly on, Guid? receiptId)
     {
         if (Status is PostDatedChequeStatus.Cleared or PostDatedChequeStatus.Bounced or PostDatedChequeStatus.Cancelled)
             throw new InvalidOperationException($"Cheque is already {Status}.");

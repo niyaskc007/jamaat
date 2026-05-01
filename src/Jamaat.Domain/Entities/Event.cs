@@ -121,6 +121,12 @@ public sealed class Event : AggregateRoot<Guid>, ITenantScoped, IAuditable
         AccentColor = NormaliseHex(accentColor);
     }
 
+    /// Single-field setter used by the cover-upload endpoint - changes only the cover image URL
+    /// and leaves logoUrl / primaryColor / accentColor untouched. Necessary because the broader
+    /// UpdateBranding takes all four fields and was being called with nulls from cover-upload,
+    /// silently wiping the other three.
+    public void SetCoverImageUrl(string? coverImageUrl) => CoverImageUrl = coverImageUrl;
+
     public void UpdateShare(string? shareTitle, string? shareDescription, string? shareImageUrl)
     {
         ShareTitle = shareTitle;

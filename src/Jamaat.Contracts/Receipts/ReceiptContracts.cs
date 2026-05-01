@@ -33,7 +33,11 @@ public sealed record ReceiptDto(
     string? AgreementReference = null,
     decimal AmountReturned = 0m,
     ReturnableMaturityState MaturityState = ReturnableMaturityState.NotApplicable,
-    string? AgreementDocumentUrl = null);
+    string? AgreementDocumentUrl = null,
+    // PDC unification: contributor's drawee bank (set for cheque payments) + the PDC tracking
+    // row when the receipt is held in PendingClearance for a future-dated cheque.
+    string? DrawnOnBank = null,
+    Guid? PendingPostDatedChequeId = null);
 
 public sealed record ReceiptLineDto(
     Guid Id,
@@ -99,7 +103,10 @@ public sealed record CreateReceiptDto(
     string? AgreementReference = null,
     // Batch-3: admin-defined custom fields per fund type. Map of FieldKey → string value;
     // service validates required fields and serialises to Receipt.CustomFieldsJson.
-    IReadOnlyDictionary<string, string>? CustomFieldValues = null);
+    IReadOnlyDictionary<string, string>? CustomFieldValues = null,
+    // PDC unification: contributor's drawee bank for the cheque. Required when ChequeDate is in
+    // the future (post-dated cheque tracking); optional otherwise (kept for bank reconciliation).
+    string? DrawnOnBank = null);
 
 /// <summary>Process a return on a returnable receipt - issues a voucher to the contributor and
 /// records the amount against the original receipt's running total.</summary>

@@ -61,6 +61,36 @@ public sealed class VoucherService(
         var conversion = await fx.ConvertToBaseAsync(v.AmountTotal, txnCurrency, dto.VoucherDate, ct);
         v.ApplyFxConversion(conversion.BaseCurrency, conversion.Rate, conversion.BaseAmount);
 
+        // --- Future-dated cheque branch -----------------------------------------------------
+        // PDC unification: a voucher paid by a cheque dated in the future is held in
+        // PendingClearance with a tracking PostDatedCheque. No voucher number, no GL post -
+        // both happen on the cheque-cleared transition. Skips both the standard Submit() path
+        // (which would move us to PendingApproval/Approved) and the requires-approval branch
+        // because future cheques are their own approval gate (the bank will only honour them
+        // on or after the cheque date, regardless of in-app approval).
+        if (dto.PaymentMode == PaymentMode.Cheque
+            && dto.ChequeDate is DateOnly cd
+            && cd > clock.Today)
+        {
+            if (string.IsNullOrWhiteSpace(dto.ChequeNumber))
+                return Error.Validation("cheque.number_required", "Cheque number is required for a post-dated cheque.");
+            if (string.IsNullOrWhiteSpace(dto.DrawnOnBank))
+                return Error.Validation("cheque.bank_required", "Drawn-on bank is required for a post-dated cheque.");
+
+            var pdc = PostDatedCheque.ForVoucher(
+                Guid.NewGuid(), tenant.TenantId, v.Id,
+                dto.ChequeNumber!, cd, dto.DrawnOnBank!,
+                v.AmountTotal, txnCurrency);
+
+            v.MarkPendingClearance(pdc.Id);
+            await repo.AddAsync(v, ct);
+            db.PostDatedCheques.Add(pdc);
+            await uow.SaveChangesAsync(ct);
+
+            var pending = await repo.GetWithLinesAsync(v.Id, ct);
+            return await MapAsync(pending!, ct);
+        }
+
         v.Submit(requiresApproval);
 
         await repo.AddAsync(v, ct);
@@ -111,6 +141,53 @@ Open the dashboard to review and approve.",
         v.Approve(currentUser.UserId ?? Guid.Empty, currentUser.UserName ?? "system", clock.UtcNow);
         await ApproveAndPayInternalAsync(v, expenseTypes, ct);
         return await MapAsync(v, ct);
+    }
+
+    /// <summary>Finalize a voucher held in <see cref="VoucherStatus.PendingClearance"/> because a
+    /// future-dated cheque was used. Replays the deferred numbering + GL posting that the
+    /// future-cheque branch in <see cref="CreateAsync"/> skipped. Period is resolved against the
+    /// clearance date so the entry lands when money actually moved, not when the cheque was drafted.</summary>
+    public async Task<Result<VoucherDto>> ConfirmPendingAsync(Guid voucherId, DateOnly clearedOn, CancellationToken ct = default)
+    {
+        var v = await repo.GetWithLinesAsync(voucherId, ct);
+        if (v is null) return Error.NotFound("voucher.not_found", "Voucher not found.");
+        if (v.Status != VoucherStatus.PendingClearance)
+            return Error.Business("voucher.not_pending", $"Voucher is {v.Status}, not pending clearance.");
+
+        var db = services.GetRequiredService<Application.Persistence.JamaatDbContextFacade>();
+        var expenseTypes = await db.ExpenseTypes.AsNoTracking()
+            .Where(x => v.Lines.Select(l => l.ExpenseTypeId).Contains(x.Id)).ToListAsync(ct);
+
+        // Period at the cheque's clearance date - same reasoning as the receipt path: the GL
+        // entry should land in the period money actually moved, not when we drafted the voucher.
+        var period = await db.FinancialPeriods.FirstOrDefaultAsync(
+            p => p.Status == PeriodStatus.Open && p.StartDate <= clearedOn && p.EndDate >= clearedOn, ct);
+        if (period is null) return Error.Business("period.not_open", "No open financial period covers the clearance date.");
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var (seriesId, number) = await numbering.NextAsync(NumberingScope.Voucher, null, clearedOn.Year, ct);
+        v.MarkPaid(number, period.Id, seriesId, currentUser.UserId ?? Guid.Empty, currentUser.UserName ?? "system", clock.UtcNow);
+        repo.Update(v);
+        await posting.PostVoucherAsync(v, expenseTypes, ct);
+        await uow.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        var fresh = await repo.GetWithLinesAsync(v.Id, ct);
+        return await MapAsync(fresh!, ct);
+    }
+
+    /// <summary>Cancel a voucher held in <see cref="VoucherStatus.PendingClearance"/> because the
+    /// linked cheque bounced. No GL impact since none was made.</summary>
+    public async Task<Result> CancelPendingAsync(Guid voucherId, string reason, CancellationToken ct = default)
+    {
+        var v = await repo.GetByIdAsync(voucherId, ct);
+        if (v is null) return Result.Failure(Error.NotFound("voucher.not_found", "Voucher not found."));
+        if (v.Status != VoucherStatus.PendingClearance)
+            return Result.Failure(Error.Business("voucher.not_pending", $"Voucher is {v.Status}, not pending clearance."));
+        v.Cancel(reason, currentUser.UserId ?? Guid.Empty, clock.UtcNow);
+        repo.Update(v);
+        await uow.SaveChangesAsync(ct);
+        return Result.Success();
     }
 
     private async Task ApproveAndPayInternalAsync(Voucher v, IReadOnlyList<ExpenseType> expenseTypes, CancellationToken ct)
@@ -330,7 +407,8 @@ Open the dashboard to review and approve.",
             {
                 var et = ets.First(x => x.Id == l.ExpenseTypeId);
                 return new VoucherLineDto(l.Id, l.LineNo, l.ExpenseTypeId, et.Code, et.Name, l.Amount, l.Narration);
-            }).ToList());
+            }).ToList(),
+            v.PendingPostDatedChequeId);
     }
 
     public async Task<VoucherSummaryDto> SummaryAsync(CancellationToken ct = default)

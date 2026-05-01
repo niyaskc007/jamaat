@@ -11,11 +11,30 @@ export const PdcStatusColor: Record<PostDatedChequeStatus, string> = {
   1: 'gold', 2: 'blue', 3: 'green', 4: 'red', 5: 'default',
 };
 
+/// 1=Commitment, 2=Receipt, 3=Voucher. Discriminator on PostDatedCheque - drives which set of
+/// source fields is populated and what "cleared" actually does to the source document.
+export type PostDatedChequeSource = 1 | 2 | 3;
+
+export const PdcSourceLabel: Record<PostDatedChequeSource, string> = {
+  1: 'Commitment', 2: 'Receipt', 3: 'Voucher',
+};
+
+export const PdcSourceColor: Record<PostDatedChequeSource, string> = {
+  1: 'cyan', 2: 'green', 3: 'purple',
+};
+
 export type PostDatedCheque = {
   id: string;
-  commitmentId: string; commitmentCode: string; partyName: string;
+  source: PostDatedChequeSource;
+  /// Commitment-source (null otherwise).
+  commitmentId?: string | null; commitmentCode?: string | null; partyName?: string | null;
   commitmentInstallmentId?: string | null; installmentNo?: number | null; installmentDueDate?: string | null;
-  memberId: string; memberItsNumber: string; memberName: string;
+  /// Receipt-source (null otherwise). The receipt is held in PendingClearance until this PDC clears.
+  sourceReceiptId?: string | null; sourceReceiptNumber?: string | null;
+  /// Voucher-source (null otherwise). The voucher is held in PendingClearance until this PDC clears.
+  sourceVoucherId?: string | null; sourceVoucherNumber?: string | null; voucherPayTo?: string | null;
+  /// Member context - present for Commitment + Receipt sources, null for Voucher (non-member payees).
+  memberId?: string | null; memberItsNumber?: string | null; memberName?: string | null;
   chequeNumber: string; chequeDate: string; drawnOnBank: string;
   amount: number; currency: string;
   status: PostDatedChequeStatus;

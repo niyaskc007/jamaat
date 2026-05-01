@@ -36,6 +36,11 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public PaymentMode PaymentMode { get; private set; }
     public string? ChequeNumber { get; private set; }
     public DateOnly? ChequeDate { get; private set; }
+    /// <summary>The contributor's bank that issued the cheque (different from
+    /// <see cref="BankAccountId"/>, which is the Jamaat's deposit account). Required when a
+    /// post-dated cheque is being tracked - the cheques workbench groups by drawee bank for
+    /// reconciliation.</summary>
+    public string? DrawnOnBank { get; private set; }
     public Guid? BankAccountId { get; private set; }
     public string? PaymentReference { get; private set; }
     public string? Remarks { get; private set; }
@@ -45,6 +50,10 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
     /// JSON array of member ids this payment is on behalf of (when paying for family members).
     public string? OnBehalfOfMemberIdsJson { get; private set; }
     public ReceiptStatus Status { get; private set; }
+    /// <summary>When set, this receipt is held in <see cref="ReceiptStatus.PendingClearance"/>
+    /// awaiting the linked post-dated cheque to clear. The PDC drives the transition to
+    /// Confirmed (cleared) or Cancelled (bounced).</summary>
+    public Guid? PendingPostDatedChequeId { get; private set; }
     public DateTimeOffset? ConfirmedAtUtc { get; private set; }
     public Guid? ConfirmedByUserId { get; private set; }
     public string? ConfirmedByUserName { get; private set; }
@@ -100,12 +109,13 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
 
     public IReadOnlyCollection<ReceiptLine> Lines => _lines.AsReadOnly();
 
-    public void SetPayment(PaymentMode mode, Guid? bankAccountId, string? chequeNumber, DateOnly? chequeDate, string? reference)
+    public void SetPayment(PaymentMode mode, Guid? bankAccountId, string? chequeNumber, DateOnly? chequeDate, string? drawnOnBank, string? reference)
     {
         PaymentMode = mode;
         BankAccountId = bankAccountId;
         ChequeNumber = chequeNumber;
         ChequeDate = chequeDate;
+        DrawnOnBank = drawnOnBank;
         PaymentReference = reference;
     }
 
@@ -177,7 +187,11 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
 
     public void Confirm(string receiptNumber, Guid periodId, Guid numberingSeriesId, Guid userId, string userName, DateTimeOffset at)
     {
-        if (Status != ReceiptStatus.Draft) throw new InvalidOperationException("Only drafts can be confirmed.");
+        // Allowed entry states: Draft (the standard cashier flow) and PendingClearance (the
+        // PDC-cleared flow - cheque finally cleared, now this method assigns number + posts).
+        // Both have full lines + payment data captured already; only the status differs.
+        if (Status != ReceiptStatus.Draft && Status != ReceiptStatus.PendingClearance)
+            throw new InvalidOperationException($"Only drafts or pending-clearance receipts can be confirmed (current: {Status}).");
         if (_lines.Count == 0) throw new InvalidOperationException("A receipt must have at least one line.");
         ReceiptNumber = receiptNumber;
         FinancialPeriodId = periodId;
@@ -186,6 +200,22 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
         ConfirmedAtUtc = at;
         ConfirmedByUserId = userId;
         ConfirmedByUserName = userName;
+        // The PDC link no longer needs the receipt as "pending" - clear it so a list filter on
+        // PendingPostDatedChequeId IS NOT NULL stays meaningful for "still awaiting clearance".
+        PendingPostDatedChequeId = null;
+    }
+
+    /// <summary>Transition a fully-built draft into the holding state used while a future-dated
+    /// cheque is in flight. No receipt number, no GL posting; only metadata changes. The PDC
+    /// row created alongside this drives the eventual confirm-or-cancel.</summary>
+    public void MarkPendingClearance(Guid pendingPostDatedChequeId)
+    {
+        if (Status != ReceiptStatus.Draft)
+            throw new InvalidOperationException($"Only drafts can be moved to PendingClearance (current: {Status}).");
+        if (_lines.Count == 0) throw new InvalidOperationException("A receipt must have at least one line.");
+        if (pendingPostDatedChequeId == Guid.Empty) throw new ArgumentException("PDC id required.", nameof(pendingPostDatedChequeId));
+        Status = ReceiptStatus.PendingClearance;
+        PendingPostDatedChequeId = pendingPostDatedChequeId;
     }
 
     public void Cancel(string reason, Guid userId, DateTimeOffset at)

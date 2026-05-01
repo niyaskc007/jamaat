@@ -1,11 +1,13 @@
-import { Card, Row, Col, Statistic, Tag, Empty } from 'antd';
+import { Card, Row, Col, Tag, Empty, Alert } from 'antd';
 import {
   BookOutlined, BarChartOutlined, CalendarOutlined,
-  ArrowUpOutlined, ArrowDownOutlined, BankOutlined, LineChartOutlined, PieChartOutlined,
+  BankOutlined, LineChartOutlined, PieChartOutlined,
+  WalletOutlined, RiseOutlined, FallOutlined, InfoCircleOutlined,
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '../../shared/ui/PageHeader';
+import { KpiCard } from '../../shared/ui/KpiCard';
 import { useAuth } from '../../shared/auth/useAuth';
 import { ledgerApi, periodsApi, dashboardApi } from '../ledger/ledgerApi';
 import { money } from '../../shared/format/format';
@@ -69,40 +71,37 @@ export function AccountingPage() {
         <Empty description="You don't have accounting access. Ask an admin for the accounting.view permission." />
       ) : (
         <>
+          {balances.length === 0 && !balancesQ.isLoading && (
+            <Alert
+              type="info"
+              showIcon
+              icon={<InfoCircleOutlined />}
+              message="No ledger activity yet"
+              description="Asset / liability / income / expense rollups appear once receipts and vouchers post to the ledger. Issue your first receipt or voucher to start populating accounting."
+              style={{ marginBlockEnd: 16 }}
+            />
+          )}
+
           {/* Top-line KPIs - the numbers a treasurer wants in their face the moment they land */}
           <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
             <Col xs={12} md={6}>
-              <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
-                <Statistic title="Assets" value={totalAssets} precision={2}
-                  prefix={<ArrowUpOutlined style={{ color: '#0E5C40' }} />}
-                  formatter={(v) => money(Number(v), baseCurrency)} />
-              </Card>
+              <KpiCard icon={<WalletOutlined />} label="Assets" value={totalAssets} currency={baseCurrency} accent="#0E5C40" />
             </Col>
             <Col xs={12} md={6}>
-              <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
-                <Statistic title="Liabilities" value={totalLiabilities} precision={2}
-                  prefix={<ArrowDownOutlined style={{ color: '#B45309' }} />}
-                  formatter={(v) => money(Number(v), baseCurrency)} />
-                <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
-                  Includes returnable contributions still owed back.
-                </div>
-              </Card>
+              <KpiCard icon={<BankOutlined />} label="Liabilities" value={totalLiabilities} currency={baseCurrency}
+                caption="Includes returnable contributions still owed back."
+                accent="#B45309" />
             </Col>
             <Col xs={12} md={6}>
-              <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
-                <Statistic title="Income (lifetime)" value={totalIncome} precision={2}
-                  formatter={(v) => money(Number(v), baseCurrency)} />
-              </Card>
+              <KpiCard icon={<RiseOutlined />} label="Income (lifetime)" value={totalIncome} currency={baseCurrency} accent="#0E5C40" />
             </Col>
             <Col xs={12} md={6}>
-              <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
-                <Statistic title="Net (income - expenses)" value={net} precision={2}
-                  valueStyle={{ color: net >= 0 ? '#0E5C40' : '#DC2626' }}
-                  formatter={(v) => money(Number(v), baseCurrency)} />
-                <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
-                  Expenses to date: {money(totalExpenses, baseCurrency)}
-                </div>
-              </Card>
+              <KpiCard icon={net >= 0 ? <RiseOutlined /> : <FallOutlined />}
+                label="Net (income - expenses)"
+                value={net}
+                currency={baseCurrency}
+                caption={`Expenses to date: ${money(totalExpenses, baseCurrency)}`}
+                accent={net >= 0 ? '#0E5C40' : '#DC2626'} />
             </Col>
           </Row>
 

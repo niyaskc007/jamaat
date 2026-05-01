@@ -103,7 +103,16 @@ export function ReceiptsPage() {
             onClick: () => promptReason(modal, 'Reverse receipt', 'Reason for reversal', (reason) => reverseMut.mutate({ id: row.id, reason })),
           },
         ];
-        return <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight"><Button type="text" icon={<MoreOutlined />} /></Dropdown>;
+        // Wrap the dropdown trigger in a click-stopper so the row's onClick (which navigates
+        // to detail) doesn't fire when the user opens the actions menu. Without this, every
+        // menu interaction would also navigate, defeating the purpose of the dropdown.
+        return (
+          <span onClick={(e) => e.stopPropagation()}>
+            <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight">
+              <Button type="text" icon={<MoreOutlined />} />
+            </Dropdown>
+          </span>
+        );
       },
     },
   ], [cancelMut, modal, navigate, reverseMut]);
@@ -165,6 +174,13 @@ export function ReceiptsPage() {
         <Table<ReceiptListItem>
           rowKey="id" size="middle" loading={isLoading} columns={columns}
           dataSource={data?.items ?? []}
+          // Whole-row click navigates to detail. Drafts + PendingClearance receipts have no
+          // receipt number to click on as a link, so without this the only way to view them
+          // was through the 3-dots menu.
+          onRow={(row) => ({
+            onClick: () => navigate(`/receipts/${row.id}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{ current: query.page, pageSize: query.pageSize, total: data?.total ?? 0, showSizeChanger: true, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
           onChange={(p) => setQuery((q) => ({ ...q, page: p.current ?? 1, pageSize: p.pageSize ?? 25 }))}
           locale={{
@@ -204,6 +220,8 @@ function StatusTag({ status }: { status: ReceiptStatus }) {
     2: { bg: '#D1FAE5', color: '#065F46' },
     3: { bg: '#E5E9EF', color: '#475569' },
     4: { bg: '#FEE2E2', color: '#991B1B' },
+    // PendingClearance shares the amber palette with Draft - paused awaiting an external event.
+    5: { bg: '#FEF3C7', color: '#92400E' },
   };
   const c = cfg[status];
   return <Tag style={{ margin: 0, background: c.bg, color: c.color, border: 'none', fontWeight: 500 }}>{ReceiptStatusLabel[status]}</Tag>;

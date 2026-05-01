@@ -4,7 +4,7 @@ import {
 } from 'antd';
 import {
   PlusOutlined, DragOutlined, EyeOutlined, EyeInvisibleOutlined, EditOutlined, DeleteOutlined,
-  ArrowUpOutlined, ArrowDownOutlined, LayoutOutlined,
+  ArrowUpOutlined, ArrowDownOutlined, LayoutOutlined, FullscreenOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { pageDesignerApi, portalApi, type PageSection, type PortalEventDetail } from '../eventsApi';
@@ -47,6 +47,7 @@ export function PageDesigner({ eventId, eventSlug, primaryColor, accentColor }: 
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [editing, setEditing] = useState<PageSection | null>(null);
+  const [fullPreview, setFullPreview] = useState(false);
 
   const addMut = useMutation({
     mutationFn: (type: EventPageSectionType) => pageDesignerApi.add(eventId, { type, contentJson: null, sortOrder: null }),
@@ -182,6 +183,13 @@ export function PageDesigner({ eventId, eventSlug, primaryColor, accentColor }: 
         {/* Live preview */}
         <Col xs={24} md={14} xl={16}>
           <Card size="small" title={<Space><EyeOutlined /> Live preview</Space>}
+            extra={
+              <Button size="small" icon={<FullscreenOutlined />}
+                onClick={() => setFullPreview(true)}
+                disabled={!preview || sections.length === 0}>
+                Full-page preview
+              </Button>
+            }
             style={{ border: '1px solid var(--jm-border)' }}>
             <div
               style={{
@@ -212,6 +220,34 @@ export function PageDesigner({ eventId, eventSlug, primaryColor, accentColor }: 
           onClose={() => setEditing(null)}
         />
       )}
+
+      <Modal
+        open={fullPreview}
+        onCancel={() => setFullPreview(false)}
+        footer={null}
+        width="100vw"
+        style={{ top: 0, paddingBlockEnd: 0 }}
+        styles={{ body: { padding: 0, blockSize: 'calc(100dvh - 56px)', overflow: 'auto', background: '#F8FAFC' } }}
+        title={<Space><FullscreenOutlined /> Full-page preview · {eventSlug}</Space>}
+        destroyOnHidden
+      >
+        <div
+          style={{
+            ['--portal-primary' as string]: primaryColor || '#0E5C40',
+            ['--portal-accent' as string]: accentColor || '#B45309',
+            ['--portal-text' as string]: '#0F172A',
+            ['--portal-muted' as string]: '#64748B',
+            paddingBlock: 0,
+          } as React.CSSProperties}
+        >
+          {preview && sections.length > 0
+            ? sections.filter((s) => s.isVisible).map((s) => (
+                <SectionRenderer key={s.id} section={s} event={previewAugmented(preview, sections)} />
+              ))
+            : <div style={{ padding: 60, textAlign: 'center', color: 'var(--jm-gray-500)' }}>No visible sections to preview.</div>
+          }
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -305,7 +341,9 @@ function EditSectionDrawer({ eventId, eventSlug, section, onClose }: {
           </Space>
         </Space>
       }>
-      <SectionEditor type={section.type} value={content} onChange={(v) => setContent(v as SectionContent['content'])} />
+      <SectionEditor type={section.type} value={content}
+        onChange={(v) => setContent(v as SectionContent['content'])}
+        eventId={eventId} eventSlug={eventSlug} />
     </Drawer>
   );
 }

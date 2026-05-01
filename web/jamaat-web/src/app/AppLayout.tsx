@@ -26,6 +26,16 @@ import {
   MenuUnfoldOutlined,
   PlusOutlined,
   QuestionCircleOutlined,
+  AppstoreOutlined,
+  LineChartOutlined,
+  PieChartOutlined,
+  CalculatorOutlined,
+  FundOutlined,
+  SettingOutlined,
+  ProfileOutlined,
+  ThunderboltOutlined,
+  CreditCardOutlined,
+  InfoCircleOutlined,
 } from '@ant-design/icons';
 import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -43,7 +53,7 @@ const COLLAPSED_KEY = 'jm:sider-collapsed';
 /// Persist which sections (Operations / Accounting / Administration / Support) are open
 /// so a user's expand/collapse choices survive a reload.
 const OPEN_SECTIONS_KEY = 'jm:sider-open-sections';
-const DEFAULT_OPEN_SECTIONS = ['operations', 'accounting', 'admin', 'support'];
+const DEFAULT_OPEN_SECTIONS = ['operations', 'insights', 'accounting', 'admin', 'support'];
 
 export function AppLayout() {
   const { t } = useTranslation('common');
@@ -83,8 +93,14 @@ export function AppLayout() {
 
   // Permission-gated nav - every entry lists the permissions that grant access.
   // Dashboard + Help are always visible; everything else requires at least one matching claim.
+  // Icons are unique within the sidebar so the user can identify each item by glyph alone in
+  // collapsed mode - the duplicate-icon problem we hit earlier (DashboardOutlined and
+  // BarChartOutlined on multiple items) made every overview / dashboard / reliability item
+  // look interchangeable.
   const navItems: MenuProps['items'] = useMemo(() => {
     const any = (...perms: string[]) => perms.length === 0 || perms.some(hasPermission);
+
+    // -- Operations: day-to-day transactional work ---------------------------
     const ops: any[] = [{ key: '/dashboard', icon: <DashboardOutlined />, label: t('nav.dashboard') }];
     if (any('member.view')) ops.push({ key: '/members', icon: <TeamOutlined />, label: t('nav.members') });
     if (any('family.view')) ops.push({ key: '/families', icon: <HomeOutlined />, label: 'Families' });
@@ -94,20 +110,28 @@ export function AppLayout() {
     if (any('enrollment.view')) ops.push({ key: '/fund-enrollments', icon: <GiftOutlined />, label: 'Patronages' });
     if (any('qh.view')) ops.push({ key: '/qarzan-hasana', icon: <BankOutlined />, label: 'Qarzan Hasana' });
     if (any('receipt.view')) ops.push({ key: '/receipts', icon: <FileTextOutlined />, label: t('nav.receipts') });
-    if (any('commitment.view')) ops.push({ key: '/cheques', icon: <BankOutlined />, label: 'Cheques' });
+    if (any('commitment.view')) ops.push({ key: '/cheques', icon: <CreditCardOutlined />, label: 'Cheques' });
     if (any('voucher.view')) ops.push({ key: '/vouchers', icon: <WalletOutlined />, label: t('nav.vouchers') });
 
-    const acc: any[] = [];
-    // Overview lands on /accounting (KPI dashboard); Ledger and Reports are the existing drill-ins.
-    if (any('accounting.view')) acc.push({ key: '/accounting', icon: <DashboardOutlined />, label: 'Overview' });
-    if (any('accounting.view')) acc.push({ key: '/ledger', icon: <BookOutlined />, label: t('nav.ledger') });
-    if (any('reports.view')) acc.push({ key: '/reports', icon: <BarChartOutlined />, label: t('nav.reports') });
+    // -- Insights: dashboards landing + reports landing, both card-grids -----
+    // Both sub-items follow the same shape (landing page lists every report/dashboard, the slug
+    // routes drill in to one). Bundling them in their own section keeps them discoverable
+    // without crowding the Accounting section.
+    const ins: any[] = [];
     if (any('reports.view', 'accounting.view', 'admin.audit', 'qh.view', 'member.view'))
-      acc.push({ key: '/dashboards', icon: <DashboardOutlined />, label: 'Dashboards' });
+      ins.push({ key: '/dashboards', icon: <PieChartOutlined />, label: 'Dashboards' });
+    if (any('reports.view'))
+      ins.push({ key: '/reports', icon: <BarChartOutlined />, label: t('nav.reports') });
 
+    // -- Accounting: the books -----------------------------------------------
+    const acc: any[] = [];
+    if (any('accounting.view')) acc.push({ key: '/accounting', icon: <FundOutlined />, label: 'Overview' });
+    if (any('accounting.view')) acc.push({ key: '/ledger', icon: <BookOutlined />, label: t('nav.ledger') });
+
+    // -- Administration -------------------------------------------------------
     const adm: any[] = [];
     if (any('admin.users', 'admin.roles', 'admin.masterdata', 'admin.integration', 'admin.audit', 'admin.errorlogs'))
-      adm.push({ key: '/admin', icon: <DashboardOutlined />, label: 'Overview' });
+      adm.push({ key: '/admin', icon: <ProfileOutlined />, label: 'Overview' });
     if (any('admin.users', 'admin.roles'))
       adm.push({ key: '/admin/users', icon: <UserSwitchOutlined />, label: t('nav.users') });
     if (any('admin.masterdata'))
@@ -120,21 +144,23 @@ export function AppLayout() {
     if (any('admin.audit'))
       adm.push({ key: '/admin/notifications', icon: <BellOutlined />, label: 'Notifications' });
     if (any('admin.reliability'))
-      adm.push({ key: '/admin/reliability', icon: <BarChartOutlined />, label: 'Reliability' });
+      adm.push({ key: '/admin/reliability', icon: <ThunderboltOutlined />, label: 'Reliability' });
 
     const help: any[] = [{ key: '/help', icon: <QuestionCircleOutlined />, label: 'Help & Docs' }];
 
     // When the sider is collapsed, AntD Menu renders submenus as popovers - useful for icon
     // mode. When expanded, submenus collapse/expand inline driven by openSections state. Each
-    // section header carries an icon-key prefix so it has a glyph when collapsed.
+    // section header carries its own unique icon so a collapsed sider still has visual hierarchy.
     const groups: any[] = [
-      { key: 'operations', icon: <DashboardOutlined />, label: t('nav.sectionOperations'), children: ops },
+      { key: 'operations', icon: <AppstoreOutlined />, label: t('nav.sectionOperations'), children: ops },
     ];
+    if (ins.length)
+      groups.push({ key: 'insights', icon: <LineChartOutlined />, label: t('nav.sectionInsights'), children: ins });
     if (acc.length)
-      groups.push({ key: 'accounting', icon: <BookOutlined />, label: t('nav.sectionAccounting'), children: acc });
+      groups.push({ key: 'accounting', icon: <CalculatorOutlined />, label: t('nav.sectionAccounting'), children: acc });
     if (adm.length)
-      groups.push({ key: 'admin', icon: <SafetyOutlined />, label: t('nav.sectionAdmin'), children: adm });
-    groups.push({ key: 'support', icon: <QuestionCircleOutlined />, label: 'Support', children: help });
+      groups.push({ key: 'admin', icon: <SettingOutlined />, label: t('nav.sectionAdmin'), children: adm });
+    groups.push({ key: 'support', icon: <InfoCircleOutlined />, label: 'Support', children: help });
     return groups;
   }, [t, hasPermission, user?.id]);
 

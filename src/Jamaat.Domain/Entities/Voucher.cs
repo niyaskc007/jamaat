@@ -52,6 +52,11 @@ public sealed class Voucher : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public Guid? FinancialPeriodId { get; private set; }
     public Guid? NumberingSeriesId { get; private set; }
 
+    /// <summary>When set, the voucher is held in <see cref="VoucherStatus.PendingClearance"/>
+    /// awaiting a future-dated cheque to clear. Cleared by the linked
+    /// <c>PostDatedCheque</c> transitioning to <c>Cleared</c>; cancelled if the cheque bounces.</summary>
+    public Guid? PendingPostDatedChequeId { get; private set; }
+
     /// <summary>When set, this voucher represents a return-of-contribution against the
     /// referenced returnable Receipt (rather than a regular expense payment). The posting
     /// engine debits the receipt's liability account instead of an ExpenseType debit account,
@@ -165,7 +170,11 @@ public sealed class Voucher : AggregateRoot<Guid>, ITenantScoped, IAuditable
 
     public void MarkPaid(string voucherNumber, Guid periodId, Guid numberingSeriesId, Guid userId, string userName, DateTimeOffset at)
     {
-        if (Status != VoucherStatus.Approved) throw new InvalidOperationException("Only approved vouchers can be marked paid.");
+        // Allowed entry: Approved (the regular approve-then-pay flow) and PendingClearance (the
+        // PDC-cleared flow, where the voucher was held while a future-dated cheque was in flight
+        // and is now being numbered + posted on clearance).
+        if (Status != VoucherStatus.Approved && Status != VoucherStatus.PendingClearance)
+            throw new InvalidOperationException($"Only approved or pending-clearance vouchers can be marked paid (current: {Status}).");
         VoucherNumber = voucherNumber;
         FinancialPeriodId = periodId;
         NumberingSeriesId = numberingSeriesId;
@@ -173,6 +182,25 @@ public sealed class Voucher : AggregateRoot<Guid>, ITenantScoped, IAuditable
         PaidAtUtc = at;
         PaidByUserId = userId;
         PaidByUserName = userName;
+        PendingPostDatedChequeId = null;
+    }
+
+    /// <summary>Hold a fully-built voucher until a future-dated cheque clears. No voucher
+    /// number is assigned and no GL entry is made. The PDC row created alongside drives the
+    /// eventual MarkPaid (clear) or Cancel (bounce). Only callable on a Draft voucher; the
+    /// service-layer branch checks the cheque date before invoking this.</summary>
+    public void MarkPendingClearance(Guid pendingPostDatedChequeId)
+    {
+        if (Status != VoucherStatus.Draft)
+            throw new InvalidOperationException($"Only drafts can be moved to PendingClearance (current: {Status}).");
+        if (pendingPostDatedChequeId == Guid.Empty) throw new ArgumentException("PDC id required.", nameof(pendingPostDatedChequeId));
+        // Same lines invariant as Submit() - can't put a lineless voucher into a holding state
+        // unless it's a contribution-return / QH-disbursement (those don't carry per-line allocations).
+        var allowsLineless = IsContributionReturn || IsQhLoanDisbursement;
+        if (!allowsLineless && _lines.Count == 0)
+            throw new InvalidOperationException("Voucher must have at least one line.");
+        Status = VoucherStatus.PendingClearance;
+        PendingPostDatedChequeId = pendingPostDatedChequeId;
     }
 
     public void Cancel(string reason, Guid userId, DateTimeOffset at)

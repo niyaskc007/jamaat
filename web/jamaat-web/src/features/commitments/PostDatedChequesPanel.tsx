@@ -491,54 +491,81 @@ function ClearChequeModal({ cheque, onClose, onCleared }: { cheque: PostDatedChe
 
 function BounceButton({ id, commitmentId, disabled, disabledReason }: { id: string; commitmentId: string; disabled?: boolean; disabledReason?: string }) {
   const qc = useQueryClient();
-  const { message, modal } = AntdApp.useApp();
+  const { message } = AntdApp.useApp();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
   const mut = useMutation({
-    mutationFn: (reason: string) => postDatedChequesApi.bounce(id, { bouncedOn: dayjs().format('YYYY-MM-DD'), reason }),
-    onSuccess: () => { message.success('Marked bounced.'); void qc.invalidateQueries({ queryKey: ['pdcs', commitmentId] }); },
-    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed.'),
+    mutationFn: (r: string) => postDatedChequesApi.bounce(id, { bouncedOn: dayjs().format('YYYY-MM-DD'), reason: r }),
+    onSuccess: () => {
+      message.success('Marked bounced.');
+      void qc.invalidateQueries({ queryKey: ['pdcs', commitmentId] });
+      setOpen(false);
+      setReason('');
+    },
+    // Bumped duration so the cashier doesn't miss it - default 3s is too quick when their
+    // attention is on the modal closing.
+    onError: (e) => message.error({ content: extractProblem(e).detail ?? 'Failed.', duration: 6 }),
   });
+  const onSubmit = () => {
+    if (!reason.trim()) { message.error('Reason is required.'); return; }
+    mut.mutate(reason);
+  };
   return (
-    <Tooltip title={disabled ? disabledReason : undefined}>
-      <Button size="small" danger icon={<CloseCircleOutlined />} disabled={disabled} onClick={() => {
-        let reason = '';
-        modal.confirm({
-          title: 'Mark cheque bounced?',
-          content: (
-            <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>Reason (visible in audit log):</Typography.Text>
-              <Input.TextArea rows={3} autoFocus onChange={(e) => { reason = e.target.value; }} />
-            </div>
-          ),
-          okText: 'Mark bounced', okButtonProps: { danger: true },
-          onOk: () => { if (!reason.trim()) throw new Error('Reason required'); return mut.mutateAsync(reason); },
-        });
-      }}>Bounce</Button>
-    </Tooltip>
+    <>
+      <Tooltip title={disabled ? disabledReason : undefined}>
+        <Button size="small" danger icon={<CloseCircleOutlined />} disabled={disabled} onClick={() => setOpen(true)}>Bounce</Button>
+      </Tooltip>
+      <Modal
+        title="Mark cheque bounced?"
+        open={open}
+        onCancel={() => { if (!mut.isPending) { setOpen(false); setReason(''); } }}
+        onOk={onSubmit}
+        okText="Mark bounced"
+        okButtonProps={{ danger: true }}
+        confirmLoading={mut.isPending}
+        destroyOnHidden
+      >
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>Reason (visible in audit log):</Typography.Text>
+        <Input.TextArea rows={3} autoFocus value={reason} onChange={(e) => setReason(e.target.value)} />
+      </Modal>
+    </>
   );
 }
 
 function CancelButton({ id, commitmentId }: { id: string; commitmentId: string }) {
   const qc = useQueryClient();
-  const { message, modal } = AntdApp.useApp();
+  const { message } = AntdApp.useApp();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
   const mut = useMutation({
-    mutationFn: (reason: string) => postDatedChequesApi.cancel(id, { cancelledOn: dayjs().format('YYYY-MM-DD'), reason }),
-    onSuccess: () => { message.success('Cancelled.'); void qc.invalidateQueries({ queryKey: ['pdcs', commitmentId] }); },
-    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed.'),
+    mutationFn: (r: string) => postDatedChequesApi.cancel(id, { cancelledOn: dayjs().format('YYYY-MM-DD'), reason: r }),
+    onSuccess: () => {
+      message.success('Cancelled.');
+      void qc.invalidateQueries({ queryKey: ['pdcs', commitmentId] });
+      setOpen(false);
+      setReason('');
+    },
+    onError: (e) => message.error({ content: extractProblem(e).detail ?? 'Failed.', duration: 6 }),
   });
+  const onSubmit = () => {
+    if (!reason.trim()) { message.error('Reason is required.'); return; }
+    mut.mutate(reason);
+  };
   return (
-    <Button size="small" icon={<StopOutlined />} onClick={() => {
-      let reason = '';
-      modal.confirm({
-        title: 'Cancel cheque?',
-        content: (
-          <div>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>Reason:</Typography.Text>
-            <Input.TextArea rows={3} autoFocus onChange={(e) => { reason = e.target.value; }} />
-          </div>
-        ),
-        okText: 'Cancel cheque',
-        onOk: () => { if (!reason.trim()) throw new Error('Reason required'); return mut.mutateAsync(reason); },
-      });
-    }}>Cancel</Button>
+    <>
+      <Button size="small" icon={<StopOutlined />} onClick={() => setOpen(true)}>Cancel</Button>
+      <Modal
+        title="Cancel cheque?"
+        open={open}
+        onCancel={() => { if (!mut.isPending) { setOpen(false); setReason(''); } }}
+        onOk={onSubmit}
+        okText="Cancel cheque"
+        confirmLoading={mut.isPending}
+        destroyOnHidden
+      >
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>Reason:</Typography.Text>
+        <Input.TextArea rows={3} autoFocus value={reason} onChange={(e) => setReason(e.target.value)} />
+      </Modal>
+    </>
   );
 }

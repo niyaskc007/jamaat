@@ -105,7 +105,14 @@ export function VouchersPage() {
           { key: 'reverse', icon: <RollbackOutlined />, label: 'Reverse', danger: true, disabled: row.status !== 4,
             onClick: () => promptReason(modal, 'Reverse voucher', 'Reason', (r) => reverseMut.mutate({ id: row.id, reason: r })) },
         ];
-        return <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight"><Button type="text" icon={<MoreOutlined />} /></Dropdown>;
+        // Stop the row-click handler from firing when the user opens the actions dropdown.
+        return (
+          <span onClick={(e) => e.stopPropagation()}>
+            <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight">
+              <Button type="text" icon={<MoreOutlined />} />
+            </Dropdown>
+          </span>
+        );
       },
     },
   ], [approveMut, cancelMut, modal, navigate, reverseMut]);
@@ -209,6 +216,13 @@ export function VouchersPage() {
         <Table<VoucherListItem>
           rowKey="id" size="middle" loading={isLoading} columns={columns}
           dataSource={data?.items ?? []}
+          // Whole-row click navigates to detail. Drafts + PendingApproval + PendingClearance
+          // vouchers have no voucher number to click on as a link, so without this the only way
+          // to view them was through the 3-dots menu.
+          onRow={(row) => ({
+            onClick: () => navigate(`/vouchers/${row.id}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{ current: query.page, pageSize: query.pageSize, total: data?.total ?? 0, showSizeChanger: true, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
           onChange={(p) => setQuery((q) => ({ ...q, page: p.current ?? 1, pageSize: p.pageSize ?? 25 }))}
           locale={{
@@ -251,6 +265,8 @@ function StatusTag({ status }: { status: VoucherStatus }) {
     4: { bg: '#D1FAE5', color: '#065F46' },
     5: { bg: '#E5E9EF', color: '#475569' },
     6: { bg: '#FEE2E2', color: '#991B1B' },
+    // PendingClearance shares the amber palette with Draft - paused awaiting an external event.
+    7: { bg: '#FEF3C7', color: '#92400E' },
   };
   const c = cfg[status];
   return <Tag style={{ margin: 0, background: c.bg, color: c.color, border: 'none', fontWeight: 500 }}>{VoucherStatusLabel[status]}</Tag>;

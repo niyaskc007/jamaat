@@ -44,7 +44,7 @@ export function PortalEventsListPage() {
                   : `linear-gradient(135deg, ${e.primaryColor ?? '#0E5C40'} 0%, ${e.accentColor ?? '#B45309'} 100%)`,
                 display: 'flex', alignItems: 'flex-end', padding: 12, color: '#fff',
               }}>
-                <Tag color="rgba(255,255,255,0.25)" style={{ color: '#fff', border: 'none' }}>{EventCategoryLabel[e.category]}</Tag>
+                <Tag color="rgba(255,255,255,0.25)" style={{ color: '#fff', border: 'none' }}>{e.categoryName ?? EventCategoryLabel[e.category] ?? `Category ${e.category}`}</Tag>
               </div>
               <div style={{ padding: 16 }}>
                 <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--portal-text)' }}>{e.name}</div>

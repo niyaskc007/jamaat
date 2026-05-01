@@ -1216,6 +1216,52 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.ToTable("Family", "dbo");
                 });
 
+            modelBuilder.Entity("Jamaat.Domain.Entities.FamilyMemberLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FamilyId");
+
+                    b.HasIndex("MemberId");
+
+                    b.HasIndex("TenantId", "FamilyId");
+
+                    b.HasIndex("TenantId", "MemberId");
+
+                    b.HasIndex("TenantId", "FamilyId", "MemberId")
+                        .IsUnique();
+
+                    b.ToTable("FamilyMemberLink", "dbo");
+                });
+
             modelBuilder.Entity("Jamaat.Domain.Entities.FinancialPeriod", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2730,7 +2776,7 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ClearedReceiptId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("CommitmentId")
+                    b.Property<Guid?>("CommitmentId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("CommitmentInstallmentId")
@@ -2755,7 +2801,7 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<Guid>("MemberId")
+                    b.Property<Guid?>("MemberId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Notes")
@@ -2763,6 +2809,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(2000)");
 
                     b.Property<Guid?>("ReplacedByChequeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("SourceReceiptId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SourceVoucherId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("Status")
@@ -2783,9 +2838,19 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("MemberId");
 
+                    b.HasIndex("SourceReceiptId");
+
+                    b.HasIndex("SourceVoucherId");
+
                     b.HasIndex("TenantId", "CommitmentId");
 
                     b.HasIndex("TenantId", "MemberId");
+
+                    b.HasIndex("TenantId", "Source");
+
+                    b.HasIndex("TenantId", "SourceReceiptId");
+
+                    b.HasIndex("TenantId", "SourceVoucherId");
 
                     b.HasIndex("TenantId", "Status", "ChequeDate");
 
@@ -3127,6 +3192,10 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<string>("CustomFieldsJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("DrawnOnBank")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<Guid?>("FamilyId")
                         .HasColumnType("uniqueidentifier");
 
@@ -3183,6 +3252,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<Guid?>("PendingPostDatedChequeId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateOnly>("ReceiptDate")
                         .HasColumnType("date");
 
@@ -3224,6 +3296,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.HasIndex("MemberId");
 
                     b.HasIndex("NumberingSeriesId");
+
+                    b.HasIndex("PendingPostDatedChequeId")
+                        .HasFilter("[PendingPostDatedChequeId] IS NOT NULL");
 
                     b.HasIndex("TenantId", "FamilyId");
 
@@ -3622,6 +3697,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<int>("PaymentMode")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("PendingPostDatedChequeId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Purpose")
                         .IsRequired()
                         .HasMaxLength(1000)
@@ -3670,6 +3748,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.HasIndex("FinancialPeriodId");
 
                     b.HasIndex("NumberingSeriesId");
+
+                    b.HasIndex("PendingPostDatedChequeId")
+                        .HasFilter("[PendingPostDatedChequeId] IS NOT NULL");
 
                     b.HasIndex("SourceQarzanHasanaLoanId")
                         .HasFilter("[SourceQarzanHasanaLoanId] IS NOT NULL");
@@ -4223,6 +4304,21 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("Jamaat.Domain.Entities.FamilyMemberLink", b =>
+                {
+                    b.HasOne("Jamaat.Domain.Entities.Family", null)
+                        .WithMany()
+                        .HasForeignKey("FamilyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Jamaat.Domain.Entities.Member", null)
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Jamaat.Domain.Entities.FundEnrollment", b =>
                 {
                     b.HasOne("Jamaat.Domain.Entities.Family", null)
@@ -4341,14 +4437,22 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.HasOne("Jamaat.Domain.Entities.Commitment", null)
                         .WithMany()
                         .HasForeignKey("CommitmentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Jamaat.Domain.Entities.Member", null)
                         .WithMany()
                         .HasForeignKey("MemberId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Jamaat.Domain.Entities.Receipt", null)
+                        .WithMany()
+                        .HasForeignKey("SourceReceiptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Jamaat.Domain.Entities.Voucher", null)
+                        .WithMany()
+                        .HasForeignKey("SourceVoucherId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Jamaat.Domain.Entities.QarzanHasanaGuarantorConsent", b =>

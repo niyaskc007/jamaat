@@ -28,7 +28,10 @@ public sealed record VoucherDto(
     string? PaidByUserName,
     DateTimeOffset? PaidAtUtc,
     DateTimeOffset CreatedAtUtc,
-    IReadOnlyList<VoucherLineDto> Lines);
+    IReadOnlyList<VoucherLineDto> Lines,
+    /// <summary>Set when Status == PendingClearance: the linked PostDatedCheque tracking the
+    /// future-dated cheque that's holding this voucher unposted.</summary>
+    Guid? PendingPostDatedChequeId = null);
 
 public sealed record VoucherLineDto(
     Guid Id, int LineNo, Guid ExpenseTypeId, string ExpenseTypeCode, string ExpenseTypeName,
