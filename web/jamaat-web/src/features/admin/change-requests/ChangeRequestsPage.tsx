@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { PageHeader } from '../../../shared/ui/PageHeader';
+import { UserHoverCard } from '../../../shared/ui/UserHoverCard';
 import { useAuth } from '../../../shared/auth/useAuth';
 import { extractProblem } from '../../../shared/api/client';
 import {
@@ -92,7 +93,8 @@ function RequestList({ status }: { status: 1 | 2 | 3 }) {
             render: (v: string, row) => <Link to={`/members/${row.memberId}`}>{v || '-'}</Link> },
           { title: 'Section', dataIndex: 'section', width: 140,
             render: (v: string) => <Tag color="blue">{v}</Tag> },
-          { title: 'Requested by', dataIndex: 'requestedByUserName', width: 180 },
+          { title: 'Requested by', dataIndex: 'requestedByUserName', width: 180,
+            render: (v: string, row) => <UserHoverCard userId={row.requestedByUserId ?? null} fallback={v} /> },
           { title: 'When', dataIndex: 'requestedAtUtc', width: 180,
             render: (v: string) => dayjs(v).format('DD MMM YYYY HH:mm') },
           { title: 'Status', dataIndex: 'status', width: 110,
@@ -129,8 +131,18 @@ function PreviewDrawer({ request, onClose }: { request: MemberChangeRequest; onC
           { key: 'm', label: 'Member', children: <Link to={`/members/${request.memberId}`}>{request.memberName}</Link> },
           { key: 's', label: 'Section', children: <Tag color="blue">{request.section}</Tag> },
           { key: 'st', label: 'Status', children: <Tag color={MemberChangeRequestStatusColor[request.status]}>{MemberChangeRequestStatusLabel[request.status]}</Tag> },
-          { key: 'req', label: 'Requested by', children: `${request.requestedByUserName} on ${dayjs(request.requestedAtUtc).format('DD MMM YYYY HH:mm')}` },
-          ...(request.reviewedByUserName ? [{ key: 'rv', label: 'Reviewed by', children: `${request.reviewedByUserName} on ${dayjs(request.reviewedAtUtc).format('DD MMM YYYY HH:mm')}` }] : []),
+          { key: 'req', label: 'Requested by', children: (
+            <span>
+              <UserHoverCard userId={request.requestedByUserId ?? null} fallback={request.requestedByUserName} />
+              {' on '}{dayjs(request.requestedAtUtc).format('DD MMM YYYY HH:mm')}
+            </span>
+          ) },
+          ...(request.reviewedByUserName ? [{ key: 'rv', label: 'Reviewed by', children: (
+            <span>
+              <UserHoverCard userId={request.reviewedByUserId ?? null} fallback={request.reviewedByUserName} />
+              {' on '}{dayjs(request.reviewedAtUtc).format('DD MMM YYYY HH:mm')}
+            </span>
+          ) }] : []),
           ...(request.reviewerNote ? [{ key: 'note', label: 'Reviewer note', children: <span style={{ whiteSpace: 'pre-wrap' }}>{request.reviewerNote}</span> }] : []),
         ]}
       />

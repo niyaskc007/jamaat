@@ -42,6 +42,10 @@ export function KpiCard({ icon, label, value, format = 'money', currency = 'AED'
       style={{
         boxShadow: 'var(--jm-shadow-1)',
         border: '1px solid var(--jm-border)',
+        // Stretch to fill the parent Col so KPI strips stay vertically aligned even when one
+        // tile has a caption/sub line and others don't. Without this the AntD Row leaves the
+        // taller tile pulling its row out of alignment (treasurer dashboard regression report).
+        blockSize: '100%',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>

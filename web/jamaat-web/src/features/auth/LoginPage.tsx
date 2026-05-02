@@ -6,7 +6,7 @@ import { Button, Form, Input, Typography, Alert, Checkbox, Collapse, Tag } from 
 import { LockOutlined, MailOutlined, SafetyCertificateFilled, GlobalOutlined, FileDoneOutlined } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { authApi } from './authApi';
+import { authApi, isPasswordChangeRequired } from './authApi';
 import { authStore } from '../../shared/auth/authStore';
 import { extractProblem } from '../../shared/api/client';
 import { Logo } from '../../shared/ui/Logo';
@@ -48,6 +48,16 @@ export function LoginPage() {
     setError(null);
     try {
       const res = await authApi.login(data.email, data.password);
+      // Force first-login change: server returned a non-JWT signal. Hand off to the
+      // /change-password page with the identifier + temp pw pre-filled. We do NOT seed any
+      // session here - clients only get a JWT after the change-password call succeeds.
+      if (isPasswordChangeRequired(res)) {
+        navigate('/change-password', {
+          replace: true,
+          state: { identifier: data.email, temporaryPassword: data.password, expiresAtUtc: res.temporaryPasswordExpiresAtUtc, returnTo: from },
+        });
+        return;
+      }
       authStore.setSession(res.accessToken, res.refreshToken, {
         id: res.user.id,
         userName: res.user.userName,
@@ -56,7 +66,10 @@ export function LoginPage() {
         permissions: res.user.permissions,
         preferredLanguage: res.user.preferredLanguage,
       });
-      navigate(from, { replace: true });
+      // If this user only has portal access (no admin/operator perms), land them on /portal/me.
+      const portalOnly = res.user.permissions.length > 0
+        && res.user.permissions.every((p) => p.startsWith('portal.') || p === 'member.self.update' || p === 'member.wealth.view');
+      navigate(portalOnly ? '/portal/me' : from, { replace: true });
     } catch (err) {
       const problem = extractProblem(err);
       setError(problem.detail ?? problem.title ?? t('login.invalid'));

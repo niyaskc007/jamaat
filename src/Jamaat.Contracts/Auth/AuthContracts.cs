@@ -19,3 +19,15 @@ public sealed record UserInfo(
     IReadOnlyList<string> Roles,
     IReadOnlyList<string> Permissions,
     string? PreferredLanguage);
+
+/// Returned by /auth/login when the user supplied a valid temp password but MustChangePassword
+/// is set. No JWT is issued. The client navigates to the change-password screen and POSTs to
+/// /auth/complete-first-login with the new password; on success a normal AuthResponse is returned.
+public sealed record PasswordChangeRequiredResponse(
+    Guid UserId,
+    string UserName,
+    bool MustChangePassword,
+    DateTimeOffset? TemporaryPasswordExpiresAtUtc,
+    string Reason);
+
+public sealed record CompleteFirstLoginRequest(string Identifier, string CurrentPassword, string NewPassword);

@@ -11,6 +11,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, Area,
 } from 'recharts';
 import { PageHeader } from '../../shared/ui/PageHeader';
+import { UserHoverCard } from '../../shared/ui/UserHoverCard';
 import { useAuth } from '../../shared/auth/useAuth';
 import { money, formatDate } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
@@ -197,7 +198,9 @@ export function PatronageDetailPage() {
               <Descriptions.Item label="Start">{formatDate(p.startDate)}</Descriptions.Item>
               <Descriptions.Item label="End">{p.endDate ? formatDate(p.endDate) : 'Open-ended'}</Descriptions.Item>
               <Descriptions.Item label="Approved by">
-                {p.approvedByUserName ?? '-'}
+                {p.approvedByUserName
+                  ? <UserHoverCard userId={p.approvedByUserId ?? null} fallback={p.approvedByUserName} />
+                  : '-'}
                 {p.approvedAtUtc && <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>{dayjs(p.approvedAtUtc).format('DD MMM YYYY HH:mm')}</div>}
               </Descriptions.Item>
               <Descriptions.Item label="Notes" span={2}>

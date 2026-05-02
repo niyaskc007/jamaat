@@ -80,7 +80,20 @@ public static class DependencyInjection
             .AddDefaultTokenProviders();
 
         services.Configure<JwtOptions>(config.GetSection(JwtOptions.SectionName));
+        services.Configure<Application.Identity.TemporaryPasswordOptions>(
+            config.GetSection(Application.Identity.TemporaryPasswordOptions.SectionName));
         services.AddScoped<ITokenService, JwtTokenService>();
+        services.AddScoped<Identity.ILoginAuditService, Identity.LoginAuditService>();
+        services.AddScoped<Identity.ITemporaryPasswordService, Identity.TemporaryPasswordService>();
+        services.AddScoped<Application.Members.IMemberLoginProvisioningService, Identity.MemberLoginProvisioningService>();
+        // Geolocation: singleton because the MaxMind reader holds an mmap-style file handle that
+        // benefits from being shared across requests. Reload() is exposed on the concrete impl so
+        // the admin upload endpoint can swap the .mmdb without an app restart.
+        services.Configure<Application.Identity.GeolocationOptions>(
+            config.GetSection(Application.Identity.GeolocationOptions.SectionName));
+        services.AddSingleton<Identity.MaxMindGeolocationService>();
+        services.AddSingleton<Application.Identity.IGeolocationService>(sp =>
+            sp.GetRequiredService<Identity.MaxMindGeolocationService>());
 
         // Repositories
         services.AddScoped<IMemberRepository, MemberRepository>();
@@ -141,6 +154,7 @@ public static class DependencyInjection
         // PDF renderers
         services.AddSingleton<IReceiptPdfRenderer, ReceiptPdfRenderer>();
         services.AddSingleton<IVoucherPdfRenderer, VoucherPdfRenderer>();
+        services.AddSingleton<IQhAgreementPdfRenderer, QhAgreementPdfRenderer>();
 
         // Photo storage (local file-system default; swap for Azure Blob later)
         services.Configure<PhotoStorageOptions>(config.GetSection(PhotoStorageOptions.SectionName));
@@ -162,6 +176,25 @@ public static class DependencyInjection
             config.GetSection(Notifications.NotificationSenderOptions.SectionName));
         services.AddScoped<Domain.Abstractions.INotificationSender, Notifications.NotificationSender>();
         services.AddScoped<Application.Notifications.INotificationQueryService, Application.Notifications.NotificationQueryService>();
+
+        // Pluggable SMS / WhatsApp - admins pick the active provider in the integration panel
+        // and supply credentials. Every provider is registered; CompositeSmsSender delegates to
+        // whichever matches SmsOptions.Provider at runtime, so swapping providers is a config
+        // change with no redeploy.
+        services.Configure<Application.Notifications.SmsOptions>(
+            config.GetSection(Application.Notifications.SmsOptions.SectionName));
+        services.Configure<Application.Notifications.WhatsAppOptions>(
+            config.GetSection(Application.Notifications.WhatsAppOptions.SectionName));
+        services.AddHttpClient();
+        services.AddScoped<Application.Notifications.ISmsSender, Notifications.TwilioSmsSender>();
+        services.AddScoped<Application.Notifications.ISmsSender, Notifications.UnifonicSmsSender>();
+        services.AddScoped<Application.Notifications.ISmsSender, Notifications.InfobipSmsSender>();
+        services.AddScoped<Application.Notifications.IWhatsAppSender, Notifications.TwilioWhatsAppSender>();
+        // Composite sender that picks the active provider per request. Registered LAST so DI's
+        // last-wins resolution pulls the composite when a single ISmsSender is requested by
+        // domain code; explicit IEnumerable<ISmsSender> resolution still gets all providers.
+        services.AddScoped<Notifications.CompositeSmsSender>();
+        services.AddScoped<Notifications.CompositeWhatsAppSender>();
 
         // Excel exporter / reader - ClosedXML-backed, stateless, safe as singletons.
         services.AddSingleton<Application.Common.IExcelExporter, Export.ClosedXmlExcelExporter>();

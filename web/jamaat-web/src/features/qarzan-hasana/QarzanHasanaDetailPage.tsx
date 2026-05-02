@@ -8,7 +8,7 @@ import {
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, Legend,
 } from 'recharts';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -21,6 +21,7 @@ import {
 } from './qarzanHasanaApi';
 import { LoanDecisionSupport } from './LoanDecisionSupport';
 import { GuarantorConsentPanel } from './GuarantorConsentPanel';
+import { UserHoverCard } from '../../shared/ui/UserHoverCard';
 
 export function QarzanHasanaDetailPage() {
   const { id = '' } = useParams();
@@ -141,6 +142,13 @@ export function QarzanHasanaDetailPage() {
         actions={
           <Space wrap>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/qarzan-hasana')}>Back</Button>
+            {/* Agreement is printable at any status — admins often print a draft for guarantor
+                signatures before disbursement, and after disbursement the same document goes
+                into the loan file. The endpoint returns a styled QuestPDF document. */}
+            <Button icon={<FileProtectOutlined />}
+              onClick={() => qarzanHasanaApi.downloadAgreement(loan.id, loan.code)}>
+              Download agreement
+            </Button>
             {isDraft && <Button type="primary" icon={<SendOutlined />} loading={submitMut.isPending} onClick={() => submitMut.mutate()}>Submit for L1 approval</Button>}
             {isL1 && <>
               <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => { setL1Amount(loan.amountRequested); setL1Inst(loan.instalmentsRequested); setL1Open(true); }}>Approve L1</Button>
@@ -357,10 +365,28 @@ export function QarzanHasanaDetailPage() {
                 { key: 'end', label: 'End', children: loan.endDate ? formatDate(loan.endDate) : '-' },
                 { key: 'status', label: 'Status', children: <Tag color={QhStatusColor[loan.status]}>{QhStatusLabel[loan.status]}</Tag> },
                 { key: 'd', label: 'Disbursed on', children: loan.disbursedOn ? formatDate(loan.disbursedOn) : '-' },
-                { key: 'g1', label: 'Guarantor 1', children: loan.guarantor1Name },
-                { key: 'g2', label: 'Guarantor 2', children: loan.guarantor2Name },
-                ...(loan.level1ApprovedAtUtc ? [{ key: 'l1', label: 'L1 approval', span: 2, children: `${loan.level1ApproverName} · ${formatDateTime(loan.level1ApprovedAtUtc)}${loan.level1Comments ? ` · ${loan.level1Comments}` : ''}` }] : []),
-                ...(loan.level2ApprovedAtUtc ? [{ key: 'l2', label: 'L2 approval', span: 2, children: `${loan.level2ApproverName} · ${formatDateTime(loan.level2ApprovedAtUtc)}${loan.level2Comments ? ` · ${loan.level2Comments}` : ''}` }] : []),
+                { key: 'g1', label: 'Guarantor 1', children: (
+                  <Link to={`/dashboards/members/${loan.guarantor1MemberId}`}>{loan.guarantor1Name}</Link>
+                ) },
+                { key: 'g2', label: 'Guarantor 2', children: (
+                  <Link to={`/dashboards/members/${loan.guarantor2MemberId}`}>{loan.guarantor2Name}</Link>
+                ) },
+                ...(loan.level1ApprovedAtUtc ? [{ key: 'l1', label: 'L1 approval', span: 2, children: (
+                  <span>
+                    <UserHoverCard userId={loan.level1ApproverUserId ?? null}
+                      fallback={loan.level1ApproverName ?? '—'} />
+                    {' · '}{formatDateTime(loan.level1ApprovedAtUtc)}
+                    {loan.level1Comments ? ` · ${loan.level1Comments}` : ''}
+                  </span>
+                ) }] : []),
+                ...(loan.level2ApprovedAtUtc ? [{ key: 'l2', label: 'L2 approval', span: 2, children: (
+                  <span>
+                    <UserHoverCard userId={loan.level2ApproverUserId ?? null}
+                      fallback={loan.level2ApproverName ?? '—'} />
+                    {' · '}{formatDateTime(loan.level2ApprovedAtUtc)}
+                    {loan.level2Comments ? ` · ${loan.level2Comments}` : ''}
+                  </span>
+                ) }] : []),
                 ...(loan.cashflowDocumentUrl || loan.goldSlipDocumentUrl ? [{ key: 'docs', label: 'Documents', span: 2, children: (
                   <Space>
                     {loan.cashflowDocumentUrl && <a href={loan.cashflowDocumentUrl} target="_blank" rel="noreferrer">Cashflow</a>}

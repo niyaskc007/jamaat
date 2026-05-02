@@ -69,7 +69,7 @@ export type Installment = {
   status: InstallmentStatus;
   waiverReason?: string | null;
   waivedAtUtc?: string | null;
-  waivedByUserName?: string | null;
+  waivedByUserId?: string | null; waivedByUserName?: string | null;
   /// Most recent confirmed receipt that contributed a payment to this installment - used to
   /// render "Last payment" as a clickable link. Null when no receipt has paid the installment
   /// yet (e.g. seeded data, payment via a different channel).
@@ -119,7 +119,7 @@ export type CommitmentPaymentRow = {
   paymentReference?: string | null;
   remarks?: string | null;
   confirmedAtUtc?: string | null;
-  confirmedByUserName?: string | null;
+  confirmedByUserId?: string | null; confirmedByUserName?: string | null;
 };
 
 export type CommitmentListQuery = {

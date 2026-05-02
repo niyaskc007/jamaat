@@ -23,6 +23,7 @@ public sealed record ReceiptDto(
     string? Remarks,
     ReceiptStatus Status,
     DateTimeOffset? ConfirmedAtUtc,
+    Guid? ConfirmedByUserId,
     string? ConfirmedByUserName,
     DateTimeOffset CreatedAtUtc,
     IReadOnlyList<ReceiptLineDto> Lines,

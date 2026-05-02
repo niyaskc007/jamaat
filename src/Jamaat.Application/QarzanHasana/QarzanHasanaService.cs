@@ -101,7 +101,7 @@ public sealed class QarzanHasanaService(
         var installments = loan.Installments.OrderBy(i => i.InstallmentNo)
             .Select(i => new QarzanHasanaInstallmentDto(i.Id, i.InstallmentNo, i.DueDate,
                 i.ScheduledAmount, i.PaidAmount, i.RemainingAmount, i.LastPaymentDate, i.Status,
-                i.WaiverReason, i.WaivedAtUtc, i.WaivedByUserName))
+                i.WaiverReason, i.WaivedAtUtc, i.WaivedByUserId, i.WaivedByUserName))
             .ToList();
         return new QarzanHasanaLoanDetailDto(dto, installments);
     }
@@ -838,14 +838,14 @@ public sealed class QarzanHasanaService(
             loan.Guarantor1MemberId, g1Name,
             loan.Guarantor2MemberId, g2Name,
             loan.CashflowDocumentUrl, loan.GoldSlipDocumentUrl,
-            loan.Level1ApproverName, loan.Level1ApprovedAtUtc, loan.Level1Comments,
-            loan.Level2ApproverName, loan.Level2ApprovedAtUtc, loan.Level2Comments,
+            loan.Level1ApproverUserId, loan.Level1ApproverName, loan.Level1ApprovedAtUtc, loan.Level1Comments,
+            loan.Level2ApproverUserId, loan.Level2ApproverName, loan.Level2ApprovedAtUtc, loan.Level2Comments,
             loan.DisbursedOn,
             loan.RejectionReason, loan.CancellationReason,
             loan.ProgressPercent,
             loan.CreatedAtUtc,
             loan.Purpose, loan.RepaymentPlan, loan.SourceOfIncome, loan.OtherObligations,
-            loan.GuarantorsAcknowledged, loan.GuarantorsAcknowledgedAtUtc, loan.GuarantorsAcknowledgedByUserName,
+            loan.GuarantorsAcknowledged, loan.GuarantorsAcknowledgedAtUtc, null, loan.GuarantorsAcknowledgedByUserName,
             loan.MonthlyIncome, loan.MonthlyExpenses, loan.MonthlyExistingEmis,
             loan.GoldWeightGrams, loan.GoldPurityKarat, loan.GoldHeldAt,
             loan.IncomeSources);
@@ -868,14 +868,14 @@ public sealed class QarzanHasanaService(
             x.Guarantor2MemberId,
             db.Members.Where(m => m.Id == x.Guarantor2MemberId).Select(m => m.FullName).FirstOrDefault() ?? "",
             x.CashflowDocumentUrl, x.GoldSlipDocumentUrl,
-            x.Level1ApproverName, x.Level1ApprovedAtUtc, x.Level1Comments,
-            x.Level2ApproverName, x.Level2ApprovedAtUtc, x.Level2Comments,
+            x.Level1ApproverUserId, x.Level1ApproverName, x.Level1ApprovedAtUtc, x.Level1Comments,
+            x.Level2ApproverUserId, x.Level2ApproverName, x.Level2ApprovedAtUtc, x.Level2Comments,
             x.DisbursedOn,
             x.RejectionReason, x.CancellationReason,
             x.ProgressPercent,
             x.CreatedAtUtc,
             x.Purpose, x.RepaymentPlan, x.SourceOfIncome, x.OtherObligations,
-            x.GuarantorsAcknowledged, x.GuarantorsAcknowledgedAtUtc, x.GuarantorsAcknowledgedByUserName,
+            x.GuarantorsAcknowledged, x.GuarantorsAcknowledgedAtUtc, null, x.GuarantorsAcknowledgedByUserName,
             x.MonthlyIncome, x.MonthlyExpenses, x.MonthlyExistingEmis,
             x.GoldWeightGrams, x.GoldPurityKarat, x.GoldHeldAt,
             x.IncomeSources);

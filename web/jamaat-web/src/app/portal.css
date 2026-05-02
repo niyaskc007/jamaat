@@ -1,0 +1,248 @@
+/* =============================================================
+   Portal & admin shared visual patterns
+   ----
+   Lives next to tokens.css. Every selector here uses var(--jm-*)
+   tokens so a brand re-skin (changing the palette in tokens.css)
+   automatically refreshes the entire member portal + admin pages
+   that share these classes.
+
+   Imported once from index.css; no per-page imports needed.
+   ============================================================= */
+
+/* ----- Card variants ----------------------------------------------- */
+
+/* Standard bordered card with elevation 1. Replaces the repeated
+   `style={{ border: '1px solid var(--jm-border)', boxShadow: ... }}`
+   pattern that appeared on every Card across the app. */
+.jm-card {
+  border: 1px solid var(--jm-border);
+  box-shadow: var(--jm-shadow-1);
+  border-radius: var(--jm-radius-lg);
+}
+
+/* ----- KPI tile ---------------------------------------------------- */
+
+.jm-kpi-row { display: flex; align-items: flex-start; gap: 10px; }
+.jm-kpi-icon {
+  inline-size: 36px; block-size: 36px; border-radius: var(--jm-radius-lg);
+  display: grid; place-items: center; font-size: 16px; flex-shrink: 0;
+}
+.jm-kpi-icon-success { background: var(--jm-success-bg-soft); color: var(--jm-success-fg-strong); }
+.jm-kpi-icon-danger  { background: var(--jm-danger-bg-soft);  color: var(--jm-danger-fg-strong); }
+.jm-kpi-icon-info    { background: var(--jm-info-bg-soft);    color: var(--jm-info-fg-strong); }
+.jm-kpi-icon-warning { background: var(--jm-warning-bg-soft); color: var(--jm-warning); }
+.jm-kpi-icon-neutral { background: var(--jm-gray-100);        color: var(--jm-neutral-fg-strong); }
+.jm-kpi-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--jm-gray-500);
+}
+.jm-kpi-value {
+  font-size: 22px; font-weight: 700; color: var(--jm-gray-900); line-height: 1.1; margin-block-start: 2px;
+}
+.jm-kpi-sub { font-size: 11px; color: var(--jm-gray-500); margin-block-start: 2px; }
+
+/* ----- Section header & body spacing ------------------------------- */
+
+.jm-section-head { display: flex; align-items: center; justify-content: space-between; margin-block-end: var(--jm-space-2); }
+.jm-section-sub  { color: var(--jm-gray-600); margin-block-end: var(--jm-space-4); }
+
+/* ----- Identifier avatar (login-history, audit lists) -------------- */
+
+.jm-id-avatar {
+  inline-size: 28px; block-size: 28px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 600; color: var(--jm-on-strong);
+}
+.jm-id-avatar-its   { background: var(--jm-avatar-its); }
+.jm-id-avatar-email { background: var(--jm-avatar-email); }
+
+/* ----- Status row (login-history table + mobile cards) ------------ */
+
+.jm-login-row td:first-child { border-inline-start: 3px solid transparent; }
+.jm-login-row-ok td:first-child { border-inline-start-color: var(--jm-success-fg-strong); }
+.jm-login-row-bad td:first-child {
+  border-inline-start-color: var(--jm-danger-fg-strong);
+  background: var(--jm-danger-bg-soft);
+}
+
+.jm-mob-row { border-inline-start: 3px solid var(--jm-border); }
+.jm-mob-row-ok  { border-inline-start-color: var(--jm-success-fg-strong); }
+.jm-mob-row-bad { border-inline-start-color: var(--jm-danger-fg-strong); background: var(--jm-danger-bg-soft); }
+.jm-mob-row-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+
+/* ----- Sparkline header + dot legend ------------------------------ */
+
+.jm-spark-header { display: flex; justify-content: space-between; align-items: center; margin-block-end: 4px; }
+.jm-spark-title  { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+.jm-spark-legend { font-size: 11px; }
+.jm-dot {
+  display: inline-block; inline-size: 8px; block-size: 8px; border-radius: 2px; margin-inline-end: 2px;
+}
+.jm-dot-success { background: var(--jm-success-fg-strong); }
+.jm-dot-danger  { background: var(--jm-danger-fg-strong); }
+
+/* ----- Location cell (login-history) ------------------------------ */
+
+.jm-loc-line { display: flex; align-items: center; gap: 6px; color: var(--jm-gray-700); }
+.jm-loc-ip   { font-size: 11px; color: var(--jm-gray-500); margin-block-start: 2px; font-variant-numeric: tabular-nums; }
+
+/* ----- Member portal home tile ------------------------------------ */
+
+.jm-tile-row { display: flex; align-items: flex-start; gap: var(--jm-space-3); }
+.jm-tile-icon {
+  inline-size: 40px; block-size: 40px; border-radius: var(--jm-radius-lg);
+  display: grid; place-items: center; font-size: 20px; flex-shrink: 0;
+}
+.jm-tile-icon-primary { background: var(--jm-primary-50);  color: var(--jm-primary-500); }
+.jm-tile-icon-success { background: var(--jm-success-bg-soft); color: var(--jm-success-fg-strong); }
+.jm-tile-icon-info    { background: var(--jm-info-bg-soft); color: var(--jm-info-fg-strong); }
+.jm-tile-icon-warning { background: var(--jm-warning-bg-soft); color: var(--jm-warning); }
+.jm-tile-icon-danger  { background: var(--jm-danger-bg-soft); color: var(--jm-danger-fg-strong); }
+.jm-tile-icon-accent  { background: var(--jm-accent-100); color: var(--jm-accent-600); }
+.jm-tile-icon-neutral { background: var(--jm-gray-100); color: var(--jm-neutral-fg-strong); }
+.jm-tile-title { font-weight: 600; color: var(--jm-gray-900); }
+.jm-tile-desc  { font-size: 13px; color: var(--jm-gray-600); line-height: 1.5; margin-block-start: 4px; }
+
+.jm-tile { block-size: 100%; }
+.jm-tile-link { text-decoration: none; display: block; }
+
+.jm-page-title { margin: 0; }
+
+/* ----- Brand-gradient backdrop (auth + change-password screens) --- */
+
+.jm-brand-backdrop {
+  min-block-size: 100dvh; display: grid; place-items: center;
+  background: var(--jm-brand-gradient); padding: var(--jm-space-6);
+}
+.jm-brand-card {
+  inline-size: 100%; max-inline-size: 460px;
+  box-shadow: var(--jm-shadow-3);
+  border-radius: var(--jm-radius-lg);
+}
+
+/* ----- Member portal layout chrome -------------------------------- */
+
+.jm-portal-shell { min-block-size: 100dvh; }
+.jm-portal-sider { border-inline-end: 1px solid var(--jm-border); }
+.jm-portal-sider-brand {
+  padding: var(--jm-space-4) var(--jm-space-5);
+  display: flex; align-items: center; gap: 10px;
+}
+.jm-portal-sider-brand--collapsed { padding: var(--jm-space-4) var(--jm-space-2); }
+
+.jm-portal-header {
+  background: var(--jm-surface);
+  border-block-end: 1px solid var(--jm-border);
+  padding-inline: var(--jm-space-6);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.jm-portal-header-label { font-size: 13px; }
+.jm-portal-header-trigger { block-size: auto; padding: 4px; }
+.jm-portal-avatar { background: var(--jm-primary-500); }
+.jm-portal-user-block { text-align: start; }
+.jm-portal-user-name { font-size: 13px; font-weight: 500; }
+.jm-portal-user-role { font-size: 11px; color: var(--jm-gray-500); }
+.jm-portal-content { padding: var(--jm-space-6); background: var(--jm-surface-muted); }
+
+/* ----- Generic page intro paragraph -------------------------------- */
+
+.jm-page-intro {
+  margin-block-start: 4px;
+  margin-block-end: var(--jm-space-4);
+  color: var(--jm-gray-600);
+}
+
+/* ----- Form / toolbar utilities ------------------------------------ */
+
+.jm-full-width { inline-size: 100%; }
+.jm-toolbar-end { inline-size: 100%; justify-content: flex-end; }
+.jm-input-prefix-icon { color: var(--jm-gray-400); }
+
+/* ----- Login-history specific (table cells, mobile row internals) -- */
+
+.jm-cell-when-primary { font-weight: 500; color: var(--jm-gray-900); }
+.jm-cell-when-rel { font-size: 11px; color: var(--jm-gray-500); }
+
+.jm-mob-list { display: grid; gap: 8px; }
+.jm-mob-row-identifier { margin-block-start: 8px; }
+.jm-mob-row-meta { margin-block-start: 8px; display: grid; gap: 6px; font-size: 13px; }
+
+.jm-id-text { font-size: 13px; }
+
+.jm-loc-line-compact { font-size: 12px; }
+.jm-loc-name { font-weight: 500; color: var(--jm-gray-700); }
+
+.jm-device-icon { color: var(--jm-gray-500); }
+.jm-device-label { font-size: 13px; color: var(--jm-gray-700); }
+.jm-device-label-compact { font-size: 12px; }
+
+/* Solid filled outcome pill (login-history Outcome column + mobile cards).
+   White text + icon over a strong success/danger background. Replaces the
+   soft-tinted AntD Tag look so the Success/Failure state pops at a glance. */
+.jm-outcome-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding-inline: 12px; padding-block: 4px;
+  border-radius: 999px;
+  font-size: 12px; font-weight: 600; line-height: 1.4;
+  color: var(--jm-on-strong);
+  box-shadow: var(--jm-shadow-1);
+}
+.jm-outcome-pill .anticon { font-size: 14px; }
+.jm-outcome-pill-success { background: var(--jm-success-fg-strong); }
+.jm-outcome-pill-danger  { background: var(--jm-danger-fg-strong); }
+
+.jm-empty-padded { padding-block: 32px; }
+
+.jm-kpi-body { min-inline-size: 0; }
+
+/* ----- Country flag SVG (shared/ui/CountryFlag) ------------------- */
+
+.jm-country-flag { flex-shrink: 0; box-shadow: var(--jm-ring-soft); }
+.jm-country-flag--rounded { border-radius: 2px; }
+.jm-country-flag-fallback { color: var(--jm-gray-400); }
+
+/* ----- Section helpers (page header row, intro, muted text) ------- */
+
+.jm-section-title { margin: 0; }
+.jm-muted-em { color: var(--jm-gray-400); font-style: italic; }
+.jm-muted    { color: var(--jm-gray-400); }
+.jm-num-strong { font-weight: 500; }
+.jm-alert-after-card { margin-block-start: var(--jm-space-4); }
+
+/* ----- Change-password page ---------------------------------------- */
+
+.jm-changepw-icon { font-size: 28px; color: var(--jm-primary-500); }
+.jm-changepw-subtitle { margin-block-end: var(--jm-space-4); }
+.jm-changepw-form { margin-block-start: var(--jm-space-2); }
+.jm-changepw-alert { margin-block-end: var(--jm-space-4); }
+.jm-changepw-cancel { margin-block-start: var(--jm-space-2); }
+
+/* ----- Integration panel patterns ---------------------------------- */
+
+.jm-divider-flush { margin: 0; }
+.jm-row-12 { display: flex; align-items: center; gap: var(--jm-space-3); }
+.jm-status-tag { margin: 0; padding-inline: 10px; padding-block: 4px; }
+.jm-strong { font-weight: 500; }
+.jm-test-form-input { inline-size: 100%; max-inline-size: 480px; }
+
+/* ----- Users page (admin) - my Phase B extensions ------------------ */
+
+.jm-status-tag-flush { margin: 0; }
+.jm-tag-after { margin-inline-start: 4px; }
+.jm-temppw-howto { margin-block-end: var(--jm-space-4); }
+.jm-bullets-flush { padding-inline-start: 18px; margin: 0; }
+.jm-overline {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.jm-temppw-card { margin-block-end: var(--jm-space-3); }
+.jm-temppw-row {
+  display: flex; align-items: center; gap: var(--jm-space-2);
+  margin-block-start: var(--jm-space-2);
+}
+.jm-temppw-plaintext {
+  flex: 1; font-size: 16px; font-weight: 600;
+  padding: var(--jm-space-2) var(--jm-space-3);
+  background: var(--jm-surface-muted);
+  border-radius: var(--jm-radius);
+  border: 1px dashed var(--jm-border);
+}
+.jm-temppw-expiry { font-size: 12px; display: block; margin-block-start: var(--jm-space-2); }

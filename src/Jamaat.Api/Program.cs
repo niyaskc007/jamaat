@@ -6,6 +6,7 @@ using Jamaat.Domain.Abstractions;
 using Jamaat.Infrastructure;
 using Jamaat.Infrastructure.Persistence.Seed;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Exceptions;
@@ -80,6 +81,48 @@ var healthBuilder = builder.Services.AddHealthChecks();
 if (!string.IsNullOrWhiteSpace(connectionString))
     healthBuilder.AddSqlServer(connectionString, name: "sql", tags: ["ready"]);
 
+// ---- Forwarded headers ----------------------------------------------------
+// Production deployments typically sit behind a reverse proxy (nginx, IIS, ALB, Cloudflare).
+// Without this, HttpContext.Connection.RemoteIpAddress is the PROXY's IP - so login-history
+// records the proxy instead of the real member, and MaxMind geolocation never has a useful
+// IP to look up.
+//
+// Trust list is configurable via ForwardedHeaders:KnownProxies / KnownNetworks. In dev we
+// trust loopback so a Vite dev-proxy or local nginx Just Works. In production, set
+// ForwardedHeaders:KnownProxies to your proxy's IP(s) - never leave KnownProxies empty in
+// production or any client could spoof X-Forwarded-For.
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // Clear the defaults; we explicitly add what we trust.
+    o.KnownIPNetworks.Clear();
+    o.KnownProxies.Clear();
+
+    var knownProxies = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [];
+    foreach (var p in knownProxies)
+        if (System.Net.IPAddress.TryParse(p, out var ip)) o.KnownProxies.Add(ip);
+
+    var knownNetworks = builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [];
+    foreach (var n in knownNetworks)
+    {
+        var slash = n.IndexOf('/');
+        if (slash > 0
+            && System.Net.IPAddress.TryParse(n[..slash], out var prefix)
+            && int.TryParse(n[(slash + 1)..], out var prefixLen))
+        {
+            o.KnownIPNetworks.Add(new System.Net.IPNetwork(prefix, prefixLen));
+        }
+    }
+
+    // Dev fallback: trust the loopback range so X-Forwarded-For from the Vite proxy or a local
+    // tunnel propagates without any extra config. Production deploys MUST set KnownProxies.
+    if (builder.Environment.IsDevelopment() && knownProxies.Length == 0 && knownNetworks.Length == 0)
+    {
+        o.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.Parse("127.0.0.0"), 8));
+        o.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.IPv6Loopback, 128));
+    }
+});
+
 // ---- CORS (configurable origins) ------------------------------------------
 const string CorsPolicy = "JamaatWeb";
 builder.Services.AddCors(o => o.AddPolicy(CorsPolicy, p => p
@@ -91,6 +134,11 @@ builder.Services.AddCors(o => o.AddPolicy(CorsPolicy, p => p
 var app = builder.Build();
 
 await DatabaseSeeder.SeedAsync(app.Services);
+
+// ForwardedHeaders MUST run before everything that reads RemoteIpAddress (request logging,
+// auth, audit). Order matters - this overwrites HttpContext.Connection.RemoteIpAddress with
+// the original client IP from X-Forwarded-For when the request came through a trusted proxy.
+app.UseForwardedHeaders();
 
 app.UseSerilogRequestLogging();
 

@@ -10,7 +10,7 @@ public sealed record FundEnrollmentDto(
     string? SubType, FundEnrollmentRecurrence Recurrence,
     DateOnly StartDate, DateOnly? EndDate,
     FundEnrollmentStatus Status,
-    string? ApprovedByUserName, DateTimeOffset? ApprovedAtUtc,
+    Guid? ApprovedByUserId, string? ApprovedByUserName, DateTimeOffset? ApprovedAtUtc,
     string? Notes,
     decimal TotalCollected, int ReceiptCount,
     DateTimeOffset CreatedAtUtc);

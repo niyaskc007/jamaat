@@ -8,6 +8,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
+import { UserHoverCard } from '../../shared/ui/UserHoverCard';
 import { money, formatDateTime, formatDate } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
 import { vouchersApi, PaymentModeLabel, VoucherStatusLabel, type VoucherStatus } from './vouchersApi';
@@ -163,7 +164,7 @@ export function VoucherDetailPage() {
               {data.paidAtUtc ? formatDateTime(data.paidAtUtc).split(' ')[0] : (isCancelled ? 'Cancelled' : 'Not paid')}
             </div>
             <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
-              {data.paidByUserName ? `by ${data.paidByUserName}` : ' '}
+              {data.paidByUserName ? <>by <UserHoverCard userId={data.paidByUserId ?? null} fallback={data.paidByUserName} /></> : ' '}
             </div>
           </Card>
         </Col>
@@ -220,7 +221,7 @@ export function VoucherDetailPage() {
                       <div style={{ fontWeight: 500, fontSize: 13 }}>Approved</div>
                       <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>
                         {formatDateTime(data.approvedAtUtc)}
-                        {data.approvedByUserName && <> by {data.approvedByUserName}</>}
+                        {data.approvedByUserName && <> by <UserHoverCard userId={data.approvedByUserId ?? null} fallback={data.approvedByUserName} /></>}
                       </div>
                     </div>
                   ),
@@ -232,7 +233,7 @@ export function VoucherDetailPage() {
                       <div style={{ fontWeight: 500, fontSize: 13 }}>Paid</div>
                       <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>
                         {formatDateTime(data.paidAtUtc)}
-                        {data.paidByUserName && <> by {data.paidByUserName}</>}
+                        {data.paidByUserName && <> by <UserHoverCard userId={data.paidByUserId ?? null} fallback={data.paidByUserName} /></>}
                       </div>
                     </div>
                   ),

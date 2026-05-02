@@ -10,6 +10,7 @@ import {
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../../shared/ui/PageHeader';
+import { UserHoverCard } from '../../../shared/ui/UserHoverCard';
 import { extractProblem } from '../../../shared/api/client';
 import {
   errorLogsApi,
@@ -132,12 +133,18 @@ export function ErrorLogsPage() {
           >Resolve</Button>
           {row.reviewedAtUtc && (
             <span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
-              Reviewed {dayjs(row.reviewedAtUtc).format('DD MMM HH:mm')}{row.reviewedByUserName ? ` by ${row.reviewedByUserName}` : ''}
+              Reviewed {dayjs(row.reviewedAtUtc).format('DD MMM HH:mm')}
+              {row.reviewedByUserName && (
+                <> by <UserHoverCard userId={row.reviewedByUserId ?? null} fallback={row.reviewedByUserName} /></>
+              )}
             </span>
           )}
           {row.resolvedAtUtc && (
             <span style={{ fontSize: 12, color: 'var(--jm-success)' }}>
-              Resolved {dayjs(row.resolvedAtUtc).format('DD MMM HH:mm')}{row.resolvedByUserName ? ` by ${row.resolvedByUserName}` : ''}
+              Resolved {dayjs(row.resolvedAtUtc).format('DD MMM HH:mm')}
+              {row.resolvedByUserName && (
+                <> by <UserHoverCard userId={row.resolvedByUserId ?? null} fallback={row.resolvedByUserName} /></>
+              )}
             </span>
           )}
         </Space>

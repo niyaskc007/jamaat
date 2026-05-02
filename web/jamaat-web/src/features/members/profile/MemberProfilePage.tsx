@@ -11,6 +11,7 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { PageHeader } from '../../../shared/ui/PageHeader';
+import { UserHoverCard } from '../../../shared/ui/UserHoverCard';
 import { formatDate, formatDateTime, money } from '../../../shared/format/format';
 import { extractProblem } from '../../../shared/api/client';
 import {
@@ -891,6 +892,10 @@ function VerificationTab({ profile, onSaved, onErr }: { profile: MemberProfile; 
               items={[
                 { key: 's', label: 'Status', children: <Tag color={VerificationStatusColor[profile.dataVerificationStatus]}>{VerificationStatusLabel[profile.dataVerificationStatus]}</Tag> },
                 { key: 'd', label: 'Date', children: profile.dataVerifiedOn ?? '-' },
+                ...(profile.dataVerifiedByUserId ? [{ key: 'by', label: 'Verified by', children: (
+                  <UserHoverCard userId={profile.dataVerifiedByUserId}
+                    fallback={profile.dataVerifiedByUserName ?? '(view)'} />
+                ) }] : []),
               ]}
             />
             {canVerify && (
@@ -908,6 +913,10 @@ function VerificationTab({ profile, onSaved, onErr }: { profile: MemberProfile; 
               items={[
                 { key: 's', label: 'Status', children: <Tag color={VerificationStatusColor[profile.photoVerificationStatus]}>{VerificationStatusLabel[profile.photoVerificationStatus]}</Tag> },
                 { key: 'd', label: 'Date', children: profile.photoVerifiedOn ?? '-' },
+                ...(profile.photoVerifiedByUserId ? [{ key: 'by', label: 'Verified by', children: (
+                  <UserHoverCard userId={profile.photoVerifiedByUserId}
+                    fallback={profile.photoVerifiedByUserName ?? '(view)'} />
+                ) }] : []),
               ]}
             />
             <div style={{ marginBlockStart: 12, display: 'flex', gap: 12, alignItems: 'center' }}>

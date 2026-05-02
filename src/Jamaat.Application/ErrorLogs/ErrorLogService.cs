@@ -122,8 +122,10 @@ public sealed class ErrorLogService : IErrorLogService
         e.Fingerprint,
         e.OccurredAtUtc,
         e.ReviewedAtUtc,
+        e.ReviewedByUserId,
         e.ReviewedByUserName,
         e.ResolvedAtUtc,
+        e.ResolvedByUserId,
         e.ResolvedByUserName,
         e.ResolutionNote);
 }

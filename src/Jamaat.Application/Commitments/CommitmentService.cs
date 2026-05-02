@@ -100,7 +100,7 @@ public sealed class CommitmentService(
                 var lastReceipt = lastReceiptPerInst.TryGetValue(i.Id, out var rec) ? ((Guid?)rec.Id, (string?)rec.Number) : (null, null);
                 return new CommitmentInstallmentDto(
                     i.Id, i.InstallmentNo, i.DueDate, i.ScheduledAmount, i.PaidAmount, i.RemainingAmount,
-                    i.LastPaymentDate, i.Status, i.WaiverReason, i.WaivedAtUtc, i.WaivedByUserName,
+                    i.LastPaymentDate, i.Status, i.WaiverReason, i.WaivedAtUtc, i.WaivedByUserId, i.WaivedByUserName,
                     lastReceipt.Item1, lastReceipt.Item2);
             })
             .ToList();
@@ -172,7 +172,7 @@ public sealed class CommitmentService(
                     x.Receipt.PaymentMode, x.Receipt.ChequeNumber, x.Receipt.ChequeDate,
                     x.Receipt.BankAccountId, bankName,
                     x.Receipt.PaymentReference, x.Receipt.Remarks,
-                    x.Receipt.ConfirmedAtUtc, x.Receipt.ConfirmedByUserName));
+                    x.Receipt.ConfirmedAtUtc, x.Receipt.ConfirmedByUserId, x.Receipt.ConfirmedByUserName));
             }
         }
         var ordered = (IReadOnlyList<CommitmentPaymentRowDto>)result

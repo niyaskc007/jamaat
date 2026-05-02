@@ -1,3 +1,6 @@
+using System.Buffers;
+using System.Globalization;
+using System.Text;
 using ClosedXML.Excel;
 using Jamaat.Application.Common;
 
@@ -90,6 +93,79 @@ public sealed class ClosedXmlExcelExporter : IExcelExporter
                 cell.Value = value?.ToString() ?? string.Empty;
                 break;
         }
+    }
+
+    public byte[] BuildCsv(ExcelSheet sheet)
+    {
+        // RFC 4180: CRLF line endings, double-quote when the cell contains comma/quote/newline,
+        // double-up internal quotes. UTF-8 with BOM so Excel auto-detects encoding when
+        // double-clicked (without the BOM, non-ASCII characters - e.g. Arabic member names -
+        // render as mojibake in older Excel versions).
+        var sb = new StringBuilder();
+        for (var c = 0; c < sheet.Columns.Count; c++)
+        {
+            if (c > 0) sb.Append(',');
+            sb.Append(EscapeCsv(sheet.Columns[c].Header));
+        }
+        sb.Append("\r\n");
+        foreach (var row in sheet.Rows)
+        {
+            for (var c = 0; c < sheet.Columns.Count; c++)
+            {
+                if (c > 0) sb.Append(',');
+                var value = c < row.Count ? row[c] : null;
+                sb.Append(EscapeCsv(FormatCsvValue(value, sheet.Columns[c])));
+            }
+            sb.Append("\r\n");
+        }
+        var bom = Encoding.UTF8.GetPreamble();
+        var body = Encoding.UTF8.GetBytes(sb.ToString());
+        var output = new byte[bom.Length + body.Length];
+        Buffer.BlockCopy(bom, 0, output, 0, bom.Length);
+        Buffer.BlockCopy(body, 0, output, bom.Length, body.Length);
+        return output;
+    }
+
+    private static string FormatCsvValue(object? value, ExcelColumn col)
+    {
+        if (value is null) return string.Empty;
+        return col.Type switch
+        {
+            ExcelColumnType.Date => value switch
+            {
+                DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                DateTime dt => dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                DateTimeOffset dto => dto.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
+            },
+            ExcelColumnType.DateTime => value switch
+            {
+                DateTime dt => dt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                DateTimeOffset dto => dto.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
+            },
+            ExcelColumnType.Number or ExcelColumnType.Currency => value switch
+            {
+                // Use invariant decimal separator so the CSV is portable (Excel imports the
+                // active locale on open; pandas / R / DuckDB all expect '.').
+                decimal d => d.ToString("0.##############", CultureInfo.InvariantCulture),
+                double d => d.ToString("0.##############", CultureInfo.InvariantCulture),
+                float f => f.ToString("0.##############", CultureInfo.InvariantCulture),
+                int i => i.ToString(CultureInfo.InvariantCulture),
+                long l => l.ToString(CultureInfo.InvariantCulture),
+                _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
+            },
+            _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
+        };
+    }
+
+    private static readonly SearchValues<char> CsvSpecialChars = SearchValues.Create(",\"\r\n");
+
+    private static string EscapeCsv(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        if (s.AsSpan().IndexOfAny(CsvSpecialChars) < 0) return s;
+        return "\"" + s.Replace("\"", "\"\"") + "\"";
     }
 
     private static string SafeSheetName(string name)

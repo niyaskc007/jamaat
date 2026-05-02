@@ -71,6 +71,7 @@ public static class DatabaseSeeder
             ("DataValidator", "Reviews and approves member change requests; verifies data + photos"),
             ("EventCoordinator", "Plans and runs events; manages registrations and check-ins"),
             ("EventVolunteer", "Scans and check-ins members at events"),
+            ("Member", "Member self-service - access only to own data via the member portal"),
         };
         foreach (var (name, desc) in roles)
         {
@@ -116,6 +117,23 @@ public static class DatabaseSeeder
             {
                 "member.view", "event.view", "event.scan",
             }),
+            // Member self-service portal: scoped to OWN data; controllers must apply ownership
+            // filters so a Member can never see anyone else's contributions / loans / events.
+            ("Member", new[]
+            {
+                "portal.access",
+                "portal.contributions.view.own",
+                "portal.commitments.view.own",
+                "portal.commitments.create.own",
+                "portal.qh.view.own",
+                "portal.qh.request",
+                "portal.qh.endorse_guarantor",
+                "portal.events.view",
+                "portal.events.register",
+                "portal.login_history.view.own",
+                "member.self.update",
+                "member.wealth.view",
+            }),
         };
         foreach (var (roleName, perms) in rolePermissions)
         {
@@ -148,6 +166,8 @@ public static class DatabaseSeeder
                 TenantId = defaultTenantId,
                 EmailConfirmed = true,
                 IsActive = true,
+                IsLoginAllowed = true,
+                MustChangePassword = false,
                 PreferredLanguage = "en",
             };
             var createResult = await userMgr.CreateAsync(admin, adminPassword);
@@ -184,6 +204,13 @@ public static class DatabaseSeeder
                 }
             }
             if (added > 0) logger.LogInformation("Reconciled {Count} new permission claim(s) on admin user.", added);
+
+            // Idempotent reconciliation of the new login flags for upgrades from older builds.
+            if (!admin.IsLoginAllowed)
+            {
+                admin.IsLoginAllowed = true;
+                await userMgr.UpdateAsync(admin);
+            }
         }
 
         await SeedCurrenciesAndRatesAsync(db, defaultTenantId, logger, ct);
@@ -207,6 +234,27 @@ public static class DatabaseSeeder
             await DevDataSeeder.SeedAsync(db, defaultTenantId, logger, ct);
             await DevDataSeeder.SeedReceiptsAsync(scope.ServiceProvider, defaultTenantId, logger, ct);
             await DevDataSeeder.EnrichDevDataAsync(scope.ServiceProvider, defaultTenantId, logger, ct);
+        }
+
+        // Phase A6: backfill - every Member without an ApplicationUser gets one provisioned (with
+        // IsLoginAllowed=false). Idempotent; safe to run on every startup. Gated by Seed:Backfill
+        // so a flagged-off deployment doesn't surprise admins with thousands of new login rows.
+        if (bool.TryParse(config["Seed:BackfillMemberLogins"] ?? "true", out var backfill) && backfill)
+        {
+            try
+            {
+                var prov = scope.ServiceProvider.GetService<Application.Members.IMemberLoginProvisioningService>();
+                if (prov is not null)
+                {
+                    var created = await prov.BackfillTenantAsync(ct);
+                    if (created > 0)
+                        logger.LogInformation("Member login backfill provisioned {Count} new logins", created);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Member login backfill encountered an error; admins can re-run by restarting.");
+            }
         }
     }
 
@@ -291,6 +339,8 @@ public static class DatabaseSeeder
                     TenantId = tenantId,
                     EmailConfirmed = true,
                     IsActive = true,
+                    IsLoginAllowed = true,        // seeded operator personas are usable immediately
+                    MustChangePassword = false,    // dev seed - skip the force-reset flow
                     PreferredLanguage = "en",
                 };
                 var result = await userMgr.CreateAsync(user, password);
@@ -313,6 +363,13 @@ public static class DatabaseSeeder
             {
                 if (!current.Contains(p))
                     await userMgr.AddClaimAsync(user, new Claim("permission", p));
+            }
+
+            // Reconcile login flags so existing seeded users from older builds can still log in.
+            if (!user.IsLoginAllowed)
+            {
+                user.IsLoginAllowed = true;
+                await userMgr.UpdateAsync(user);
             }
         }
     }
@@ -766,5 +823,18 @@ Accepted on {{today}}.
         "member.self.update", "member.changes.approve",
         // Self-declared wealth (Phase G). Sensitive - kept tighter than member.view.
         "member.wealth.view",
+        // Member self-service portal scope. These are intentionally distinct from the operator
+        // permissions above - they are scoped to OWN data only (controllers must filter by the
+        // current user's MemberId). Granted to the seeded "Member" role by default.
+        "portal.access",                   // can hit /portal/me at all
+        "portal.contributions.view.own",   // own receipts / past contributions
+        "portal.commitments.view.own",     // own commitments
+        "portal.commitments.create.own",   // create new commitment for self
+        "portal.qh.view.own",              // own QH loans
+        "portal.qh.request",               // submit a new QH application that goes to L1 approver
+        "portal.qh.endorse_guarantor",     // endorse / decline guarantor requests addressed to me
+        "portal.events.view",              // see published events on the portal
+        "portal.events.register",          // register self / family for events
+        "portal.login_history.view.own",   // own login attempts
     ];
 }

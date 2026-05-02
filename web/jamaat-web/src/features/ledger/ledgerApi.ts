@@ -21,7 +21,8 @@ export type AccountBalance = {
 
 export type FinancialPeriod = {
   id: string; name: string; startDate: string; endDate: string;
-  status: 1 | 2; closedAtUtc?: string | null; closedByUserName?: string | null;
+  status: 1 | 2; closedAtUtc?: string | null;
+  closedByUserId?: string | null; closedByUserName?: string | null;
 };
 
 export type PagedResult<T> = { items: T[]; total: number; page: number; pageSize: number };
@@ -166,6 +167,57 @@ export const dashboardApi = {
     (await api.get<MemberEngagementDto>('/api/v1/dashboard/member-engagement', { params: { months } })).data,
   compliance: async (days = 30) =>
     (await api.get<ComplianceDashboardDto>('/api/v1/dashboard/compliance', { params: { days } })).data,
+
+  events: async (months = 12) =>
+    (await api.get<EventsDashboardDto>('/api/v1/dashboard/events', { params: { months } })).data,
+  cheques: async () =>
+    (await api.get<ChequesDashboardDto>('/api/v1/dashboard/cheques')).data,
+  families: async (months = 12) =>
+    (await api.get<FamiliesDashboardDto>('/api/v1/dashboard/families', { params: { months } })).data,
+  fundEnrollments: async (months = 12) =>
+    (await api.get<FundEnrollmentsDashboardDto>('/api/v1/dashboard/fund-enrollments', { params: { months } })).data,
+
+  eventDetail: async (eventId: string) =>
+    (await api.get<EventDetailDashboardDto>(`/api/v1/dashboard/events/${eventId}`)).data,
+  fundTypeDetail: async (fundTypeId: string, months = 12) =>
+    (await api.get<FundTypeDetailDashboardDto>(`/api/v1/dashboard/fund-types/${fundTypeId}`, { params: { months } })).data,
+  cashflow: async (days = 90) =>
+    (await api.get<CashflowDashboardDto>('/api/v1/dashboard/cashflow', { params: { days } })).data,
+  qhFunnel: async (months = 12) =>
+    (await api.get<QhFunnelDashboardDto>('/api/v1/dashboard/qh-funnel', { params: { months } })).data,
+  commitmentTypes: async () =>
+    (await api.get<CommitmentTypesDashboardDto>('/api/v1/dashboard/commitment-types')).data,
+
+  vouchers: async (from?: string | null, to?: string | null) =>
+    (await api.get<VouchersDashboardDto>('/api/v1/dashboard/vouchers', { params: { from, to } })).data,
+  receipts: async (from?: string | null, to?: string | null, fundTypeId?: string | null) =>
+    (await api.get<ReceiptsDashboardDto>('/api/v1/dashboard/receipts', { params: { from, to, fundTypeId } })).data,
+  memberAssets: async (sectorId?: string | null) =>
+    (await api.get<MemberAssetsDashboardDto>('/api/v1/dashboard/member-assets', { params: { sectorId } })).data,
+  sectors: async () =>
+    (await api.get<SectorsDashboardDto>('/api/v1/dashboard/sectors')).data,
+  returnables: async (fundTypeId?: string | null) =>
+    (await api.get<ReturnablesDashboardDto>('/api/v1/dashboard/returnables', { params: { fundTypeId } })).data,
+
+  memberDetail: async (memberId: string) =>
+    (await api.get<MemberDetailDashboardDto>(`/api/v1/dashboard/members/${memberId}`)).data,
+  commitmentDetail: async (commitmentId: string) =>
+    (await api.get<CommitmentDetailDashboardDto>(`/api/v1/dashboard/commitments/${commitmentId}`)).data,
+  notifications: async (from?: string | null, to?: string | null) =>
+    (await api.get<NotificationsDashboardDto>('/api/v1/dashboard/notifications', { params: { from, to } })).data,
+  userActivity: async (from?: string | null, to?: string | null) =>
+    (await api.get<UserActivityDashboardDto>('/api/v1/dashboard/user-activity', { params: { from, to } })).data,
+
+  changeRequests: async (from?: string | null, to?: string | null) =>
+    (await api.get<ChangeRequestsDashboardDto>('/api/v1/dashboard/change-requests', { params: { from, to } })).data,
+  expenseTypes: async (from?: string | null, to?: string | null) =>
+    (await api.get<ExpenseTypesDashboardDto>('/api/v1/dashboard/expense-types', { params: { from, to } })).data,
+  periods: async () =>
+    (await api.get<PeriodsDashboardDto>('/api/v1/dashboard/periods')).data,
+  annualSummary: async (year: number) =>
+    (await api.get<AnnualSummaryDto>('/api/v1/dashboard/annual-summary', { params: { year } })).data,
+  reconciliation: async () =>
+    (await api.get<ReconciliationDashboardDto>('/api/v1/dashboard/reconciliation')).data,
 };
 
 export type QhStatusBucket = { status: number; label: string; count: number; outstanding: number };
@@ -242,4 +294,460 @@ export type ComplianceDashboardDto = {
   errorTrend: DailyCountPoint[];
   errorsBySource: NamedCountPoint[];
   windowDays: number;
+};
+
+// -- Events dashboard --------------------------------------------------------
+
+export type TopEventRow = {
+  eventId: string; slug: string; name: string; eventDate: string;
+  registrationCount: number; checkedInCount: number; capacity: number | null; fillPercent: number;
+};
+export type UpcomingEventRow = {
+  eventId: string; slug: string; name: string; eventDate: string;
+  category: string; registrationCount: number; capacity: number | null;
+};
+export type EventsDashboardDto = {
+  totalEvents: number; activeEvents: number; upcomingEvents: number; pastEvents: number;
+  totalRegistrations: number; confirmedRegistrations: number; checkedInRegistrations: number; cancelledRegistrations: number;
+  registrationsThisMonth: number;
+  averageFillPercent: number;
+  registrationsByStatus: NamedCountPoint[];
+  eventsByCategory: NamedCountPoint[];
+  registrationTrend: MemberMonthlyPoint[];
+  topEvents: TopEventRow[];
+  upcomingEventsList: UpcomingEventRow[];
+};
+
+// -- Cheques dashboard -------------------------------------------------------
+
+export type NamedAmountPoint = { label: string; count: number; amount: number };
+export type MaturityWeekPoint = { weekStart: string; count: number; amount: number };
+export type RecentBounceRow = {
+  chequeId: string; chequeNumber: string; memberName: string; drawnOnBank: string;
+  amount: number; bouncedOn: string; reason: string | null;
+};
+export type TopPledgerRow = {
+  memberId: string | null; memberName: string; chequeCount: number; totalAmount: number;
+};
+export type ChequesDashboardDto = {
+  currency: string;
+  totalCheques: number;
+  pledgedCount: number; depositedCount: number; clearedCount: number; bouncedCount: number; cancelledCount: number;
+  pledgedAmount: number; depositedAmount: number; clearedAmount: number; bouncedAmount: number;
+  overdueDepositCount: number; overdueDepositAmount: number;
+  upcomingMaturityCount: number; upcomingMaturityAmount: number;
+  statusMix: NamedAmountPoint[];
+  byBank: NamedAmountPoint[];
+  maturityTimeline: MaturityWeekPoint[];
+  recentBounces: RecentBounceRow[];
+  topPledgers: TopPledgerRow[];
+};
+
+// -- Families dashboard ------------------------------------------------------
+
+export type TopFamilyRow = {
+  familyId: string; code: string; familyName: string; memberCount: number; totalAmount: number;
+};
+export type FamiliesDashboardDto = {
+  currency: string;
+  totalFamilies: number; activeFamilies: number; inactiveFamilies: number;
+  totalLinkedMembers: number; averageFamilySize: number;
+  familiesWithHead: number; familiesWithoutHead: number;
+  familiesWithContributionsYtd: number;
+  totalContributionsYtd: number;
+  sizeBuckets: NamedCountPoint[];
+  newFamiliesTrend: MemberMonthlyPoint[];
+  topFamiliesByContribution: TopFamilyRow[];
+  largestFamilies: TopFamilyRow[];
+};
+
+// -- Fund Enrollments dashboard ---------------------------------------------
+
+export type TopFundEnrollmentRow = {
+  fundTypeId: string; fundCode: string; fundName: string;
+  activeEnrollments: number; totalEnrollments: number;
+};
+export type FundEnrollmentsDashboardDto = {
+  totalEnrollments: number;
+  activeCount: number; draftCount: number; pausedCount: number; cancelledCount: number; expiredCount: number;
+  newThisMonth: number; newThisYear: number;
+  recurringActive: number; oneTimeActive: number;
+  statusMix: NamedCountPoint[];
+  recurrenceMix: NamedCountPoint[];
+  byFundType: NamedCountPoint[];
+  enrollmentTrend: MemberMonthlyPoint[];
+  topFundsByActiveCount: TopFundEnrollmentRow[];
+};
+
+// -- Per-event detail --------------------------------------------------------
+
+export type HourlyCountPoint = { hour: number; count: number };
+export type EventDetailDashboardDto = {
+  eventId: string; slug: string; name: string; eventDate: string; category: string;
+  place: string | null; capacity: number | null; isActive: boolean; registrationsEnabled: boolean;
+  totalRegistrations: number;
+  confirmed: number; checkedIn: number; cancelled: number; waitlisted: number; noShow: number; pending: number;
+  totalSeats: number; fillPercent: number;
+  totalGuests: number; checkedInGuests: number;
+  daysUntilEvent: number;
+  statusMix: NamedCountPoint[];
+  ageBandMix: NamedCountPoint[];
+  relationshipMix: NamedCountPoint[];
+  registrationCurve: DailyCountPoint[];
+  checkInArrivalPattern: HourlyCountPoint[];
+};
+
+// -- Per-fund-type detail ---------------------------------------------------
+
+export type MonthlyAmountPoint = { year: number; month: number; amount: number; count: number };
+export type FundTypeDetailDashboardDto = {
+  fundTypeId: string; code: string; name: string; isReturnable: boolean; isActive: boolean;
+  currency: string;
+  totalReceived: number; receivedThisMonth: number; receivedThisYear: number;
+  receiptCount: number; receiptCountThisMonth: number; averageReceipt: number;
+  activeEnrollments: number; totalEnrollments: number; uniqueContributors: number;
+  returnableOutstanding: number; returnableMatured: number;
+  monthlyInflowTrend: MonthlyAmountPoint[];
+  topContributors: { memberId: string; itsNumber: string; fullName: string; amount: number; receiptCount: number; currency: string }[];
+  enrollmentRecurrenceMix: NamedCountPoint[];
+  enrollmentStatusMix: NamedCountPoint[];
+};
+
+// -- Cashflow dashboard ------------------------------------------------------
+
+export type DailyCashflowPoint = { date: string; inflow: number; outflow: number; net: number };
+export type CashflowDashboardDto = {
+  currency: string; windowDays: number;
+  totalInflow: number; totalOutflow: number; netCashflow: number;
+  pendingOutflow: number; pendingClearanceOutflow: number;
+  inflowThisMonth: number; outflowThisMonth: number;
+  inflowMtdPriorMonth: number; outflowMtdPriorMonth: number;
+  inflowReceiptCount: number; outflowVoucherCount: number;
+  dailyCurve: DailyCashflowPoint[];
+  inflowByFund: NamedAmountPoint[];
+  outflowByPurpose: NamedAmountPoint[];
+  inflowByPaymentMode: NamedAmountPoint[];
+  outflowByPaymentMode: NamedAmountPoint[];
+};
+
+// -- QH funnel ---------------------------------------------------------------
+
+export type MonthlyRequestVsDisbursementPoint = {
+  year: number; month: number; requests: number; disbursements: number; requested: number; disbursed: number;
+};
+export type QhFunnelDashboardDto = {
+  currency: string;
+  totalRequests: number;
+  pending: number; approved: number; disbursed: number; active: number; completed: number;
+  defaulted: number; rejected: number; cancelled: number;
+  totalRequestedAmount: number; totalApprovedAmount: number; totalDisbursedAmount: number; totalRepaidAmount: number;
+  approvalRatePercent: number; disbursementRatePercent: number;
+  contributionsToLoanPool: number; availablePool: number;
+  averageDaysToApprove: number; averageDaysToDisburse: number;
+  monthlyTrend: MonthlyRequestVsDisbursementPoint[];
+  statusFunnel: NamedAmountPoint[];
+  topBorrowers: QhBorrowerRow[];
+};
+
+// -- Commitment types --------------------------------------------------------
+
+export type CommitmentTemplateRow = {
+  templateId: string | null; templateName: string;
+  count: number; activeCount: number;
+  committed: number; paid: number; progressPercent: number; defaultedCount: number;
+};
+export type CommitmentByFundRow = {
+  fundTypeId: string; fundCode: string; fundName: string;
+  count: number; committed: number; paid: number;
+};
+export type CommitmentTypesDashboardDto = {
+  currency: string;
+  totalCommitments: number;
+  activeCount: number; completedCount: number; defaultedCount: number; cancelledCount: number;
+  totalCommitted: number; totalPaid: number; totalRemaining: number;
+  overallProgressPercent: number;
+  byTemplate: CommitmentTemplateRow[];
+  byFund: CommitmentByFundRow[];
+  statusMix: NamedCountPoint[];
+  creationTrend: MemberMonthlyPoint[];
+};
+
+// -- Vouchers ---------------------------------------------------------------
+
+export type DailyAmountPoint = { date: string; count: number; amount: number };
+export type VouchersDashboardDto = {
+  currency: string;
+  totalVouchers: number;
+  draftCount: number; pendingApprovalCount: number; approvedCount: number; paidCount: number;
+  cancelledCount: number; reversedCount: number; pendingClearanceCount: number;
+  totalPaidAmount: number; pendingApprovalAmount: number; approvedNotPaidAmount: number;
+  averageVoucherAmount: number; maxVoucherAmount: number;
+  windowFrom: string | null; windowTo: string | null;
+  statusMix: NamedAmountPoint[];
+  byPaymentMode: NamedAmountPoint[];
+  byPurpose: NamedAmountPoint[];
+  byExpenseType: NamedAmountPoint[];
+  topPayees: NamedAmountPoint[];
+  dailyOutflow: DailyAmountPoint[];
+  monthlyVoucherCount: MemberMonthlyPoint[];
+};
+
+// -- Receipts ---------------------------------------------------------------
+
+export type ReceiptsDashboardDto = {
+  currency: string;
+  totalReceipts: number;
+  confirmed: number; draft: number; cancelled: number; reversed: number; pendingClearance: number;
+  totalAmount: number; permanentAmount: number; returnableAmount: number;
+  averageReceipt: number; largestReceipt: number;
+  uniqueContributors: number;
+  windowFrom: string | null; windowTo: string | null;
+  scopedFundTypeId: string | null; scopedFundName: string | null;
+  byPaymentMode: NamedAmountPoint[];
+  byFund: NamedAmountPoint[];
+  intentionSplit: NamedAmountPoint[];
+  dailyInflow: DailyAmountPoint[];
+  monthlyReceiptCount: MemberMonthlyPoint[];
+  topContributors: { memberId: string; itsNumber: string; fullName: string; amount: number; receiptCount: number; currency: string }[];
+};
+
+// -- Member assets ----------------------------------------------------------
+
+export type TopAssetMemberRow = { memberId: string; itsNumber: string; fullName: string; assetCount: number; totalValue: number };
+export type MemberAssetsDashboardDto = {
+  currency: string;
+  totalAssets: number; membersWithAssets: number;
+  totalEstimatedValue: number; averageAssetValue: number; largestAssetValue: number;
+  scopedSectorId: string | null; scopedSectorName: string | null;
+  byKind: NamedAmountPoint[];
+  topMembersByValue: TopAssetMemberRow[];
+  creationTrend: MemberMonthlyPoint[];
+  assetsBySector: NamedCountPoint[];
+};
+
+// -- Sectors ----------------------------------------------------------------
+
+export type SectorRow = {
+  sectorId: string; code: string; name: string; isActive: boolean;
+  memberCount: number; activeMembers: number; verifiedMembers: number;
+  familyCount: number; commitmentCount: number;
+  contributionsYtd: number; assetValue: number;
+};
+export type SectorsDashboardDto = {
+  currency: string;
+  totalSectors: number; activeSectors: number;
+  totalMembers: number; membersWithoutSector: number;
+  totalContributionsYtd: number;
+  sectors: SectorRow[];
+};
+
+// -- Returnable receipts ----------------------------------------------------
+
+export type TopReturnableHolderRow = {
+  memberId: string; memberName: string; itsNumber: string;
+  receiptCount: number; totalIssued: number; outstanding: number;
+};
+export type ReturnablesDashboardDto = {
+  currency: string;
+  totalReturnable: number; totalIssued: number; totalReturned: number; outstanding: number;
+  overdueCount: number; overdueAmount: number;
+  maturedNotReturnedCount: number; maturedNotReturnedAmount: number;
+  scopedFundTypeId: string | null; scopedFundName: string | null;
+  ageBuckets: NamedAmountPoint[];
+  byFund: NamedAmountPoint[];
+  maturityStateMix: NamedAmountPoint[];
+  topHolders: TopReturnableHolderRow[];
+  upcomingMaturityTimeline: MaturityWeekPoint[];
+};
+
+// -- Per-member drill-in -----------------------------------------------------
+
+export type MemberCommitmentRow = {
+  commitmentId: string; fundName: string;
+  totalAmount: number; paidAmount: number; status: number;
+  installmentsTotal: number; installmentsPaid: number; overdueInstallments: number;
+};
+export type MemberLoanRow = {
+  loanId: string; loanCode: string; status: number;
+  amountDisbursed: number; amountRepaid: number; amountOutstanding: number;
+  disbursedOn: string | null;
+};
+export type MemberRecentReceiptRow = {
+  receiptId: string; receiptNumber: string | null; receiptDate: string;
+  amount: number; status: number; paymentMode: number;
+};
+export type MemberDetailDashboardDto = {
+  memberId: string; itsNumber: string; fullName: string;
+  status: number; phone: string | null; email: string | null; dateOfBirth: string | null;
+  verificationStatus: number; misaqStatus: number; hajjStatus: number;
+  familyId: string | null; familyName: string | null; familyCode: string | null; familyRole: number;
+  sectorId: string | null; sectorName: string | null;
+  currency: string;
+  lifetimeContribution: number; ytdContribution: number; monthContribution: number;
+  lifetimeReceiptCount: number; ytdReceiptCount: number;
+  commitmentCount: number; committedTotal: number; committedPaid: number; commitmentDefaultedCount: number;
+  loanCount: number; loansDisbursed: number; loansRepaid: number; loansOutstanding: number;
+  assetCount: number; assetValue: number;
+  eventRegistrationCount: number; eventCheckedInCount: number;
+  monthlyContributionTrend: MonthlyAmountPoint[];
+  contributionByFund: NamedAmountPoint[];
+  commitments: MemberCommitmentRow[];
+  loans: MemberLoanRow[];
+  recentReceipts: MemberRecentReceiptRow[];
+};
+
+// -- Per-commitment drill-in -------------------------------------------------
+
+export type CommitmentInstallmentRow = {
+  installmentId: string; installmentNo: number; dueDate: string;
+  scheduledAmount: number; paidAmount: number; remainingAmount: number;
+  status: number; daysOverdue: number;
+};
+export type CommitmentPaymentRow = {
+  receiptId: string; receiptNumber: string | null; receiptDate: string;
+  installmentNo: number; amount: number;
+};
+export type CommitmentDetailDashboardDto = {
+  commitmentId: string; currency: string;
+  memberId: string | null; memberName: string | null; memberItsNumber: string | null;
+  fundTypeId: string; fundCode: string; fundName: string;
+  templateId: string | null; templateName: string | null;
+  status: number; totalAmount: number; paidAmount: number; remainingAmount: number;
+  progressPercent: number;
+  installmentsTotal: number; installmentsPaid: number; installmentsPending: number; installmentsOverdue: number;
+  nextDueDate: string | null; nextDueAmount: number | null;
+  createdDate: string;
+  schedule: CommitmentInstallmentRow[];
+  payments: CommitmentPaymentRow[];
+};
+
+// -- Notifications dashboard -------------------------------------------------
+
+export type NotificationFailureRow = {
+  id: number; attemptedAtUtc: string;
+  channel: number; kind: number; failureReason: string | null; subject: string;
+};
+export type NotificationsDashboardDto = {
+  total: number; sentCount: number; failedCount: number; skippedCount: number;
+  deliveryRatePercent: number;
+  windowFrom: string | null; windowTo: string | null;
+  byChannel: NamedCountPoint[];
+  byStatus: NamedCountPoint[];
+  byKind: NamedCountPoint[];
+  topFailureReasons: NamedCountPoint[];
+  dailyVolume: DailyCountPoint[];
+  recentFailures: NotificationFailureRow[];
+};
+
+// -- User activity dashboard -------------------------------------------------
+
+export type UserActivityRecentRow = {
+  atUtc: string;
+  userId: string | null; userName: string;
+  entityName: string; action: string; entityId: string | null;
+};
+export type UserActivityDashboardDto = {
+  totalEvents: number; uniqueUsers: number; uniqueEntities: number;
+  windowFrom: string | null; windowTo: string | null;
+  topUsers: NamedCountPoint[];
+  topEntities: NamedCountPoint[];
+  actionMix: NamedCountPoint[];
+  dailyVolume: DailyCountPoint[];
+  hourOfDayHeatmap: HourlyCountPoint[];
+  recentEvents: UserActivityRecentRow[];
+};
+
+// -- Change requests dashboard ----------------------------------------------
+
+export type ChangeRequestRow = {
+  id: string; memberId: string; memberName: string; itsNumber: string;
+  section: string;
+  requestedByUserId: string | null; requestedByUserName: string;
+  requestedAtUtc: string; ageDays: number;
+};
+export type ChangeRequestsDashboardDto = {
+  total: number; pending: number; approved: number; rejected: number;
+  oldestPendingDays: number;
+  windowFrom: string | null; windowTo: string | null;
+  bySection: NamedCountPoint[];
+  byStatus: NamedCountPoint[];
+  byRequester: NamedCountPoint[];
+  dailyVolume: DailyCountPoint[];
+  oldestPending: ChangeRequestRow[];
+};
+
+// -- Expense types dashboard ------------------------------------------------
+
+export type ExpenseTypeRow = {
+  expenseTypeId: string; code: string; name: string; isActive: boolean;
+  voucherCount: number; totalAmount: number; averageAmount: number;
+  lastUsed: string | null;
+};
+export type ExpenseTypesDashboardDto = {
+  currency: string;
+  totalExpenseTypes: number; activeExpenseTypes: number; usedExpenseTypes: number;
+  totalSpend: number;
+  windowFrom: string | null; windowTo: string | null;
+  rows: ExpenseTypeRow[];
+  monthlyTrend: MonthlyAmountPoint[];
+};
+
+// -- Periods management dashboard -------------------------------------------
+
+export type PeriodRow = {
+  id: string; name: string; startDate: string; endDate: string;
+  status: number; ageDays: number;
+  closedAtUtc: string | null; closedByUserName: string | null;
+};
+export type PeriodsDashboardDto = {
+  totalPeriods: number; openPeriods: number; closedPeriods: number;
+  currentPeriodId: string | null; currentPeriodName: string | null;
+  currentPeriodOpenDays: number | null;
+  draftReceiptsInOpenPeriod: number; pendingVoucherApprovalsInOpenPeriod: number;
+  readyToClose: boolean;
+  periods: PeriodRow[];
+};
+
+// -- Annual summary report --------------------------------------------------
+
+export type MonthlyIncomeExpensePoint = { month: number; income: number; expense: number; net: number };
+export type AnnualByFundRow = {
+  fundTypeId: string; fundCode: string; fundName: string;
+  income: number; receiptCount: number;
+};
+export type AnnualSummaryDto = {
+  year: number; currency: string;
+  totalIncome: number; totalExpense: number; net: number;
+  monthly: MonthlyIncomeExpensePoint[];
+  byFund: AnnualByFundRow[];
+  byVoucherPurpose: NamedAmountPoint[];
+};
+
+// -- Account reconciliation dashboard ---------------------------------------
+
+export type BankAccountReconciliationRow = {
+  id: string; name: string; bankName: string; accountNumberMasked: string; currency: string;
+  isActive: boolean;
+  accountingAccountId: string | null; accountingAccountCode: string | null; accountingAccountName: string | null;
+  ledgerBalance: number;
+  inTransitChequeCount: number; inTransitChequeAmount: number;
+  pendingVoucherCount: number; pendingVoucherAmount: number;
+  lastEntryDate: string | null; daysSinceLastEntry: number | null;
+  readinessLabel: string;
+};
+export type CoaAccountReconciliationRow = {
+  accountId: string; code: string; name: string; accountType: number;
+  balance: number; entryCount: number;
+  lastEntryDate: string | null; daysSinceLastEntry: number | null;
+  isStale: boolean;
+};
+export type ReconciliationDashboardDto = {
+  currency: string;
+  bankAccountCount: number; activeBankAccountCount: number;
+  totalBankBalance: number;
+  inTransitAmount: number; inTransitChequeCount: number;
+  pendingVoucherAmount: number; pendingVoucherCount: number;
+  coaAccountsCount: number; staleAccountsCount: number;
+  bankAccounts: BankAccountReconciliationRow[];
+  coaAccounts: CoaAccountReconciliationRow[];
 };

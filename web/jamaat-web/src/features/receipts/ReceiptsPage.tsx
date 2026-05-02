@@ -6,7 +6,7 @@ import {
   PrinterOutlined, StopOutlined, RollbackOutlined, FileTextOutlined,
 } from '@ant-design/icons';
 import { useQuery, keepPreviousData, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -79,9 +79,12 @@ export function ReceiptsPage() {
     },
     { title: 'Date', dataIndex: 'receiptDate', key: 'receiptDate', width: 120, render: (v: string) => formatDate(v) },
     { title: 'Member', dataIndex: 'memberNameSnapshot', key: 'member', render: (v: string, row) => (
-      <div><div style={{ fontWeight: 500 }}>{v}</div>
+      // Stop propagation: clicking the member should open the per-member dashboard,
+      // not the row's default action (open the receipt).
+      <Link to={`/dashboards/members/${row.memberId}`} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontWeight: 500 }}>{v}</div>
         <div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }} className="jm-tnum">ITS {row.itsNumberSnapshot}</div>
-      </div>
+      </Link>
     ) },
     { title: 'Amount', dataIndex: 'amountTotal', key: 'amount', width: 140, align: 'right',
       render: (v: number, row) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, row.currency)}</span> },

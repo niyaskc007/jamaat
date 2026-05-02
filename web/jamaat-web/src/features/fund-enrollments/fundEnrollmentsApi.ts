@@ -24,7 +24,7 @@ export type FundEnrollment = {
   recurrence: Recurrence;
   startDate: string; endDate?: string | null;
   status: EnrollmentStatus;
-  approvedByUserName?: string | null;
+  approvedByUserId?: string | null; approvedByUserName?: string | null;
   approvedAtUtc?: string | null;
   notes?: string | null;
   totalCollected: number;

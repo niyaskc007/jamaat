@@ -66,6 +66,7 @@ public class JamaatDbContext : IdentityDbContext<ApplicationUser, ApplicationRol
     public DbSet<MemberEducation> MemberEducations => Set<MemberEducation>();
     public DbSet<MemberChangeRequest> MemberChangeRequests => Set<MemberChangeRequest>();
     public DbSet<MemberAsset> MemberAssets => Set<MemberAsset>();
+    public DbSet<LoginAttempt> LoginAttempts => Set<LoginAttempt>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

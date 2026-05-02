@@ -1,4 +1,5 @@
 @import './app/tokens.css';
+@import './app/portal.css';
 
 /* Fonts - Inter & Inter Tight (variable) via Google Fonts.
    Harmless in dev without CDN; font-display:swap falls back cleanly. */

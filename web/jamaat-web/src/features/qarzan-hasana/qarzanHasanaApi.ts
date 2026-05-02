@@ -34,8 +34,8 @@ export type QhLoan = {
   guarantor2MemberId: string; guarantor2Name: string;
   cashflowDocumentUrl?: string | null;
   goldSlipDocumentUrl?: string | null;
-  level1ApproverName?: string | null; level1ApprovedAtUtc?: string | null; level1Comments?: string | null;
-  level2ApproverName?: string | null; level2ApprovedAtUtc?: string | null; level2Comments?: string | null;
+  level1ApproverUserId?: string | null; level1ApproverName?: string | null; level1ApprovedAtUtc?: string | null; level1Comments?: string | null;
+  level2ApproverUserId?: string | null; level2ApproverName?: string | null; level2ApprovedAtUtc?: string | null; level2Comments?: string | null;
   disbursedOn?: string | null;
   rejectionReason?: string | null; cancellationReason?: string | null;
   progressPercent: number;
@@ -47,7 +47,7 @@ export type QhLoan = {
   otherObligations?: string | null;
   guarantorsAcknowledged: boolean;
   guarantorsAcknowledgedAtUtc?: string | null;
-  guarantorsAcknowledgedByUserName?: string | null;
+  guarantorsAcknowledgedByUserId?: string | null; guarantorsAcknowledgedByUserName?: string | null;
   // Structured cashflow / gold / income tags (v2)
   monthlyIncome?: number | null;
   monthlyExpenses?: number | null;
@@ -65,7 +65,7 @@ export type QhInstallment = {
   status: QhInstallmentStatus;
   waiverReason?: string | null;
   waivedAtUtc?: string | null;
-  waivedByUserName?: string | null;
+  waivedByUserId?: string | null; waivedByUserName?: string | null;
 };
 
 export type QhLoanDetail = { loan: QhLoan; installments: QhInstallment[] };
@@ -150,6 +150,16 @@ export const qarzanHasanaApi = {
   list: async (q: { page?: number; pageSize?: number; search?: string; status?: QhStatus; scheme?: QhScheme; memberId?: string }): Promise<PagedResult<QhLoan>> =>
     (await api.get('/api/v1/qarzan-hasana', { params: q })).data,
   get: async (id: string): Promise<QhLoanDetail> => (await api.get(`/api/v1/qarzan-hasana/${id}`)).data,
+  /// Stream the printable agreement PDF for this loan. Returned as an ArrayBuffer so the
+  /// caller can build a Blob and trigger a save dialog without exposing the bearer token.
+  downloadAgreement: async (id: string, code: string): Promise<void> => {
+    const r = await api.get<Blob>(`/api/v1/qarzan-hasana/${id}/agreement.pdf`, { responseType: 'blob' });
+    const url = URL.createObjectURL(r.data);
+    const a = document.createElement('a');
+    a.href = url; a.download = `qh-agreement_${code}.pdf`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
   create: async (input: CreateQhInput): Promise<QhLoan> => (await api.post('/api/v1/qarzan-hasana', input)).data,
   submit: async (id: string): Promise<QhLoan> => (await api.post(`/api/v1/qarzan-hasana/${id}/submit`)).data,
   approveL1: async (id: string, amountApproved: number, instalmentsApproved: number, comments?: string): Promise<QhLoan> =>

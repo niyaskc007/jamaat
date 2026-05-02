@@ -37,7 +37,7 @@ public sealed record AccountBalanceDto(
 
 public sealed record FinancialPeriodDto(
     Guid Id, string Name, DateOnly StartDate, DateOnly EndDate,
-    PeriodStatus Status, DateTimeOffset? ClosedAtUtc, string? ClosedByUserName);
+    PeriodStatus Status, DateTimeOffset? ClosedAtUtc, Guid? ClosedByUserId, string? ClosedByUserName);
 
 public sealed record CreateFinancialPeriodDto(string Name, DateOnly StartDate, DateOnly EndDate);
 public sealed record CloseFinancialPeriodDto();

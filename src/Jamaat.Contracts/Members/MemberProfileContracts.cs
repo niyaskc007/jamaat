@@ -43,8 +43,8 @@ public sealed record MemberProfileDto(
     string? QuranSanad, bool QadambosiSharaf, bool RaudatTaheraZiyarat, bool KarbalaZiyarat, int AsharaMubarakaCount,
     // Hajj + Umrah (v2)
     HajjStatus HajjStatus, int? HajjYear, int UmrahCount,
-    VerificationStatus DataVerificationStatus, DateOnly? DataVerifiedOn, string? DataVerifiedByUserName,
-    VerificationStatus PhotoVerificationStatus, DateOnly? PhotoVerifiedOn, string? PhotoVerifiedByUserName,
+    VerificationStatus DataVerificationStatus, DateOnly? DataVerifiedOn, Guid? DataVerifiedByUserId, string? DataVerifiedByUserName,
+    VerificationStatus PhotoVerificationStatus, DateOnly? PhotoVerifiedOn, Guid? PhotoVerifiedByUserId, string? PhotoVerifiedByUserName,
     string? PhotoUrl,
     Guid? LastScannedEventId, string? LastScannedEventName, string? LastScannedPlace, DateTimeOffset? LastScannedAtUtc,
     MemberStatus Status, string? InactiveReason,

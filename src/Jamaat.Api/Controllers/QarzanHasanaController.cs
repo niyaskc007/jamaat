@@ -15,7 +15,8 @@ public sealed class QarzanHasanaController(
     IQarzanHasanaService svc,
     IExcelExporter excel,
     IQarzanHasanaDocumentStorage docStorage,
-    IOptions<QarzanHasanaDocumentStorageOptions> docOptions) : ControllerBase
+    IOptions<QarzanHasanaDocumentStorageOptions> docOptions,
+    IQhAgreementPdfRenderer agreementPdf) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "qh.view")]
@@ -62,6 +63,21 @@ public sealed class QarzanHasanaController(
     [Authorize(Policy = "qh.view")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)
     { var r = await svc.GetAsync(id, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+
+    /// <summary>
+    /// Generate the printable Qarzan Hasana agreement PDF for this loan. Returns the
+    /// document with parties, principal, instalment schedule, terms, and signature lines —
+    /// the version the borrower + guarantors physically sign at disbursement.
+    /// </summary>
+    [HttpGet("{id:guid}/agreement.pdf")]
+    [Authorize(Policy = "qh.view")]
+    public async Task<IActionResult> AgreementPdf(Guid id, CancellationToken ct)
+    {
+        var r = await svc.GetAsync(id, ct);
+        if (!r.IsSuccess) return ErrorMapper.ToActionResult(this, r.Error);
+        var bytes = agreementPdf.Render(r.Value);
+        return File(bytes, "application/pdf", $"qh-agreement_{r.Value.Loan.Code}.pdf");
+    }
 
     [HttpPost]
     [Authorize(Policy = "qh.create")]

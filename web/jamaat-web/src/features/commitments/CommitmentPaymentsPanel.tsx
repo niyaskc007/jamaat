@@ -7,6 +7,7 @@ import { FileSearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { commitmentsApi, type CommitmentPaymentRow } from './commitmentsApi';
 import { PaymentModeLabel, ReceiptStatusLabel } from '../receipts/receiptsApi';
 import { formatDate, formatDateTime, money } from '../../shared/format/format';
+import { UserHoverCard } from '../../shared/ui/UserHoverCard';
 
 /// Lists every receipt-line attributed to this commitment. The parent screen passes
 /// `installmentNoFilter` when the cashier wants payments for a specific instalment row.
@@ -105,7 +106,10 @@ export function CommitmentPaymentsPanel({ commitmentId, currency, installmentNoF
     {
       title: 'Confirmed', key: 'cf', width: 200,
       render: (_, row) => row.confirmedAtUtc
-        ? <span style={{ fontSize: 12, color: 'var(--jm-gray-600)' }}>{formatDateTime(row.confirmedAtUtc)}{row.confirmedByUserName ? ` · ${row.confirmedByUserName}` : ''}</span>
+        ? <span style={{ fontSize: 12, color: 'var(--jm-gray-600)' }}>
+            {formatDateTime(row.confirmedAtUtc)}
+            {row.confirmedByUserName && <> · <UserHoverCard userId={row.confirmedByUserId ?? null} fallback={row.confirmedByUserName} /></>}
+          </span>
         : <span style={{ color: 'var(--jm-gray-400)' }}>-</span>,
     },
   ];

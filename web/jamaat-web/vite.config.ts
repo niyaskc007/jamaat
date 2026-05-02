@@ -17,6 +17,10 @@ export default defineConfig(({ mode }) => {
           target: apiBase,
           changeOrigin: true,
           secure: false,
+          // Forward the original client IP so the API's login-audit + geolocation see the real
+          // browser address instead of the Vite proxy's loopback. Production behind nginx/IIS
+          // gets this for free; this makes dev consistent.
+          xfwd: true,
         },
       },
     },

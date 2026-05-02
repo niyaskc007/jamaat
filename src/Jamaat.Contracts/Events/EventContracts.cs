@@ -153,7 +153,7 @@ public sealed record EventCommunicationDto(
     CommunicationChannel Channel, CommunicationRecipientFilter RecipientFilter,
     string Subject, string Body,
     CommunicationStatus Status,
-    DateTimeOffset? ScheduledForUtc, DateTimeOffset? SentAtUtc, string? SentByUserName,
+    DateTimeOffset? ScheduledForUtc, DateTimeOffset? SentAtUtc, Guid? SentByUserId, string? SentByUserName,
     int TargetedCount, int SentCount, int FailedCount, string? LastError,
     DateTimeOffset CreatedAtUtc);
 

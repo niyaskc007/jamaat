@@ -48,7 +48,8 @@ export type Receipt = {
   drawnOnBank?: string | null;
   bankAccountId?: string | null; bankAccountName?: string | null;
   paymentReference?: string | null; remarks?: string | null;
-  status: ReceiptStatus; confirmedAtUtc?: string | null; confirmedByUserName?: string | null;
+  status: ReceiptStatus; confirmedAtUtc?: string | null;
+  confirmedByUserId?: string | null; confirmedByUserName?: string | null;
   /// Set when status === PendingClearance: the linked PostDatedCheque tracking the future-dated cheque.
   pendingPostDatedChequeId?: string | null;
   createdAtUtc: string;

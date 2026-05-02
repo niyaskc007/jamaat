@@ -4,7 +4,7 @@ import type { TableProps } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, BankOutlined, DownloadOutlined } from '@ant-design/icons';
 import { downloadServerXlsx } from '../../shared/export/server';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { ModuleEmptyState } from '../../shared/ui/ModuleEmptyState';
 import { useAuth } from '../../shared/auth/useAuth';
@@ -31,7 +31,14 @@ export function QarzanHasanaPage() {
 
   const cols: TableProps<QhLoan>['columns'] = [
     { title: 'Code', dataIndex: 'code', width: 150, render: (v: string) => <span className="jm-tnum" style={{ fontWeight: 500 }}>{v}</span> },
-    { title: 'Borrower', dataIndex: 'memberName', render: (v: string, r) => <div><div style={{ fontWeight: 500 }}>{v}</div><div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>ITS {r.memberItsNumber}</div></div> },
+    { title: 'Borrower', dataIndex: 'memberName', render: (v: string, r) => (
+      // Stop click propagation so opening the borrower in their own dashboard doesn't also
+      // navigate the row (the row click usually opens the loan detail).
+      <Link to={`/dashboards/members/${r.memberId}`} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontWeight: 500 }}>{v}</div>
+        <div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>ITS {r.memberItsNumber}</div>
+      </Link>
+    ) },
     { title: 'Scheme', dataIndex: 'scheme', width: 160, render: (s: QhScheme) => QhSchemeLabel[s] },
     { title: 'Requested', dataIndex: 'amountRequested', width: 140, align: 'end',
       render: (v: number, r) => <span className="jm-tnum">{money(v, r.currency)}</span> },

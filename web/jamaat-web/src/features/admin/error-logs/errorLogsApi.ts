@@ -35,9 +35,9 @@ export type ErrorLog = {
   fingerprint: string;
   occurredAtUtc: string;
   reviewedAtUtc?: string | null;
-  reviewedByUserName?: string | null;
+  reviewedByUserId?: string | null; reviewedByUserName?: string | null;
   resolvedAtUtc?: string | null;
-  resolvedByUserName?: string | null;
+  resolvedByUserId?: string | null; resolvedByUserName?: string | null;
   resolutionNote?: string | null;
 };
 

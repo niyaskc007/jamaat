@@ -402,7 +402,7 @@ Open the dashboard to review and approve.",
             v.Id, v.VoucherNumber, v.VoucherDate, v.PayTo, v.PayeeItsNumber, v.Purpose, v.AmountTotal, v.Currency,
             v.FxRate, v.BaseCurrency, v.BaseAmountTotal,
             v.PaymentMode, v.ChequeNumber, v.ChequeDate, v.DrawnOnBank, v.BankAccountId, bankName, v.PaymentDate, v.Remarks,
-            v.Status, v.ApprovedByUserName, v.ApprovedAtUtc, v.PaidByUserName, v.PaidAtUtc, v.CreatedAtUtc,
+            v.Status, v.ApprovedByUserId, v.ApprovedByUserName, v.ApprovedAtUtc, v.PaidByUserId, v.PaidByUserName, v.PaidAtUtc, v.CreatedAtUtc,
             v.Lines.Select(l =>
             {
                 var et = ets.First(x => x.Id == l.ExpenseTypeId);

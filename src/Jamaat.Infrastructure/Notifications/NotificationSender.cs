@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Mail;
+using Jamaat.Application.Notifications;
 using Jamaat.Application.Persistence;
 using Jamaat.Domain.Abstractions;
 using Jamaat.Domain.Entities;
@@ -26,6 +27,10 @@ public sealed class NotificationSender(
     ITenantContext tenant,
     IClock clock,
     IOptions<NotificationSenderOptions> options,
+    IOptionsMonitor<SmsOptions> smsOpts,
+    IOptionsMonitor<WhatsAppOptions> waOpts,
+    CompositeSmsSender smsSender,
+    CompositeWhatsAppSender waSender,
     ILogger<NotificationSender> logger) : INotificationSender
 {
     private readonly NotificationSenderOptions _options = options.Value;
@@ -53,21 +58,72 @@ public sealed class NotificationSender(
 
     private async Task<(NotificationChannel, NotificationStatus, string?)> TryDeliverAsync(NotificationMessage message, CancellationToken ct)
     {
-        // No recipient = nothing to deliver - record as Skipped so a missing-email-on-file
-        // case doesn't show up as Failed in the dashboard.
+        // Channel selection - explicit override wins, otherwise pick the most-direct channel
+        // we have credentials + recipient address for. Fallback chain: WhatsApp -> SMS -> Email
+        // -> log-only. Most member-facing notifications (welcome, temp pw) prefer SMS so the
+        // member can read it on their phone the moment the admin enables their login.
+        var resolved = ResolveChannel(message);
+
+        switch (resolved)
+        {
+            case NotificationChannel.WhatsApp:
+                return await DeliverWhatsAppAsync(message, ct);
+            case NotificationChannel.Sms:
+                return await DeliverSmsAsync(message, ct);
+            case NotificationChannel.Email:
+                if (string.IsNullOrWhiteSpace(message.RecipientEmail))
+                    return (NotificationChannel.LogOnly, NotificationStatus.Skipped, "No recipient email on file.");
+                if (!_options.IsSmtpReady)
+                    return (NotificationChannel.LogOnly, NotificationStatus.Sent, null);
+                return await DeliverEmailAsync(message, ct);
+            default:
+                // log-only - nothing to attempt, audit row still written.
+                return (NotificationChannel.LogOnly, NotificationStatus.Sent, null);
+        }
+    }
+
+    private NotificationChannel ResolveChannel(NotificationMessage message)
+    {
+        // Explicit override wins - caller knows what they want.
+        if (message.PreferredChannel is { } forced) return forced;
+
+        var hasPhone = !string.IsNullOrWhiteSpace(message.RecipientPhoneE164);
+        var hasEmail = !string.IsNullOrWhiteSpace(message.RecipientEmail);
+        var waReady = !string.IsNullOrWhiteSpace(waOpts.CurrentValue.Provider);
+        var smsReady = !string.IsNullOrWhiteSpace(smsOpts.CurrentValue.Provider);
+
+        if (hasPhone && waReady) return NotificationChannel.WhatsApp;
+        if (hasPhone && smsReady) return NotificationChannel.Sms;
+        if (hasEmail && _options.IsSmtpReady) return NotificationChannel.Email;
+        return NotificationChannel.LogOnly;
+    }
+
+    private async Task<(NotificationChannel, NotificationStatus, string?)> DeliverSmsAsync(NotificationMessage message, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(message.RecipientPhoneE164))
+            return (NotificationChannel.Sms, NotificationStatus.Skipped, "No recipient phone on file.");
+        var body = string.IsNullOrWhiteSpace(message.Subject) ? message.Body : $"{message.Subject}\n\n{message.Body}";
+        var outcome = await smsSender.SendAsync(message.RecipientPhoneE164, body, ct);
+        return outcome.Success
+            ? (NotificationChannel.Sms, NotificationStatus.Sent, null)
+            : (NotificationChannel.Sms, NotificationStatus.Failed, outcome.ErrorDetail);
+    }
+
+    private async Task<(NotificationChannel, NotificationStatus, string?)> DeliverWhatsAppAsync(NotificationMessage message, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(message.RecipientPhoneE164))
+            return (NotificationChannel.WhatsApp, NotificationStatus.Skipped, "No recipient phone on file.");
+        var body = string.IsNullOrWhiteSpace(message.Subject) ? message.Body : $"*{message.Subject}*\n\n{message.Body}";
+        var outcome = await waSender.SendAsync(message.RecipientPhoneE164, body, ct);
+        return outcome.Success
+            ? (NotificationChannel.WhatsApp, NotificationStatus.Sent, null)
+            : (NotificationChannel.WhatsApp, NotificationStatus.Failed, outcome.ErrorDetail);
+    }
+
+    private async Task<(NotificationChannel, NotificationStatus, string?)> DeliverEmailAsync(NotificationMessage message, CancellationToken ct)
+    {
         if (string.IsNullOrWhiteSpace(message.RecipientEmail))
-        {
-            return (NotificationChannel.LogOnly, NotificationStatus.Skipped,
-                "No recipient email on file.");
-        }
-
-        // SMTP not configured -> we're in audit-only mode. Still considered "Sent" because
-        // there was nothing to fail at.
-        if (!_options.IsSmtpReady)
-        {
-            return (NotificationChannel.LogOnly, NotificationStatus.Sent, null);
-        }
-
+            return (NotificationChannel.Email, NotificationStatus.Skipped, "No recipient email on file.");
         try
         {
             using var smtp = new SmtpClient(_options.Smtp.Host, _options.Smtp.Port)

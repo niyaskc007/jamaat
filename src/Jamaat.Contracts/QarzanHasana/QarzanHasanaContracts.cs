@@ -16,15 +16,15 @@ public sealed record QarzanHasanaLoanDto(
     Guid Guarantor1MemberId, string Guarantor1Name,
     Guid Guarantor2MemberId, string Guarantor2Name,
     string? CashflowDocumentUrl, string? GoldSlipDocumentUrl,
-    string? Level1ApproverName, DateTimeOffset? Level1ApprovedAtUtc, string? Level1Comments,
-    string? Level2ApproverName, DateTimeOffset? Level2ApprovedAtUtc, string? Level2Comments,
+    Guid? Level1ApproverUserId, string? Level1ApproverName, DateTimeOffset? Level1ApprovedAtUtc, string? Level1Comments,
+    Guid? Level2ApproverUserId, string? Level2ApproverName, DateTimeOffset? Level2ApprovedAtUtc, string? Level2Comments,
     DateOnly? DisbursedOn,
     string? RejectionReason, string? CancellationReason,
     decimal ProgressPercent,
     DateTimeOffset CreatedAtUtc,
     // --- Borrower's case + guarantor acknowledgment (added v2) ---
     string? Purpose, string? RepaymentPlan, string? SourceOfIncome, string? OtherObligations,
-    bool GuarantorsAcknowledged, DateTimeOffset? GuarantorsAcknowledgedAtUtc, string? GuarantorsAcknowledgedByUserName,
+    bool GuarantorsAcknowledged, DateTimeOffset? GuarantorsAcknowledgedAtUtc, Guid? GuarantorsAcknowledgedByUserId, string? GuarantorsAcknowledgedByUserName,
     // --- Structured cashflow / gold / income tags (added v2.1) ---
     decimal? MonthlyIncome, decimal? MonthlyExpenses, decimal? MonthlyExistingEmis,
     decimal? GoldWeightGrams, int? GoldPurityKarat, string? GoldHeldAt,
@@ -34,7 +34,7 @@ public sealed record QarzanHasanaInstallmentDto(
     Guid Id, int InstallmentNo, DateOnly DueDate,
     decimal ScheduledAmount, decimal PaidAmount, decimal RemainingAmount,
     DateOnly? LastPaymentDate, QarzanHasanaInstallmentStatus Status,
-    string? WaiverReason, DateTimeOffset? WaivedAtUtc, string? WaivedByUserName);
+    string? WaiverReason, DateTimeOffset? WaivedAtUtc, Guid? WaivedByUserId, string? WaivedByUserName);
 
 public sealed record QarzanHasanaLoanDetailDto(
     QarzanHasanaLoanDto Loan,

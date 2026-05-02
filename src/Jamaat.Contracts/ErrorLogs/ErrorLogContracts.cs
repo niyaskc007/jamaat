@@ -23,8 +23,10 @@ public sealed record ErrorLogDto(
     string Fingerprint,
     DateTimeOffset OccurredAtUtc,
     DateTimeOffset? ReviewedAtUtc,
+    Guid? ReviewedByUserId,
     string? ReviewedByUserName,
     DateTimeOffset? ResolvedAtUtc,
+    Guid? ResolvedByUserId,
     string? ResolvedByUserName,
     string? ResolutionNote);
 

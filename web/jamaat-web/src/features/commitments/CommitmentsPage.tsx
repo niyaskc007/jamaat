@@ -4,7 +4,7 @@ import type { TableProps } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, HeartOutlined, DownloadOutlined } from '@ant-design/icons';
 import { downloadServerXlsx } from '../../shared/export/server';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { ModuleEmptyState } from '../../shared/ui/ModuleEmptyState';
 import { useAuth } from '../../shared/auth/useAuth';
@@ -44,16 +44,26 @@ export function CommitmentsPage() {
     {
       title: 'Party',
       dataIndex: 'partyName',
-      render: (v: string, row) => (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontWeight: 500, color: 'var(--jm-gray-900)' }}>{v}</span>
-          <span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
-            {PartyTypeLabel[row.partyType]}
-            {row.memberItsNumber ? ` · ITS ${row.memberItsNumber}` : ''}
-            {row.familyCode ? ` · ${row.familyCode}` : ''}
-          </span>
-        </div>
-      ),
+      render: (v: string, row) => {
+        // Member-party commitments link to the per-member dashboard; family-party commitments
+        // link to the family page. Either way, stop propagation so the row's open-detail
+        // handler doesn't fire on top of the navigation.
+        const target = row.memberId ? `/dashboards/members/${row.memberId}`
+          : row.familyId ? `/families/${row.familyId}` : null;
+        const inner = (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: 500, color: 'var(--jm-gray-900)' }}>{v}</span>
+            <span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
+              {PartyTypeLabel[row.partyType]}
+              {row.memberItsNumber ? ` · ITS ${row.memberItsNumber}` : ''}
+              {row.familyCode ? ` · ${row.familyCode}` : ''}
+            </span>
+          </div>
+        );
+        return target
+          ? <Link to={target} onClick={(e) => e.stopPropagation()}>{inner}</Link>
+          : inner;
+      },
     },
     {
       title: 'Fund',

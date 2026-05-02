@@ -88,8 +88,24 @@ public sealed class ReportsController(IReportsService svc, IExcelExporter excel)
     [Authorize(Policy = "reports.export")]
     public async Task<IActionResult> DailyCollectionXlsx([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
     {
+        var sheet = await BuildDailyCollectionSheet(from, to, ct);
+        return Xlsx(excel.Build(new[] { sheet }), $"daily-collection_{from:yyyyMMdd}_{to:yyyyMMdd}.xlsx");
+    }
+
+    /// CSV companion - same data, single-sheet plain CSV with UTF-8 BOM. Useful for piping
+    /// into pandas / R / PowerBI etc. without an Excel dependency.
+    [HttpGet("daily-collection.csv")]
+    [Authorize(Policy = "reports.export")]
+    public async Task<IActionResult> DailyCollectionCsv([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
+    {
+        var sheet = await BuildDailyCollectionSheet(from, to, ct);
+        return Csv(excel.BuildCsv(sheet), $"daily-collection_{from:yyyyMMdd}_{to:yyyyMMdd}.csv");
+    }
+
+    private async Task<ExcelSheet> BuildDailyCollectionSheet(DateOnly from, DateOnly to, CancellationToken ct)
+    {
         var rows = await svc.DailyCollectionAsync(from, to, ct);
-        var sheet = new ExcelSheet(
+        return new ExcelSheet(
             "Daily Collection",
             new[]
             {
@@ -99,7 +115,6 @@ public sealed class ReportsController(IReportsService svc, IExcelExporter excel)
                 new ExcelColumn("Currency"),
             },
             rows.Select(r => (IReadOnlyList<object?>)new object?[] { r.Date, r.ReceiptCount, r.AmountTotal, r.Currency }).ToList());
-        return Xlsx(excel.Build(new[] { sheet }), $"daily-collection_{from:yyyyMMdd}_{to:yyyyMMdd}.xlsx");
     }
 
     [HttpGet("fund-wise.xlsx")]
@@ -416,12 +431,15 @@ public sealed class ReportsController(IReportsService svc, IExcelExporter excel)
 
     private FileContentResult Xlsx(byte[] bytes, string filename) =>
         File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
+
+    private FileContentResult Csv(byte[] bytes, string filename) =>
+        File(bytes, "text/csv", filename);
 }
 
 [ApiController]
 [Authorize]
 [Route("api/v1/dashboard")]
-public sealed class DashboardController(IDashboardService svc) : ControllerBase
+public sealed class DashboardController(IDashboardService svc, IExcelExporter excel) : ControllerBase
 {
     [HttpGet("stats")]
     public async Task<IActionResult> Stats(CancellationToken ct) => Ok(await svc.StatsAsync(ct));
@@ -483,4 +501,560 @@ public sealed class DashboardController(IDashboardService svc) : ControllerBase
     [Authorize(Policy = "admin.audit")]
     public async Task<IActionResult> Compliance([FromQuery] int days = 30, CancellationToken ct = default)
         => Ok(await svc.ComplianceAsync(days, ct));
+
+    /// <summary>Events dashboard - event status counts, registration mix, fill rates,
+    /// monthly registration trend, top events + upcoming list.</summary>
+    [HttpGet("events")]
+    [Authorize(Policy = "event.view")]
+    public async Task<IActionResult> Events([FromQuery] int months = 12, CancellationToken ct = default)
+        => Ok(await svc.EventsAsync(months, ct));
+
+    /// <summary>Post-dated cheque portfolio - status mix, bank distribution, maturity timeline,
+    /// recent bounces, top pledgers.</summary>
+    [HttpGet("cheques")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> Cheques(CancellationToken ct = default)
+        => Ok(await svc.ChequesAsync(ct));
+
+    /// <summary>Families analytics - size distribution, growth trend,
+    /// top contributing + largest families.</summary>
+    [HttpGet("families")]
+    [Authorize(Policy = "family.view")]
+    public async Task<IActionResult> Families([FromQuery] int months = 12, CancellationToken ct = default)
+        => Ok(await svc.FamiliesAsync(months, ct));
+
+    /// <summary>Fund enrollments dashboard - status mix, recurrence mix, by-fund-type,
+    /// monthly enrollment trend.</summary>
+    [HttpGet("fund-enrollments")]
+    [Authorize(Policy = "enrollment.view")]
+    public async Task<IActionResult> FundEnrollments([FromQuery] int months = 12, CancellationToken ct = default)
+        => Ok(await svc.FundEnrollmentsAsync(months, ct));
+
+    /// <summary>Per-event drill-in - returns 404 when the event id is unknown.</summary>
+    [HttpGet("events/{eventId:guid}")]
+    [Authorize(Policy = "event.view")]
+    public async Task<IActionResult> EventDetail(Guid eventId, CancellationToken ct = default)
+    {
+        var dto = await svc.EventDetailAsync(eventId, ct);
+        return dto is null ? NotFound() : Ok(dto);
+    }
+
+    /// <summary>Per-fund-type drill-in - returns 404 when the fund id is unknown.</summary>
+    [HttpGet("fund-types/{fundTypeId:guid}")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> FundTypeDetail(Guid fundTypeId, [FromQuery] int months = 12, CancellationToken ct = default)
+    {
+        var dto = await svc.FundTypeDetailAsync(fundTypeId, months, ct);
+        return dto is null ? NotFound() : Ok(dto);
+    }
+
+    /// <summary>System-wide cashflow over the last N days (clamped 1..365).</summary>
+    [HttpGet("cashflow")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> Cashflow([FromQuery] int days = 90, CancellationToken ct = default)
+        => Ok(await svc.CashflowAsync(days, ct));
+
+    /// <summary>QH funnel - requests vs approvals vs disbursements, repayment, available pool.</summary>
+    [HttpGet("qh-funnel")]
+    [Authorize(Policy = "qh.view")]
+    public async Task<IActionResult> QhFunnel([FromQuery] int months = 12, CancellationToken ct = default)
+        => Ok(await svc.QhFunnelAsync(months, ct));
+
+    /// <summary>Per-commitment-template analysis (counts, committed, paid, completion %).</summary>
+    [HttpGet("commitment-types")]
+    [Authorize(Policy = "reports.view")]
+    public async Task<IActionResult> CommitmentTypes(CancellationToken ct = default)
+        => Ok(await svc.CommitmentTypesAsync(ct));
+
+    /// <summary>Vouchers dashboard - status mix, mode mix, payee/purpose roll-ups, daily outflow.
+    /// Defaults to last 90 days when from/to omitted.</summary>
+    [HttpGet("vouchers")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> Vouchers([FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken ct = default)
+        => Ok(await svc.VouchersAsync(from, to, ct));
+
+    /// <summary>Receipts dashboard - inflow analysis. Optional fundTypeId scopes to a single fund.</summary>
+    [HttpGet("receipts")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> Receipts([FromQuery] DateOnly? from, [FromQuery] DateOnly? to,
+        [FromQuery] Guid? fundTypeId, CancellationToken ct = default)
+        => Ok(await svc.ReceiptsAsync(from, to, fundTypeId, ct));
+
+    /// <summary>Member assets portfolio. Optional sectorId filters to one sector.</summary>
+    [HttpGet("member-assets")]
+    [Authorize(Policy = "member.view")]
+    public async Task<IActionResult> MemberAssets([FromQuery] Guid? sectorId, CancellationToken ct = default)
+        => Ok(await svc.MemberAssetsAsync(sectorId, ct));
+
+    /// <summary>Sectors overview - per-sector member counts, contributions, families, commitments.</summary>
+    [HttpGet("sectors")]
+    [Authorize(Policy = "member.view")]
+    public async Task<IActionResult> Sectors(CancellationToken ct = default)
+        => Ok(await svc.SectorsAsync(ct));
+
+    /// <summary>Returnable receipts portfolio - outstanding, age buckets, top holders, maturity timeline.</summary>
+    [HttpGet("returnables")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> Returnables([FromQuery] Guid? fundTypeId, CancellationToken ct = default)
+        => Ok(await svc.ReturnablesAsync(fundTypeId, ct));
+
+    /// <summary>Per-member 360 view. 404 when the member id is unknown.</summary>
+    [HttpGet("members/{memberId:guid}")]
+    [Authorize(Policy = "member.view")]
+    public async Task<IActionResult> MemberDetail(Guid memberId, CancellationToken ct = default)
+    {
+        var dto = await svc.MemberDetailAsync(memberId, ct);
+        return dto is null ? NotFound() : Ok(dto);
+    }
+
+    /// <summary>Per-commitment drill-in. 404 when the commitment id is unknown.</summary>
+    [HttpGet("commitments/{commitmentId:guid}")]
+    [Authorize(Policy = "reports.view")]
+    public async Task<IActionResult> CommitmentDetail(Guid commitmentId, CancellationToken ct = default)
+    {
+        var dto = await svc.CommitmentDetailAsync(commitmentId, ct);
+        return dto is null ? NotFound() : Ok(dto);
+    }
+
+    /// <summary>Notifications engagement dashboard.</summary>
+    [HttpGet("notifications")]
+    [Authorize(Policy = "admin.audit")]
+    public async Task<IActionResult> Notifications([FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken ct = default)
+        => Ok(await svc.NotificationsAsync(from, to, ct));
+
+    /// <summary>User activity heatmap (admin audit events).</summary>
+    [HttpGet("user-activity")]
+    [Authorize(Policy = "admin.audit")]
+    public async Task<IActionResult> UserActivity([FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken ct = default)
+        => Ok(await svc.UserActivityAsync(from, to, ct));
+
+    // -- XLSX exports for the most-used dashboards -------------------------
+    // These mirror the on-page tables the user sees so they can drop them straight into Excel
+    // for further analysis or sharing with non-app users. All wrap the same service methods that
+    // back the JSON dashboard endpoints, so numbers always reconcile.
+
+    /// <summary>Cashflow XLSX export - daily inflow/outflow rows + by-fund + by-purpose rolls.</summary>
+    [HttpGet("cashflow.xlsx")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> CashflowXlsx([FromQuery] int days = 90, CancellationToken ct = default)
+    {
+        var d = await svc.CashflowAsync(days, ct);
+        var summarySheet = new ExcelSheet(
+            "Summary",
+            new[]
+            {
+                new ExcelColumn("Metric"),
+                new ExcelColumn("Value", ExcelColumnType.Currency),
+                new ExcelColumn("Currency"),
+            },
+            new IReadOnlyList<object?>[]
+            {
+                new object?[] { "Total inflow", d.TotalInflow, d.Currency },
+                new object?[] { "Total outflow", d.TotalOutflow, d.Currency },
+                new object?[] { "Net cashflow", d.NetCashflow, d.Currency },
+                new object?[] { "Pending outflow", d.PendingOutflow, d.Currency },
+                new object?[] { "Inflow this month", d.InflowThisMonth, d.Currency },
+                new object?[] { "Outflow this month", d.OutflowThisMonth, d.Currency },
+                new object?[] { "Inflow MTD prior month", d.InflowMtdPriorMonth, d.Currency },
+                new object?[] { "Outflow MTD prior month", d.OutflowMtdPriorMonth, d.Currency },
+            });
+        var dailySheet = new ExcelSheet(
+            "Daily curve",
+            new[]
+            {
+                new ExcelColumn("Date", ExcelColumnType.Date),
+                new ExcelColumn("Inflow", ExcelColumnType.Currency),
+                new ExcelColumn("Outflow", ExcelColumnType.Currency),
+                new ExcelColumn("Net", ExcelColumnType.Currency),
+            },
+            d.DailyCurve.Select(p => (IReadOnlyList<object?>)new object?[] { p.Date, p.Inflow, p.Outflow, p.Net }).ToList());
+        var byFundSheet = new ExcelSheet(
+            "Inflow by fund",
+            new[] { new ExcelColumn("Fund"), new ExcelColumn("Receipts", ExcelColumnType.Number, "#,##0"), new ExcelColumn("Amount", ExcelColumnType.Currency) },
+            d.InflowByFund.Select(x => (IReadOnlyList<object?>)new object?[] { x.Label, x.Count, x.Amount }).ToList());
+        var byPurposeSheet = new ExcelSheet(
+            "Outflow by purpose",
+            new[] { new ExcelColumn("Purpose"), new ExcelColumn("Vouchers", ExcelColumnType.Number, "#,##0"), new ExcelColumn("Amount", ExcelColumnType.Currency) },
+            d.OutflowByPurpose.Select(x => (IReadOnlyList<object?>)new object?[] { x.Label, x.Count, x.Amount }).ToList());
+        return Xlsx(excel.Build(new[] { summarySheet, dailySheet, byFundSheet, byPurposeSheet }),
+            $"cashflow_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
+
+    /// <summary>Vouchers dashboard XLSX export - status mix + payment-mode mix + top payees + by-purpose.</summary>
+    [HttpGet("vouchers.xlsx")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> VouchersXlsx([FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken ct = default)
+    {
+        var d = await svc.VouchersAsync(from, to, ct);
+        var summarySheet = new ExcelSheet(
+            "Summary",
+            new[] { new ExcelColumn("Metric"), new ExcelColumn("Value", ExcelColumnType.Number, "#,##0") },
+            new IReadOnlyList<object?>[]
+            {
+                new object?[] { "Total vouchers", d.TotalVouchers },
+                new object?[] { "Draft", d.DraftCount },
+                new object?[] { "Pending approval", d.PendingApprovalCount },
+                new object?[] { "Approved", d.ApprovedCount },
+                new object?[] { "Paid", d.PaidCount },
+                new object?[] { "Cancelled", d.CancelledCount },
+                new object?[] { "Reversed", d.ReversedCount },
+                new object?[] { "Pending clearance", d.PendingClearanceCount },
+                new object?[] { "Total paid amount", d.TotalPaidAmount },
+                new object?[] { "Pending approval amount", d.PendingApprovalAmount },
+                new object?[] { "Average voucher", d.AverageVoucherAmount },
+            });
+        var statusSheet = new ExcelSheet(
+            "Status mix",
+            new[] { new ExcelColumn("Status"), new ExcelColumn("Count", ExcelColumnType.Number, "#,##0"), new ExcelColumn("Amount", ExcelColumnType.Currency) },
+            d.StatusMix.Select(x => (IReadOnlyList<object?>)new object?[] { x.Label, x.Count, x.Amount }).ToList());
+        var payeesSheet = new ExcelSheet(
+            "Top payees",
+            new[] { new ExcelColumn("Payee"), new ExcelColumn("Vouchers", ExcelColumnType.Number, "#,##0"), new ExcelColumn("Amount", ExcelColumnType.Currency) },
+            d.TopPayees.Select(x => (IReadOnlyList<object?>)new object?[] { x.Label, x.Count, x.Amount }).ToList());
+        var purposeSheet = new ExcelSheet(
+            "By purpose",
+            new[] { new ExcelColumn("Purpose"), new ExcelColumn("Vouchers", ExcelColumnType.Number, "#,##0"), new ExcelColumn("Amount", ExcelColumnType.Currency) },
+            d.ByPurpose.Select(x => (IReadOnlyList<object?>)new object?[] { x.Label, x.Count, x.Amount }).ToList());
+        var dailySheet = new ExcelSheet(
+            "Daily outflow",
+            new[] { new ExcelColumn("Date", ExcelColumnType.Date), new ExcelColumn("Vouchers", ExcelColumnType.Number, "#,##0"), new ExcelColumn("Amount", ExcelColumnType.Currency) },
+            d.DailyOutflow.Select(p => (IReadOnlyList<object?>)new object?[] { p.Date, p.Count, p.Amount }).ToList());
+        return Xlsx(excel.Build(new[] { summarySheet, statusSheet, payeesSheet, purposeSheet, dailySheet }),
+            $"vouchers_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
+
+    /// <summary>Receipts dashboard XLSX export.</summary>
+    [HttpGet("receipts.xlsx")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> ReceiptsXlsx([FromQuery] DateOnly? from, [FromQuery] DateOnly? to,
+        [FromQuery] Guid? fundTypeId, CancellationToken ct = default)
+    {
+        var d = await svc.ReceiptsAsync(from, to, fundTypeId, ct);
+        var summarySheet = new ExcelSheet(
+            "Summary",
+            new[] { new ExcelColumn("Metric"), new ExcelColumn("Value") },
+            new IReadOnlyList<object?>[]
+            {
+                new object?[] { "Total receipts", d.TotalReceipts },
+                new object?[] { "Confirmed", d.Confirmed },
+                new object?[] { "Total amount", d.TotalAmount },
+                new object?[] { "Permanent", d.PermanentAmount },
+                new object?[] { "Returnable", d.ReturnableAmount },
+                new object?[] { "Unique contributors", d.UniqueContributors },
+                new object?[] { "Average receipt", d.AverageReceipt },
+                new object?[] { "Largest receipt", d.LargestReceipt },
+                new object?[] { "Currency", d.Currency },
+                new object?[] { "Window from", d.WindowFrom?.ToString("yyyy-MM-dd") ?? "" },
+                new object?[] { "Window to", d.WindowTo?.ToString("yyyy-MM-dd") ?? "" },
+                new object?[] { "Scoped fund", d.ScopedFundName ?? "(all)" },
+            });
+        var byFundSheet = new ExcelSheet(
+            "By fund",
+            new[] { new ExcelColumn("Fund"), new ExcelColumn("Receipts", ExcelColumnType.Number, "#,##0"), new ExcelColumn("Amount", ExcelColumnType.Currency) },
+            d.ByFund.Select(x => (IReadOnlyList<object?>)new object?[] { x.Label, x.Count, x.Amount }).ToList());
+        var byModeSheet = new ExcelSheet(
+            "By payment mode",
+            new[] { new ExcelColumn("Mode"), new ExcelColumn("Receipts", ExcelColumnType.Number, "#,##0"), new ExcelColumn("Amount", ExcelColumnType.Currency) },
+            d.ByPaymentMode.Select(x => (IReadOnlyList<object?>)new object?[] { x.Label, x.Count, x.Amount }).ToList());
+        var topSheet = new ExcelSheet(
+            "Top contributors",
+            new[]
+            {
+                new ExcelColumn("ITS"),
+                new ExcelColumn("Member"),
+                new ExcelColumn("Receipts", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+            },
+            d.TopContributors.Select(p => (IReadOnlyList<object?>)new object?[] { p.ItsNumber, p.FullName, p.ReceiptCount, p.Amount }).ToList());
+        var dailySheet = new ExcelSheet(
+            "Daily inflow",
+            new[] { new ExcelColumn("Date", ExcelColumnType.Date), new ExcelColumn("Receipts", ExcelColumnType.Number, "#,##0"), new ExcelColumn("Amount", ExcelColumnType.Currency) },
+            d.DailyInflow.Select(p => (IReadOnlyList<object?>)new object?[] { p.Date, p.Count, p.Amount }).ToList());
+        return Xlsx(excel.Build(new[] { summarySheet, byFundSheet, byModeSheet, topSheet, dailySheet }),
+            $"receipts_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
+
+    /// <summary>Per-member statement XLSX - profile + lifetime/YTD totals + commitments + loans + recent receipts.
+    /// This is the "Member Statement" the operations team has been asking for. Reuses the per-member
+    /// drill-in service method so figures always reconcile with the on-page dashboard.</summary>
+    [HttpGet("members/{memberId:guid}.xlsx")]
+    [Authorize(Policy = "member.view")]
+    public async Task<IActionResult> MemberStatementXlsx(Guid memberId, CancellationToken ct = default)
+    {
+        var d = await svc.MemberDetailAsync(memberId, ct);
+        if (d is null) return NotFound();
+        var profileSheet = new ExcelSheet(
+            "Profile",
+            new[] { new ExcelColumn("Field"), new ExcelColumn("Value") },
+            new IReadOnlyList<object?>[]
+            {
+                new object?[] { "ITS number", d.ItsNumber },
+                new object?[] { "Full name", d.FullName },
+                new object?[] { "Phone", d.Phone ?? "" },
+                new object?[] { "Email", d.Email ?? "" },
+                new object?[] { "Family", d.FamilyName ?? "" },
+                new object?[] { "Sector", d.SectorName ?? "" },
+                new object?[] { "Currency", d.Currency },
+                new object?[] { "Lifetime contribution", d.LifetimeContribution },
+                new object?[] { "YTD contribution", d.YtdContribution },
+                new object?[] { "Lifetime receipts", d.LifetimeReceiptCount },
+                new object?[] { "Active commitments", d.CommitmentCount },
+                new object?[] { "Committed total", d.CommittedTotal },
+                new object?[] { "Committed paid", d.CommittedPaid },
+                new object?[] { "Loans (count)", d.LoanCount },
+                new object?[] { "Loans outstanding", d.LoansOutstanding },
+                new object?[] { "Asset value", d.AssetValue },
+                new object?[] { "Event registrations", d.EventRegistrationCount },
+                new object?[] { "Event check-ins", d.EventCheckedInCount },
+            });
+        var trendSheet = new ExcelSheet(
+            "Monthly trend",
+            new[] { new ExcelColumn("Year", ExcelColumnType.Number), new ExcelColumn("Month", ExcelColumnType.Number),
+                new ExcelColumn("Amount", ExcelColumnType.Currency), new ExcelColumn("Receipts", ExcelColumnType.Number, "#,##0") },
+            d.MonthlyContributionTrend.Select(p => (IReadOnlyList<object?>)new object?[] { p.Year, p.Month, p.Amount, p.Count }).ToList());
+        var byFundSheet = new ExcelSheet(
+            "By fund",
+            new[] { new ExcelColumn("Fund"), new ExcelColumn("Receipts", ExcelColumnType.Number, "#,##0"), new ExcelColumn("Amount", ExcelColumnType.Currency) },
+            d.ContributionByFund.Select(x => (IReadOnlyList<object?>)new object?[] { x.Label, x.Count, x.Amount }).ToList());
+        var commitmentsSheet = new ExcelSheet(
+            "Commitments",
+            new[]
+            {
+                new ExcelColumn("Fund"), new ExcelColumn("Total", ExcelColumnType.Currency),
+                new ExcelColumn("Paid", ExcelColumnType.Currency), new ExcelColumn("Status"),
+                new ExcelColumn("Installments", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Paid #", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Overdue #", ExcelColumnType.Number, "#,##0"),
+            },
+            d.Commitments.Select(c => (IReadOnlyList<object?>)new object?[] { c.FundName, c.TotalAmount, c.PaidAmount,
+                c.Status.ToString(), c.InstallmentsTotal, c.InstallmentsPaid, c.OverdueInstallments }).ToList());
+        var loansSheet = new ExcelSheet(
+            "Loans",
+            new[]
+            {
+                new ExcelColumn("Code"), new ExcelColumn("Status"),
+                new ExcelColumn("Disbursed", ExcelColumnType.Currency),
+                new ExcelColumn("Repaid", ExcelColumnType.Currency),
+                new ExcelColumn("Outstanding", ExcelColumnType.Currency),
+                new ExcelColumn("Disbursed on", ExcelColumnType.Date),
+            },
+            d.Loans.Select(l => (IReadOnlyList<object?>)new object?[] { l.LoanCode, l.Status.ToString(),
+                l.AmountDisbursed, l.AmountRepaid, l.AmountOutstanding, l.DisbursedOn }).ToList());
+        var recentSheet = new ExcelSheet(
+            "Recent receipts",
+            new[]
+            {
+                new ExcelColumn("Receipt #"), new ExcelColumn("Date", ExcelColumnType.Date),
+                new ExcelColumn("Amount", ExcelColumnType.Currency), new ExcelColumn("Status"),
+            },
+            d.RecentReceipts.Select(r => (IReadOnlyList<object?>)new object?[] { r.ReceiptNumber ?? "—", r.ReceiptDate, r.Amount, r.Status.ToString() }).ToList());
+        return Xlsx(excel.Build(new[] { profileSheet, trendSheet, byFundSheet, commitmentsSheet, loansSheet, recentSheet }),
+            $"member-statement_{d.ItsNumber}_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
+
+    /// <summary>Member change-requests queue dashboard.</summary>
+    [HttpGet("change-requests")]
+    [Authorize(Policy = "member.view")]
+    public async Task<IActionResult> ChangeRequests([FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken ct = default)
+        => Ok(await svc.ChangeRequestsAsync(from, to, ct));
+
+    /// <summary>Expense-type analytics dashboard - voucher outflow grouped by ExpenseType.</summary>
+    [HttpGet("expense-types")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> ExpenseTypes([FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken ct = default)
+        => Ok(await svc.ExpenseTypesAsync(from, to, ct));
+
+    /// <summary>Periods management overview - list periods + status + close-readiness signals.</summary>
+    [HttpGet("periods")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> Periods(CancellationToken ct = default)
+        => Ok(await svc.PeriodsAsync(ct));
+
+    /// <summary>Annual summary report (JSON) - per-month income/expense + by-fund roll-up.</summary>
+    [HttpGet("annual-summary")]
+    [Authorize(Policy = "reports.view")]
+    public async Task<IActionResult> AnnualSummary([FromQuery] int year, CancellationToken ct = default)
+        => Ok(await svc.AnnualSummaryAsync(year, ct));
+
+    /// <summary>Account reconciliation dashboard - bank accounts + COA balances with stale-flag.</summary>
+    [HttpGet("reconciliation")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> Reconciliation(CancellationToken ct = default)
+        => Ok(await svc.ReconciliationAsync(ct));
+
+    /// <summary>Annual summary XLSX export - 3 sheets: Summary, Monthly, By fund.</summary>
+    [HttpGet("annual-summary.xlsx")]
+    [Authorize(Policy = "reports.export")]
+    public async Task<IActionResult> AnnualSummaryXlsx([FromQuery] int year, CancellationToken ct = default)
+    {
+        var d = await svc.AnnualSummaryAsync(year, ct);
+        var summarySheet = new ExcelSheet(
+            $"Summary {d.Year}",
+            new[] { new ExcelColumn("Metric"), new ExcelColumn("Value", ExcelColumnType.Currency) },
+            new IReadOnlyList<object?>[]
+            {
+                new object?[] { "Total income", d.TotalIncome },
+                new object?[] { "Total expense", d.TotalExpense },
+                new object?[] { "Net", d.Net },
+                new object?[] { $"Currency = {d.Currency}", null },
+            });
+        var monthlySheet = new ExcelSheet(
+            "Monthly",
+            new[] { new ExcelColumn("Month", ExcelColumnType.Number), new ExcelColumn("Income", ExcelColumnType.Currency),
+                new ExcelColumn("Expense", ExcelColumnType.Currency), new ExcelColumn("Net", ExcelColumnType.Currency) },
+            d.Monthly.Select(p => (IReadOnlyList<object?>)new object?[] { p.Month, p.Income, p.Expense, p.Net }).ToList());
+        var fundSheet = new ExcelSheet(
+            "By fund",
+            new[] { new ExcelColumn("Code"), new ExcelColumn("Fund"),
+                new ExcelColumn("Income", ExcelColumnType.Currency),
+                new ExcelColumn("Receipts", ExcelColumnType.Number, "#,##0") },
+            d.ByFund.Select(r => (IReadOnlyList<object?>)new object?[] { r.FundCode, r.FundName, r.Income, r.ReceiptCount }).ToList());
+        var purposeSheet = new ExcelSheet(
+            "By voucher purpose",
+            new[] { new ExcelColumn("Purpose"), new ExcelColumn("Vouchers", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency) },
+            d.ByVoucherPurpose.Select(p => (IReadOnlyList<object?>)new object?[] { p.Label, p.Count, p.Amount }).ToList());
+        return Xlsx(excel.Build(new[] { summarySheet, monthlySheet, fundSheet, purposeSheet }),
+            $"annual-summary_{d.Year}.xlsx");
+    }
+
+    /// <summary>User-activity (audit) XLSX export.</summary>
+    [HttpGet("user-activity.xlsx")]
+    [Authorize(Policy = "admin.audit")]
+    public async Task<IActionResult> UserActivityXlsx([FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken ct = default)
+    {
+        var d = await svc.UserActivityAsync(from, to, ct);
+        var summarySheet = new ExcelSheet(
+            "Summary",
+            new[] { new ExcelColumn("Metric"), new ExcelColumn("Value", ExcelColumnType.Number, "#,##0") },
+            new IReadOnlyList<object?>[]
+            {
+                new object?[] { "Total events", d.TotalEvents },
+                new object?[] { "Unique users", d.UniqueUsers },
+                new object?[] { "Unique entities", d.UniqueEntities },
+            });
+        var topUsersSheet = new ExcelSheet(
+            "Top users",
+            new[] { new ExcelColumn("User"), new ExcelColumn("Events", ExcelColumnType.Number, "#,##0") },
+            d.TopUsers.Select(x => (IReadOnlyList<object?>)new object?[] { x.Label, x.Count }).ToList());
+        var topEntsSheet = new ExcelSheet(
+            "Top entities",
+            new[] { new ExcelColumn("Entity"), new ExcelColumn("Events", ExcelColumnType.Number, "#,##0") },
+            d.TopEntities.Select(x => (IReadOnlyList<object?>)new object?[] { x.Label, x.Count }).ToList());
+        var recentSheet = new ExcelSheet(
+            "Recent events",
+            new[]
+            {
+                new ExcelColumn("When", ExcelColumnType.DateTime),
+                new ExcelColumn("User"),
+                new ExcelColumn("Action"),
+                new ExcelColumn("Entity"),
+                new ExcelColumn("Entity id"),
+            },
+            d.RecentEvents.Select(r => (IReadOnlyList<object?>)new object?[] { r.AtUtc.UtcDateTime, r.UserName, r.Action, r.EntityName, r.EntityId ?? "" }).ToList());
+        return Xlsx(excel.Build(new[] { summarySheet, topUsersSheet, topEntsSheet, recentSheet }),
+            $"user-activity_{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
+
+    // -- CSV companions for the most-used dashboard exports ----------------
+    // CSV is single-sheet by nature. Each .csv endpoint picks the most-useful primary sheet
+    // (the daily/monthly time-series usually) - users who need the multi-sheet workbook stick
+    // with the .xlsx endpoint.
+
+    [HttpGet("cashflow.csv")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> CashflowCsv([FromQuery] int days = 90, CancellationToken ct = default)
+    {
+        var d = await svc.CashflowAsync(days, ct);
+        var sheet = new ExcelSheet(
+            "Daily curve",
+            new[]
+            {
+                new ExcelColumn("Date", ExcelColumnType.Date),
+                new ExcelColumn("Inflow", ExcelColumnType.Currency),
+                new ExcelColumn("Outflow", ExcelColumnType.Currency),
+                new ExcelColumn("Net", ExcelColumnType.Currency),
+            },
+            d.DailyCurve.Select(p => (IReadOnlyList<object?>)new object?[] { p.Date, p.Inflow, p.Outflow, p.Net }).ToList());
+        return Csv(excel.BuildCsv(sheet), $"cashflow_{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
+
+    [HttpGet("vouchers.csv")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> VouchersCsv([FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken ct = default)
+    {
+        var d = await svc.VouchersAsync(from, to, ct);
+        var sheet = new ExcelSheet(
+            "Daily outflow",
+            new[]
+            {
+                new ExcelColumn("Date", ExcelColumnType.Date),
+                new ExcelColumn("Vouchers", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+            },
+            d.DailyOutflow.Select(p => (IReadOnlyList<object?>)new object?[] { p.Date, p.Count, p.Amount }).ToList());
+        return Csv(excel.BuildCsv(sheet), $"vouchers_{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
+
+    [HttpGet("receipts.csv")]
+    [Authorize(Policy = "accounting.view")]
+    public async Task<IActionResult> ReceiptsCsv([FromQuery] DateOnly? from, [FromQuery] DateOnly? to,
+        [FromQuery] Guid? fundTypeId, CancellationToken ct = default)
+    {
+        var d = await svc.ReceiptsAsync(from, to, fundTypeId, ct);
+        var sheet = new ExcelSheet(
+            "Daily inflow",
+            new[]
+            {
+                new ExcelColumn("Date", ExcelColumnType.Date),
+                new ExcelColumn("Receipts", ExcelColumnType.Number, "#,##0"),
+                new ExcelColumn("Amount", ExcelColumnType.Currency),
+            },
+            d.DailyInflow.Select(p => (IReadOnlyList<object?>)new object?[] { p.Date, p.Count, p.Amount }).ToList());
+        return Csv(excel.BuildCsv(sheet), $"receipts_{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
+
+    [HttpGet("annual-summary.csv")]
+    [Authorize(Policy = "reports.export")]
+    public async Task<IActionResult> AnnualSummaryCsv([FromQuery] int year, CancellationToken ct = default)
+    {
+        var d = await svc.AnnualSummaryAsync(year, ct);
+        var sheet = new ExcelSheet(
+            "Monthly",
+            new[]
+            {
+                new ExcelColumn("Month", ExcelColumnType.Number),
+                new ExcelColumn("Income", ExcelColumnType.Currency),
+                new ExcelColumn("Expense", ExcelColumnType.Currency),
+                new ExcelColumn("Net", ExcelColumnType.Currency),
+            },
+            d.Monthly.Select(p => (IReadOnlyList<object?>)new object?[] { p.Month, p.Income, p.Expense, p.Net }).ToList());
+        return Csv(excel.BuildCsv(sheet), $"annual-summary_{d.Year}.csv");
+    }
+
+    [HttpGet("user-activity.csv")]
+    [Authorize(Policy = "admin.audit")]
+    public async Task<IActionResult> UserActivityCsv([FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken ct = default)
+    {
+        var d = await svc.UserActivityAsync(from, to, ct);
+        var sheet = new ExcelSheet(
+            "Recent events",
+            new[]
+            {
+                new ExcelColumn("When", ExcelColumnType.DateTime),
+                new ExcelColumn("User"),
+                new ExcelColumn("Action"),
+                new ExcelColumn("Entity"),
+                new ExcelColumn("Entity id"),
+            },
+            d.RecentEvents.Select(r => (IReadOnlyList<object?>)new object?[]
+                { r.AtUtc.UtcDateTime, r.UserName, r.Action, r.EntityName, r.EntityId ?? "" }).ToList());
+        return Csv(excel.BuildCsv(sheet), $"user-activity_{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
+
+    private FileContentResult Xlsx(byte[] bytes, string filename) =>
+        File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
+
+    private FileContentResult Csv(byte[] bytes, string filename) =>
+        File(bytes, "text/csv", filename);
 }

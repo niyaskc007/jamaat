@@ -1,6 +1,18 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppLayout } from './AppLayout';
 import { LoginPage } from '../features/auth/LoginPage';
+import { ChangePasswordPage } from '../features/auth/ChangePasswordPage';
+import { MemberPortalLayout } from '../features/portal/me/MemberPortalLayout';
+import { MemberHomePage } from '../features/portal/me/MemberHomePage';
+import { MemberLoginHistoryPage } from '../features/portal/me/MemberLoginHistoryPage';
+import {
+  MemberProfilePage as PortalMemberProfilePage,
+  MemberContributionsPage,
+  MemberCommitmentsPage,
+  MemberQhPage,
+  MemberGuarantorInboxPage,
+  MemberEventsPage,
+} from '../features/portal/me/MemberPortalPages';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { MembersPage } from '../features/members/MembersPage';
 import { MemberProfilePage } from '../features/members/profile/MemberProfilePage';
@@ -27,6 +39,10 @@ import { NewVoucherPage } from '../features/vouchers/NewVoucherPage';
 import { VoucherDetailPage } from '../features/vouchers/VoucherDetailPage';
 import { ReportsPage } from '../features/reports/ReportsPage';
 import { DashboardsPage } from '../features/dashboards/DashboardsPage';
+import { EventDetailDashboardPage } from '../features/dashboards/EventDetailDashboard';
+import { FundTypeDetailDashboardPage } from '../features/dashboards/FundTypeDetailDashboard';
+import { MemberDetailDashboardPage } from '../features/dashboards/MemberDetailDashboard';
+import { CommitmentDetailDashboardPage } from '../features/dashboards/CommitmentDetailDashboard';
 import { LedgerPage } from '../features/ledger/LedgerPage';
 import { UsersPage } from '../features/admin/UsersPage';
 import { MasterDataPage } from '../features/admin/MasterDataPage';
@@ -49,14 +65,38 @@ const Gate = ({ anyOf, children }: { anyOf: string[]; children: ReactNode }) => 
   <RequirePermission anyOf={anyOf}>{children}</RequirePermission>
 );
 
+
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* Forced first-login change-password screen + free-form rotation. Uses its own
+          layout (no AppLayout chrome) and is accessible without a JWT for the forced flow. */}
+      <Route path="/change-password" element={<ChangePasswordPage />} />
       {/* Public Event Portal - no auth, no app chrome */}
       <Route path="/portal/events" element={<PortalEventsListPage />} />
       <Route path="/portal/events/:slug" element={<PortalEventPage />} />
       <Route path="/portal/qh-consent/:token" element={<PortalGuarantorConsentPage />} />
+      {/* Member self-service portal - signed-in members with portal.access. Uses its own
+          MemberPortalLayout (no admin nav). E1 + E8 + E9 are wired this turn; E2-E7 land
+          subsequently and route to placeholder cards until then. */}
+      <Route
+        path="/portal/me"
+        element={
+          <RequireAuth>
+            <RequirePermission anyOf={['portal.access']}><MemberPortalLayout /></RequirePermission>
+          </RequireAuth>
+        }
+      >
+        <Route index element={<MemberHomePage />} />
+        <Route path="login-history" element={<MemberLoginHistoryPage />} />
+        <Route path="profile" element={<PortalMemberProfilePage />} />
+        <Route path="contributions" element={<MemberContributionsPage />} />
+        <Route path="commitments" element={<MemberCommitmentsPage />} />
+        <Route path="qarzan-hasana" element={<MemberQhPage />} />
+        <Route path="guarantor-inbox" element={<MemberGuarantorInboxPage />} />
+        <Route path="events" element={<MemberEventsPage />} />
+      </Route>
       <Route
         element={
           <RequireAuth>
@@ -90,8 +130,12 @@ export function App() {
         <Route path="ledger" element={<Gate anyOf={['accounting.view']}><LedgerPage /></Gate>} />
         <Route path="reports" element={<Gate anyOf={['reports.view']}><ReportsPage /></Gate>} />
         <Route path="reports/:reportSlug" element={<Gate anyOf={['reports.view']}><ReportsPage /></Gate>} />
-        <Route path="dashboards" element={<Gate anyOf={['reports.view', 'accounting.view', 'admin.audit', 'qh.view', 'member.view']}><DashboardsPage /></Gate>} />
-        <Route path="dashboards/:dashSlug" element={<Gate anyOf={['reports.view', 'accounting.view', 'admin.audit', 'qh.view', 'member.view']}><DashboardsPage /></Gate>} />
+        <Route path="dashboards" element={<Gate anyOf={['reports.view', 'accounting.view', 'admin.audit', 'qh.view', 'member.view', 'event.view', 'family.view', 'enrollment.view']}><DashboardsPage /></Gate>} />
+        <Route path="dashboards/:dashSlug" element={<Gate anyOf={['reports.view', 'accounting.view', 'admin.audit', 'qh.view', 'member.view', 'event.view', 'family.view', 'enrollment.view']}><DashboardsPage /></Gate>} />
+        <Route path="dashboards/events/:eventId" element={<Gate anyOf={['event.view']}><EventDetailDashboardPage /></Gate>} />
+        <Route path="dashboards/fund-types/:fundTypeId" element={<Gate anyOf={['accounting.view']}><FundTypeDetailDashboardPage /></Gate>} />
+        <Route path="dashboards/members/:memberId" element={<Gate anyOf={['member.view']}><MemberDetailDashboardPage /></Gate>} />
+        <Route path="dashboards/commitments/:commitmentId" element={<Gate anyOf={['reports.view']}><CommitmentDetailDashboardPage /></Gate>} />
         <Route path="admin" element={<Gate anyOf={['admin.users', 'admin.roles', 'admin.masterdata', 'admin.integration', 'admin.audit', 'admin.errorlogs']}><AdministrationPage /></Gate>} />
         <Route path="admin/users" element={<Gate anyOf={['admin.users', 'admin.roles']}><UsersPage /></Gate>} />
         <Route path="admin/master-data" element={<Gate anyOf={['admin.masterdata']}><MasterDataPage /></Gate>} />

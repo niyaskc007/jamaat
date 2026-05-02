@@ -22,4 +22,11 @@ public sealed record NotificationMessage(
     string? RecipientEmail,
     Guid? RecipientUserId,
     Guid? SourceId,
-    string? SourceReference);
+    string? SourceReference,
+    /// E.164 phone number (e.g. +9715xxxxxxx) - used when the resolved channel is Sms or
+    /// WhatsApp. Null disables those channels for this message and falls back to email/log.
+    string? RecipientPhoneE164 = null,
+    /// Explicit channel override. Null = NotificationSender picks based on what's configured
+    /// + what the recipient has on file. Set to force a specific channel for this one message
+    /// (e.g. UserWelcome should always reach SMS even if email is preferred).
+    NotificationChannel? PreferredChannel = null);

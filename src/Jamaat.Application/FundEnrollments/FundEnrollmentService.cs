@@ -210,7 +210,7 @@ public sealed class FundEnrollmentService(
             x.SubType, x.Recurrence,
             x.StartDate, x.EndDate,
             x.Status,
-            x.ApprovedByUserName, x.ApprovedAtUtc,
+            x.ApprovedByUserId, x.ApprovedByUserName, x.ApprovedAtUtc,
             x.Notes,
             db.Receipts.SelectMany(r => r.Lines).Where(l => l.FundEnrollmentId == x.Id).Sum(l => (decimal?)l.Amount) ?? 0m,
             db.Receipts.Count(r => r.Lines.Any(l => l.FundEnrollmentId == x.Id)),

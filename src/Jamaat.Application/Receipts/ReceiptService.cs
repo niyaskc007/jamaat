@@ -962,7 +962,7 @@ Jamaat";
             e.AmountTotal, e.Currency, e.FxRate, e.BaseCurrency, e.BaseAmountTotal,
             e.PaymentMode, e.ChequeNumber, e.ChequeDate,
             e.BankAccountId, bankName, e.PaymentReference, e.Remarks, e.Status,
-            e.ConfirmedAtUtc, e.ConfirmedByUserName, e.CreatedAtUtc,
+            e.ConfirmedAtUtc, e.ConfirmedByUserId, e.ConfirmedByUserName, e.CreatedAtUtc,
             e.Lines.Select(l =>
             {
                 var f = funds.First(x => x.Id == l.FundTypeId);

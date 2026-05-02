@@ -26,6 +26,23 @@
   --jm-danger:  #DC2626;
   --jm-info:    #2563EB;
 
+  /* Soft tints used as row/card backgrounds + icon-tile washes. Computed once here so
+     a brand-colour swap automatically refreshes every "success-bg / failed-bg" surface
+     across the app. Override these in a tenant-skin sheet to re-theme without touching
+     component code. */
+  --jm-success-bg-soft: rgba(10, 135, 84, 0.08);
+  --jm-success-fg-strong: #16A34A;
+  --jm-danger-bg-soft:  rgba(220, 38, 38, 0.06);
+  --jm-danger-fg-strong: #DC2626;
+  --jm-warning-bg-soft: rgba(217, 119, 6, 0.08);
+  --jm-info-bg-soft:    rgba(37, 99, 235, 0.08);
+  --jm-info-fg-strong:  #0E7490;
+  --jm-neutral-fg-strong: #475569;
+
+  /* Foreground used over strong colored fills (success/danger/primary chips, avatars).
+     Always white in light mode; flip to a near-white in any future dark theme. */
+  --jm-on-strong: #FFFFFF;
+
   /* Neutrals (warm) */
   --jm-gray-50:  #F8FAFC;
   --jm-gray-100: #F1F4F7;
@@ -37,6 +54,17 @@
   --jm-gray-700: #334155;
   --jm-gray-800: #1E293B;
   --jm-gray-900: #0F172A;
+
+  /* Brand gradient used by the auth + change-password screens. Single source of truth so a
+     re-skin only needs to touch the two stop colours below. */
+  --jm-brand-gradient: linear-gradient(135deg, var(--jm-primary-700) 0%, var(--jm-primary-500) 55%, #0E1B26 100%);
+
+  /* Avatar background colours - keyed to identifier kind. ITS = info-strong, email = brand. */
+  --jm-avatar-its: var(--jm-info-fg-strong);
+  --jm-avatar-email: var(--jm-primary-500);
+
+  /* Subtle ring used on flags + small inline media so they read against any surface. */
+  --jm-ring-soft: 0 0 0 1px rgba(15, 23, 42, 0.08);
 
   /* Sidebar (dark chrome) */
   --jm-sider-bg: #0E1B26;

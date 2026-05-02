@@ -27,8 +27,8 @@ export type Voucher = {
   paymentMode: PaymentMode; chequeNumber?: string | null; chequeDate?: string | null;
   drawnOnBank?: string | null; bankAccountId?: string | null; bankAccountName?: string | null;
   paymentDate?: string | null; remarks?: string | null; status: VoucherStatus;
-  approvedByUserName?: string | null; approvedAtUtc?: string | null;
-  paidByUserName?: string | null; paidAtUtc?: string | null;
+  approvedByUserId?: string | null; approvedByUserName?: string | null; approvedAtUtc?: string | null;
+  paidByUserId?: string | null; paidByUserName?: string | null; paidAtUtc?: string | null;
   createdAtUtc: string;
   lines: VoucherLine[];
   /// Set when status === PendingClearance: the linked PostDatedCheque tracking the future-dated cheque.

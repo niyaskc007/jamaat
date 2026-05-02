@@ -1,374 +1,115 @@
-# AI Development Rules
+# Working Rules
 
-You are working on an enterprise-grade software project. Do not behave like a quick code generator. Behave like a senior software engineer who understands architecture, maintainability, testing, and production risk.
+These rules govern every batch of work delivered against this codebase. They override convenience or speed.
 
-## 1. Follow the Existing Architecture
+## 1. Planning and Task Tracking
 
-Before making changes, understand the current project structure, naming conventions, dependency flow, and architecture.
+1. Always understand the existing requirement, codebase, architecture, folder structure, naming conventions, dependencies, and implemented patterns before making changes.
+2. Always convert every requested item into a clear, detailed to-do list before starting execution.
+3. Each to-do item must include enough detail to make the expected outcome, implementation scope, and completion criteria clear.
+4. Keep the to-do list continuously updated throughout the work, marking items as pending, in progress, completed, blocked, or failed.
+5. Always maintain clear visibility of what has been completed, what is currently being worked on, and what is still pending.
+6. Continue working through all dependent tasks until the full requested scope is completed, not just the first visible issue.
+7. Do not stop midway unless there is a real blocker that cannot be resolved without my input.
+8. If a blocker occurs, clearly explain what is blocked, why it is blocked, what was already attempted, and what exact input is required from me.
+9. Do not ask me to review or confirm after every small step, phase, or partial implementation.
+10. My review should be requested only once, after all planned phases, waves, and related tasks are fully completed.
+11. Do not provide partial delivery as final output.
+12. Do not silently reduce scope, skip edge cases, or replace requested behavior with a simpler shortcut.
 
-You must follow the existing architecture unless explicitly instructed otherwise.
+---
 
-Do not create random folders, duplicate services, duplicate models, or parallel implementations just because it is easier.
+## 2. Requirement and Codebase Understanding
 
-Respect separation of concerns:
+13. Do not guess missing requirements, missing files, APIs, models, database structure, routes, or business logic. Inspect the existing implementation first and make decisions based on evidence.
+14. Always keep implementation aligned with the original business requirement.
+15. Do not create duplicate models, services, DTOs, ViewModels, components, pages, APIs, repositories, utilities, constants, or enums when an existing reusable implementation already exists.
+16. Always reuse existing shared components, helpers, services, validators, constants, enums, themes, layouts, and design patterns wherever applicable.
+17. Do not hardcode IDs, tenant IDs, organization IDs, URLs, credentials, role names, status values, magic strings, or configuration values unless explicitly approved.
+18. All configuration values must be placed in the correct configuration layer, environment file, database setting, options class, or secrets store as per the project architecture.
 
-- UI code must stay in the UI layer.
-- API controllers must only handle request/response flow.
-- Business logic must stay in services.
-- Data access must stay in repositories or infrastructure layer.
-- DTOs, ViewModels, Entities, and Models must not be mixed.
-- Shared logic must go into reusable services/helpers, not copied across pages.
+---
 
-If the project follows Clean Architecture, maintain proper dependency direction.
+## 3. Architecture and Layering
 
-## 2. Do Not Guess
+19. Always respect the agreed solution hierarchy, dependency direction, project separation, naming conventions, namespace rules, and clean architecture boundaries.
+20. Ensure all models, DTOs, ViewModels, entities, services, repositories, interfaces, validators, controllers, pages, and components are placed in their correct projects, folders, namespaces, and layers.
+21. Controllers must not directly call the database, DbContext, repositories, or low-level data access logic unless the approved architecture explicitly allows it.
+22. Controllers must only handle request routing, input validation coordination, authorization checks, response shaping, and delegation to the correct service/application layer.
+23. Business logic must stay in the service/application layer, not inside controllers, UI components, repositories, or database scripts.
+24. Data access logic must stay inside the repository/infrastructure layer, not inside controllers, UI pages, components, or services that should remain persistence-agnostic.
+25. UI components/pages must not directly call the database or bypass the approved API/service layer.
+26. Automatically review the implementation for architecture violations, misplaced files, wrong namespaces, direct database access, duplicated logic, hardcoded dependencies, and broken layering.
+27. Automatically fix architecture, hierarchy, and layering violations before asking me to test or review anything.
+28. Do not mark the task as complete if the architecture is technically working but structurally wrong. Functionality alone is not enough; the implementation must follow the approved architecture.
 
-Never guess missing requirements, table names, API contracts, route names, enum values, field names, or business logic.
+---
 
-If something is unclear:
+## 4. Database, API, and Integration Quality
 
-- First inspect the existing codebase.
-- Search for similar implementations.
-- Check models, services, migrations, APIs, frontend usage, and tests.
-- Only make a safe assumption if the existing code clearly supports it.
-- Document any assumption clearly.
+29. Always validate database changes, migrations, seed data, indexes, relationships, constraints, nullable fields, delete behavior, and backward compatibility before final delivery.
+30. Always ensure API contracts are complete, consistent, version-safe, documented, and aligned with frontend usage.
+31. Always check integration points, external APIs, background jobs, queues, webhooks, scheduled tasks, and retry behavior if the change touches connected systems.
+32. Never hide real failures using dummy data, fallback data, fake success messages, placeholder screens, or silent exception handling.
+33. Always handle errors properly with user-friendly messages on the frontend and safe technical logging on the backend.
 
-Do not invent fake fields, fake endpoints, fake sample data, or fake services.
+---
 
-## 3. Understand Before Changing
+## 5. UI/UX Completion
 
-Before editing code, analyze:
+34. Always ensure the full UI/UX is built, not only backend logic or placeholder screens.
+35. UI/UX must include complete pages, forms, buttons, validation messages, loading states, empty states, error states, success messages, and responsive behavior.
+36. Always implement proper loading states, empty states, validation states, permission-denied states, failed states, and retry/recovery options where relevant.
+37. Do not claim UI/UX is complete unless it has been visually checked and tested through actual frontend execution.
 
-- What feature or bug is being addressed.
-- Which files are affected.
-- Existing related implementation.
-- Possible side effects.
-- Database impact.
-- API impact.
-- UI impact.
-- Permission/security impact.
-- Test impact.
+---
 
-Do not blindly patch symptoms. Fix the actual root cause.
+## 6. Security, Access Control, and Audit
 
-## 4. No Placeholder or Fake Completion
+38. Always perform a security review and fix identified security issues, including authentication, authorization, input validation, data exposure, secrets handling, API protection, and permission gaps.
+39. Always check role-based access control, permissions, tenant/org scoping, ownership rules, and data isolation before marking work complete.
+40. Always check audit logging and history tracking where the feature changes business-critical data, approvals, financial data, user access, configuration, or workflow state.
 
-Do not say "done", "completed", or "working" unless it has been actually implemented and tested.
+---
 
-Avoid fake progress statements such as:
+## 7. Performance and Maintainability
 
-- "This should work"
-- "Everything is fixed"
-- "Production ready"
-- "Fully implemented"
+41. Always check performance impact, including unnecessary database queries, N+1 queries, missing pagination, missing indexes, large payloads, slow UI rendering, and inefficient loops.
+42. Always perform code review and fix code quality, structure, naming, duplication, maintainability, and architecture issues before final delivery.
+43. Always perform proper QC before declaring any task completed.
 
-Unless you have verified it through build, runtime test, and functional test.
+---
 
-If something is partial, say clearly:
+## 8. Testing and Verification
 
-> Implemented partially. Pending items are: ...
+44. Always update or create relevant tests, including unit tests, integration tests, API tests, UI tests, and regression tests based on the scope of the change.
+45. Always test the frontend using proper browser-based testing tools such as Playwright or equivalent.
+46. Frontend tests must verify real user flows, navigation, form submissions, validations, permissions, error handling, and expected UI behavior.
+47. If frontend tests fail, automatically investigate, fix the issues, and rerun the tests until the flow passes.
+48. Always run build, lint, type-checking, formatting, tests, migrations, and frontend validation before asking me to review.
+49. Do not ask me to test until the implementation has passed architecture review, QC, code review, security review, UI/UX validation, and frontend testing.
+50. Do not claim "all done" unless QC, code review, security review, UI/UX validation, and frontend testing are completed and issues are fixed.
+51. Do not mark anything as completed unless it has been implemented and verified.
+52. Do not claim completion based only on code changes. Completion requires implementation, review, testing, verification, and documented evidence.
 
-## 5. Build and Test Before Claiming Completion
+---
 
-After code changes, you must run the appropriate validation steps.
+## 9. Final Delivery
 
-At minimum:
+53. Always provide a final evidence-based completion report showing what was changed, what was tested, what passed, what failed, what was fixed, and what remains risky.
+54. Final delivery must include the full completed scope, implementation summary, completed task list, pending or failed items if any, testing performed, and known risks or limitations.
 
-- Restore dependencies if needed.
-- Build the backend.
-- Build the frontend.
-- Run available unit tests.
-- Run lint/type checks if applicable.
-- Start the application if possible.
-- Test the changed flow manually or with automated tests.
-
-For web applications, use Playwright or equivalent browser automation to verify the actual user flow.
-
-Do not rely only on compilation. Compilation does not prove the feature works.
-
-## 6. Use Playwright for Real UI Validation
-
-For frontend or full-stack features, test using Playwright wherever possible.
-
-Playwright test should verify:
-
-- Page loads successfully.
-- No console errors.
-- User can perform the intended action.
-- API calls return expected results.
-- UI updates correctly.
-- Validation messages work.
-- Save/update/delete flows work.
-- Permissions behave correctly.
-- Empty/error/loading states are handled properly.
-
-Do not say the UI is working unless it was opened and tested in a browser.
-
-## 7. Do Not Break Existing Features
-
-Before changing shared code, check where else it is used.
-
-Shared components, base services, generic repositories, layout files, auth logic, routing, and global styles must be handled carefully.
-
-Any change to shared logic must consider regression risk.
-
-If a change may affect other modules, mention it clearly and test at least the most important affected areas.
-
-## 8. Preserve Existing Features and Styling
-
-Do not remove working features while implementing a new one.
-
-Do not simplify the UI by deleting existing functionality unless explicitly requested.
-
-Do not replace existing design with basic/default styling unless instructed.
-
-If migration or refactoring is required, preserve:
-
-- Existing pages
-- Existing workflows
-- Existing styling
-- Existing validations
-- Existing permissions
-- Existing data flow
-- Existing API contracts
-
-## 9. Follow Naming Conventions Strictly
-
-Use the naming conventions already used in the project.
-
-Do not create inconsistent names.
-
-Examples:
-
-- If the project uses `DashboardModel`, do not create `Dashboard`, `DashboardDto`, or `ReportBoard` randomly.
-- If ViewModels must be in a specific namespace, follow it exactly.
-- If enums are stored as strings, do not change them to integers.
-- If files are one class per file, follow that rule.
-
-Consistency is more important than personal preference.
-
-## 10. Keep Code Clean and Maintainable
-
-Write code that another developer can maintain.
-
-Avoid:
-
-- Huge methods
-- Repeated code
-- Hardcoded values
-- Magic strings
-- Unclear variable names
-- Dead code
-- Commented-out blocks
-- Unused imports
-- Duplicate components
-- Business logic inside UI pages
-- SQL injection risks
-- Temporary hacks
-
-Prefer:
-
-- Small focused methods
-- Reusable services
-- Strong typing
-- Clear validation
-- Centralized constants
-- Proper error handling
-- Meaningful logs
-- Clean dependency injection
-
-## 11. Handle Errors Properly
-
-Do not hide errors.
-
-Every important operation should have proper error handling.
-
-Backend errors should return meaningful responses.
-
-Frontend errors should show useful messages to the user.
-
-Do not silently fail.
-
-Do not use fake fallback data to hide failures.
-
-If database/API connection fails, show a clear error instead of rendering dummy content.
-
-## 12. Respect Security and Permissions
-
-Do not bypass authentication or authorization to make a feature work.
-
-Check:
-
-- Is the user authenticated?
-- Does the user have permission?
-- Is tenant/org scope applied?
-- Is sensitive data protected?
-- Are API keys, tokens, and passwords kept out of code?
-- Are inputs validated?
-- Are SQL queries parameterized?
-- Are audit logs required?
-
-Never hardcode credentials, tokens, tenant IDs, organization IDs, or user IDs.
-
-## 13. Database Changes Must Be Controlled
-
-Do not casually change database schema.
-
-Before changing schema, check:
-
-- Existing entity model
-- Existing migrations
-- Existing relationships
-- Existing seed data
-- Existing APIs and UI that depend on the table
-- Backward compatibility
-
-If a migration is needed, create it properly.
-
-Do not delete data or drop columns unless explicitly instructed.
-
-For production-like systems, assume old data must be preserved.
-
-## 14. APIs Must Be Stable and Consistent
-
-Do not break existing API contracts unless explicitly required.
-
-For APIs:
-
-- Use consistent route naming.
-- Use proper HTTP methods.
-- Validate request models.
-- Return consistent response formats.
-- Use proper status codes.
-- Avoid exposing internal entity models directly if DTOs are used.
-- Keep backward compatibility where possible.
-
-If API behavior changes, mention the impact clearly.
-
-## 15. UI Must Be Tested as a User Would Use It
-
-Do not only check code.
-
-Open the relevant page and test the real workflow:
-
-- Create
-- View
-- Edit
-- Delete
-- Search/filter
-- Save
-- Cancel
-- Validation
-- Error handling
-- Refresh/reload behavior
-- Permission-based visibility
-
-If a feature is not visible or usable from the UI, it is not complete.
-
-## 16. Avoid Overengineering
-
-Do not introduce unnecessary frameworks, patterns, libraries, or abstractions.
-
-Before adding a new package, check whether the project already has a solution.
-
-Use the simplest clean approach that fits the existing architecture.
-
-Do not create a complex engine for a simple requirement.
-
-## 17. Avoid Underengineering
-
-Do not solve enterprise requirements with quick hacks.
-
-If the requirement involves workflow, audit, permissions, reporting, integration, or finance, treat it as a proper business feature.
-
-Do not put critical business rules only in the frontend.
-
-Backend validation is mandatory.
-
-## 18. Keep Auditability in Mind
-
-For business-critical actions, ensure proper audit logging where applicable.
-
-Audit should capture:
-
-- Who performed the action
-- What changed
-- Previous value
-- New value
-- Timestamp
-- Related entity
-- Action type
-- Failure reason, if any
-
-Do not overwrite important data without traceability.
-
-## 19. Multi-Tenant / Organization Scope Must Be Preserved
-
-If the application supports multiple organizations, tenants, branches, departments, or business units, every query and operation must respect that scope.
-
-Do not show one organization's data to another.
-
-Do not hardcode organization context.
-
-Do not assume global access unless the role clearly allows it.
-
-## 20. Do Not Create Duplicate Implementations
-
-Before creating a new service, component, helper, model, enum, or API, search if one already exists.
-
-Reuse and extend existing implementation where appropriate.
-
-Duplicate logic creates long-term damage.
-
-## 21. Refactor Safely
-
-Refactoring is allowed only when it improves the code without changing expected behavior.
-
-Before refactoring:
-
-- Understand current behavior.
-- Identify affected files.
-- Make small changes.
-- Build and test after changes.
-- Avoid mixing huge refactoring with feature implementation unless necessary.
-
-## 22. Keep Changes Focused
-
-Do not modify unrelated files.
-
-Do not reformat large files unnecessarily.
-
-Do not change global configuration unless required.
-
-Do not upgrade packages unless the task requires it.
-
-Every changed file must have a reason.
-
-## 23. Explain What Was Changed
-
-At the end of the task, provide a clear summary:
-
-- Files changed
-- What was implemented
-- What was fixed
-- What was tested
-- What could not be tested
-- Remaining risks or pending work
-
-Do not hide limitations.
-
-## 24. Testing Report Is Mandatory
-
-Before final response, provide a testing report.
-
-The report should include:
-
-```text
-Build: Passed / Failed / Not Run
-Unit Tests: Passed / Failed / Not Available / Not Run
-API Tests: Passed / Failed / Not Run
-UI Test: Passed / Failed / Not Run
-Playwright Test: Passed / Failed / Not Run
-Known Issues:
-Pending Items:
-```
+---
+
+## 10. Styling and Design System
+
+55. Do not define colors, typography, spacing, shadows, borders, layout rules, or repeated visual styles directly inline inside pages or components unless there is a justified one-off exception.
+56. All common styling must be managed through the approved app-level styling system, such as global CSS, theme files, design tokens, Tailwind configuration, SCSS variables, Radzen theme settings, shadcn theme configuration, or equivalent project-level styling structure.
+57. Reusable UI styles must be extracted into shared CSS classes, theme variables, component variants, layout utilities, or shared design-system components.
+58. Do not duplicate the same styling across multiple pages, components, or modules. Repeated styling must be centralized and reused.
+59. Colors, fonts, spacing, border radius, shadows, z-index values, breakpoints, and component states must follow the approved design system or app-level theme configuration.
+60. Page-level styling is allowed only for layout-specific adjustments that are unique to that page and cannot reasonably be reused elsewhere.
+61. Inline styling is allowed only for dynamic values generated at runtime, temporary debugging, or unavoidable third-party component constraints, and it must be documented or refactored before final delivery wherever possible.
+62. Before final delivery, automatically review the UI code for inline styles, duplicated CSS, inconsistent colors, hardcoded visual values, and styling that should be moved to app-level CSS or theme configuration.
+63. Automatically refactor styling issues into the correct global CSS, theme, design-token, or shared component location before asking me to review.
+64. Do not claim UI/UX is complete if styling is scattered, duplicated, hardcoded, inconsistent, or not aligned with the app-level design system.

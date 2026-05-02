@@ -66,8 +66,8 @@ public sealed class ErrorLogRepository(JamaatDbContext db) : IErrorLogRepository
                 e.ExceptionType, e.StackTrace, e.Endpoint, e.HttpMethod, e.HttpStatus,
                 e.CorrelationId, e.UserId, e.UserName, e.UserRole, e.IpAddress, e.UserAgent,
                 e.Fingerprint, e.OccurredAtUtc,
-                e.ReviewedAtUtc, e.ReviewedByUserName,
-                e.ResolvedAtUtc, e.ResolvedByUserName, e.ResolutionNote))
+                e.ReviewedAtUtc, e.ReviewedByUserId, e.ReviewedByUserName,
+                e.ResolvedAtUtc, e.ResolvedByUserId, e.ResolvedByUserName, e.ResolutionNote))
             .ToListAsync(ct);
 
         return new PagedResult<ErrorLogDto>(items, total, query.Page, query.PageSize);

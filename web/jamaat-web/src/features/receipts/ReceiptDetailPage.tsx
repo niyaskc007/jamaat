@@ -5,6 +5,7 @@ import { Card, Descriptions, Tag, Table, Button, Space, Spin, Alert, App as Antd
 import { PrinterOutlined, RollbackOutlined, StopOutlined, ArrowLeftOutlined, RedoOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
+import { UserHoverCard } from '../../shared/ui/UserHoverCard';
 import { money, formatDateTime } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
 import { receiptsApi, PaymentModeLabel, ReceiptStatusLabel, type ReceiptStatus, type Receipt, type PaymentMode } from './receiptsApi';
@@ -142,7 +143,18 @@ export function ReceiptDetailPage() {
           </Tag>
           <span style={{ color: 'var(--jm-gray-500)', fontSize: 13 }}>
             Created {formatDateTime(data.createdAtUtc)}
-            {data.confirmedAtUtc ? ` · Confirmed ${formatDateTime(data.confirmedAtUtc)}${data.confirmedByUserName ? ` by ${data.confirmedByUserName}` : ''}` : ''}
+            {data.confirmedAtUtc && (
+              <>
+                {' · Confirmed '}{formatDateTime(data.confirmedAtUtc)}
+                {data.confirmedByUserName && (
+                  <>
+                    {' by '}
+                    <UserHoverCard userId={data.confirmedByUserId ?? null}
+                      fallback={data.confirmedByUserName} />
+                  </>
+                )}
+              </>
+            )}
           </span>
         </div>
         <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 3 }}>

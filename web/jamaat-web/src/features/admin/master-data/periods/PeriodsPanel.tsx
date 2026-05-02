@@ -6,6 +6,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { extractProblem } from '../../../../shared/api/client';
 import { formatDate, formatDateTime } from '../../../../shared/format/format';
 import { periodsApi, type FinancialPeriod } from '../../../ledger/ledgerApi';
+import { UserHoverCard } from '../../../../shared/ui/UserHoverCard';
 
 export function PeriodsPanel() {
   const qc = useQueryClient();
@@ -41,7 +42,12 @@ export function PeriodsPanel() {
               render: (s: 1 | 2) => s === 1
                 ? <Tag style={{ margin: 0, background: '#D1FAE5', color: '#065F46', border: 'none', fontWeight: 500 }}>Open</Tag>
                 : <Tag style={{ margin: 0, background: '#E5E9EF', color: '#475569', border: 'none', fontWeight: 500 }}>Closed</Tag> },
-            { title: 'Closed at', key: 'c', render: (_, row) => row.closedAtUtc ? <span style={{ fontSize: 12 }}>{formatDateTime(row.closedAtUtc)}{row.closedByUserName ? ` · ${row.closedByUserName}` : ''}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
+            { title: 'Closed at', key: 'c', render: (_, row) => row.closedAtUtc
+              ? <span style={{ fontSize: 12 }}>
+                  {formatDateTime(row.closedAtUtc)}
+                  {row.closedByUserName && <> · <UserHoverCard userId={row.closedByUserId ?? null} fallback={row.closedByUserName} /></>}
+                </span>
+              : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
             { title: '', key: 'a', width: 200, render: (_, row) => row.status === 1 ? (
               <Button icon={<LockOutlined />} danger size="small"
                 onClick={() => modal.confirm({

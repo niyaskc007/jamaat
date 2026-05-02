@@ -40,6 +40,7 @@ public sealed record CommitmentInstallmentDto(
     InstallmentStatus Status,
     string? WaiverReason,
     DateTimeOffset? WaivedAtUtc,
+    Guid? WaivedByUserId,
     string? WaivedByUserName,
     /// <summary>The most recent receipt that contributed a payment to this installment.
     /// Lets the UI render the "Last payment" cell as a clickable link, so the cashier can
@@ -87,6 +88,7 @@ public sealed record CommitmentPaymentRowDto(
     string? PaymentReference,
     string? Remarks,
     DateTimeOffset? ConfirmedAtUtc,
+    Guid? ConfirmedByUserId,
     string? ConfirmedByUserName);
 
 public sealed record CreateCommitmentDto(

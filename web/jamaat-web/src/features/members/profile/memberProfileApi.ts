@@ -88,7 +88,9 @@ export type MemberProfile = {
   // Hajj + Umrah (v2)
   hajjStatus: HajjStatus; hajjYear?: number | null; umrahCount: number;
   dataVerificationStatus: VerificationStatus; dataVerifiedOn?: string | null;
+  dataVerifiedByUserId?: string | null; dataVerifiedByUserName?: string | null;
   photoVerificationStatus: VerificationStatus; photoVerifiedOn?: string | null;
+  photoVerifiedByUserId?: string | null; photoVerifiedByUserName?: string | null;
   photoUrl?: string | null;
   lastScannedEventId?: string | null; lastScannedEventName?: string | null; lastScannedPlace?: string | null; lastScannedAtUtc?: string | null;
   status: number; inactiveReason?: string | null;

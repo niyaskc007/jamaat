@@ -17,6 +17,7 @@ public sealed class MemberService : IMemberService
     private readonly IValidator<CreateMemberDto> _createValidator;
     private readonly IValidator<UpdateMemberDto> _updateValidator;
     private readonly IExcelReader _excelReader;
+    private readonly IMemberLoginProvisioningService? _loginProvisioning;
 
     public MemberService(
         IMemberRepository repo,
@@ -24,7 +25,8 @@ public sealed class MemberService : IMemberService
         ITenantContext tenant,
         IValidator<CreateMemberDto> createValidator,
         IValidator<UpdateMemberDto> updateValidator,
-        IExcelReader excelReader)
+        IExcelReader excelReader,
+        IMemberLoginProvisioningService? loginProvisioning = null)
     {
         _repo = repo;
         _uow = uow;
@@ -32,6 +34,7 @@ public sealed class MemberService : IMemberService
         _createValidator = createValidator;
         _updateValidator = updateValidator;
         _excelReader = excelReader;
+        _loginProvisioning = loginProvisioning;
     }
 
     public async Task<PagedResult<MemberDto>> ListAsync(MemberListQuery query, CancellationToken ct = default)
@@ -74,6 +77,16 @@ public sealed class MemberService : IMemberService
 
         await _repo.AddAsync(member, ct);
         await _uow.SaveChangesAsync(ct);
+
+        // Best-effort self-service login provisioning. If this throws (Identity unavailable,
+        // role-claim hiccup), we do not fail the Member create - admins can re-provision later
+        // via the bulk-enable flow. The failure is logged inside the service.
+        if (_loginProvisioning is not null)
+        {
+            try { _ = await _loginProvisioning.ProvisionAsync(member, ct); }
+            catch { /* swallowed - logged inside the service */ }
+        }
+
         return Map(member);
     }
 
@@ -169,6 +182,14 @@ public sealed class MemberService : IMemberService
         }
 
         if (committed > 0) await _uow.SaveChangesAsync(ct);
+
+        // Auto-provision logins for any newly-added Members (idempotent - existing users skipped).
+        // Best-effort: a provisioning failure does not roll back the import.
+        if (committed > 0 && _loginProvisioning is not null)
+        {
+            try { _ = await _loginProvisioning.BackfillTenantAsync(ct); } catch { /* logged inside */ }
+        }
+
         return new ImportResult(rows.Count, committed, errors);
     }
 

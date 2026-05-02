@@ -14,6 +14,12 @@ public enum NotificationKind
     ContributionReturned = 4,
     /// <summary>A QH loan was disbursed - notify the borrower.</summary>
     QhLoanDisbursed = 5,
+    /// <summary>A new self-service login was enabled for a member - send their welcome
+    /// message with their temporary password and the portal URL.</summary>
+    UserWelcome = 6,
+    /// <summary>An admin re-issued a temporary password - notify the user that their old
+    /// temp pw is no longer valid and share the new one.</summary>
+    TempPasswordIssued = 7,
 }
 
 /// <summary>How the notification was delivered (or attempted). Multiple channels can be
@@ -24,6 +30,10 @@ public enum NotificationChannel
     /// is configured, so the audit trail is captured even before a real transport is wired.</summary>
     LogOnly = 1,
     Email = 2,
+    /// <summary>Sent through the active SMS provider (Twilio / Unifonic / Infobip / Plivo).</summary>
+    Sms = 3,
+    /// <summary>Sent through the active WhatsApp provider (Twilio Business API).</summary>
+    WhatsApp = 4,
 }
 
 /// <summary>Outcome of an attempt. Logged so admins can see the failure rate at a glance.</summary>
