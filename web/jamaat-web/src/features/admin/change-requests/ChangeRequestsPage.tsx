@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Card, Table, Tag, Button, Space, Tabs, Modal, Input, App as AntdApp, Empty, Drawer, Descriptions, Alert } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
@@ -29,7 +29,7 @@ export function ChangeRequestsPage() {
     <div>
       <PageHeader title="Member change requests"
         subtitle="Edits submitted by members or data editors awaiting verification. Approve to apply; reject with a note." />
-      <Card style={{ border: '1px solid var(--jm-border)' }}>
+      <Card className="jm-card">
         <Tabs defaultActiveKey="pending"
           items={[
             { key: 'pending', label: 'Pending', children: <RequestList status={1} /> },

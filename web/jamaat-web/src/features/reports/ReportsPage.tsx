@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Card, DatePicker, Table, Select, Empty, Button, Switch, InputNumber, Row, Col } from 'antd';
 import {
   DownloadOutlined, ArrowLeftOutlined,
@@ -170,7 +170,7 @@ function ReportsQuickStats() {
   if (!data) return null;
   const tile = (label: string, value: React.ReactNode, color?: string) => (
     <Col xs={12} md={6}>
-      <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+      <Card size="small" className="jm-card">
         <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
         <div className="jm-tnum" style={{ fontSize: 20, fontWeight: 700, marginBlockStart: 4, color: color ?? 'var(--jm-gray-900)' }}>{value}</div>
       </Card>
@@ -315,7 +315,7 @@ function CashBook() {
       <div style={{ padding: 12, borderBlockEnd: '1px solid var(--jm-border)', display: 'flex', gap: 8, alignItems: 'center' }}>
         <Select style={{ inlineSize: 280 }} placeholder="Select cash/bank account"
           value={accountId} onChange={setAccountId}
-          options={cashLike.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))} />
+          options={cashLike.map((a) => ({ value: a.id, label: `${a.code} Â· ${a.name}` }))} />
         <RangePicker value={range} onChange={(v) => v && setRange(v as [Dayjs, Dayjs])} />
         <div style={{ flex: 1 }} />
         {hasPermission('reports.export') && accountId && (
@@ -356,7 +356,7 @@ function MemberContribution() {
         <Select style={{ inlineSize: 320 }} placeholder="Select member"
           showSearch optionFilterProp="label"
           value={memberId} onChange={setMemberId}
-          options={(membersQuery.data?.items ?? []).map((m) => ({ value: m.id, label: `${m.itsNumber} · ${m.fullName}` }))} />
+          options={(membersQuery.data?.items ?? []).map((m) => ({ value: m.id, label: `${m.itsNumber} Â· ${m.fullName}` }))} />
         <RangePicker value={range} onChange={(v) => v && setRange(v as [Dayjs, Dayjs])} />
         <div style={{ flex: 1 }} />
         {hasPermission('reports.export') && memberId && (
@@ -405,7 +405,7 @@ function FundBalance() {
           options={(fundsQ.data?.items ?? []).map((f) => ({ value: f.id, label: `${f.code} - ${f.nameEnglish}` }))} />
       </div>
       {!fundTypeId && <Empty description="Select a fund to see its dual-balance view" />}
-      {fundTypeId && isLoading && <div style={{ padding: 24, textAlign: 'center' }}>Loading…</div>}
+      {fundTypeId && isLoading && <div style={{ padding: 24, textAlign: 'center' }}>Loadingâ€¦</div>}
       {data && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           {/* Left column: total cash view */}
@@ -429,7 +429,7 @@ function FundBalance() {
             <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', marginBlockStart: 8 }}>
               Total received: <span className="jm-tnum">{money(data.totalCashReceived, data.currency)}</span>
               <br />
-              Less outstanding obligation: <span className="jm-tnum">−{money(data.outstandingReturnObligation, data.currency)}</span>
+              Less outstanding obligation: <span className="jm-tnum">âˆ’{money(data.outstandingReturnObligation, data.currency)}</span>
               <br />
               Already returned: <span className="jm-tnum">{money(data.alreadyReturned, data.currency)}</span>
             </div>
@@ -479,7 +479,7 @@ function ReturnableContributions() {
         columns={[
           { title: 'Receipt date', dataIndex: 'receiptDate', key: 'rd', width: 120, render: (v: string) => formatDate(v) },
           { title: 'Receipt #', dataIndex: 'receiptNumber', key: 'rn', width: 130, render: (v?: string | null) => v ?? '-' },
-          { title: 'Member', dataIndex: 'memberName', key: 'mn', render: (v: string, row) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.itsNumber}</span> · {v}</span> },
+          { title: 'Member', dataIndex: 'memberName', key: 'mn', render: (v: string, row) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.itsNumber}</span> Â· {v}</span> },
           { title: 'Fund', dataIndex: 'fundTypeName', key: 'f', render: (v: string, row) => `${row.fundTypeCode} - ${v}` },
           { title: 'Amount', dataIndex: 'amountTotal', key: 'a', align: 'right', width: 130, render: (v: number, row) => <span className="jm-tnum">{money(v, row.currency)}</span> },
           { title: 'Returned', dataIndex: 'amountReturned', key: 'rt', align: 'right', width: 130, render: (v: number, row) => v ? <span className="jm-tnum" style={{ color: 'var(--jm-gray-700)' }}>{money(v, row.currency)}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
@@ -552,7 +552,7 @@ function OutstandingLoans() {
       <Table rowKey={(r) => r.loanId} size="middle" loading={isLoading} dataSource={data ?? []} pagination={{ pageSize: 25 }}
         columns={[
           { title: 'Loan #', dataIndex: 'code', key: 'code', width: 120, render: (v: string) => <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{v}</span> },
-          { title: 'Member', key: 'm', render: (_, row) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.memberItsNumber}</span> · {row.memberName}</span> },
+          { title: 'Member', key: 'm', render: (_, row) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.memberItsNumber}</span> Â· {row.memberName}</span> },
           { title: 'Disbursed', dataIndex: 'amountDisbursed', key: 'd', align: 'right', width: 130, render: (v: number, row) => <span className="jm-tnum">{money(v, row.currency)}</span> },
           { title: 'Repaid', dataIndex: 'amountRepaid', key: 'r', align: 'right', width: 130, render: (v: number, row) => <span className="jm-tnum" style={{ color: 'var(--jm-gray-700)' }}>{money(v, row.currency)}</span> },
           { title: 'Outstanding', dataIndex: 'amountOutstanding', key: 'o', align: 'right', width: 140, render: (v: number, row) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, row.currency)}</span> },
@@ -662,7 +662,7 @@ function OverdueReturns() {
         columns={[
           { title: 'Receipt #', dataIndex: 'receiptNumber', key: 'rn', width: 130, render: (v?: string | null) => v ? <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{v}</span> : '-' },
           { title: 'Receipt date', dataIndex: 'receiptDate', key: 'rd', width: 120, render: (v: string) => formatDate(v) },
-          { title: 'Member', key: 'm', render: (_, row) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.itsNumber}</span> · {row.memberName}</span> },
+          { title: 'Member', key: 'm', render: (_, row) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.itsNumber}</span> Â· {row.memberName}</span> },
           { title: 'Fund', dataIndex: 'fundTypeName', key: 'f', render: (v: string, row) => `${row.fundTypeCode} - ${v}` },
           { title: 'Amount', dataIndex: 'amountTotal', key: 'a', align: 'right', width: 120, render: (v: number, row) => <span className="jm-tnum">{money(v, row.currency)}</span> },
           { title: 'Returned', dataIndex: 'amountReturned', key: 'rt', align: 'right', width: 120, render: (v: number, row) => v ? <span className="jm-tnum" style={{ color: 'var(--jm-gray-700)' }}>{money(v, row.currency)}</span> : <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },

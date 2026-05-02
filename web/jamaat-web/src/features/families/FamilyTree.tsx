@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Card, Empty, Tag, Space, Spin, Button } from 'antd';
 import {
   UserOutlined, HeartOutlined, ApartmentOutlined, BranchesOutlined,
@@ -15,7 +15,7 @@ import { familiesApi, type FamilyTreePerson } from './familiesApi';
 ///
 /// When a descendant has spun off into their own family, a "View family" button on their
 /// card lets the user expand the linked family inline. The expand model is **mutually
-/// exclusive with the outer-tree descendants of that branch** — when Idris's family is open,
+/// exclusive with the outer-tree descendants of that branch** â€” when Idris's family is open,
 /// his children move INTO the F-00010 box and disappear from the outer tree's "Grandchild"
 /// row. When closed, the grandchildren are back in the outer tree. So Test Child1 only ever
 /// shows up in one place at a time, depending on whether his father's family is expanded.
@@ -33,7 +33,7 @@ export function FamilyTree({ familyId }: { familyId: string }) {
 
   if (treeQ.isLoading || !treeQ.data) {
     return (
-      <Card title={cardHeader} size="small" style={{ border: '1px solid var(--jm-border)' }}>
+      <Card title={cardHeader} size="small" className="jm-card">
         <div style={{ paddingBlock: 24, textAlign: 'center' }}><Spin /></div>
       </Card>
     );
@@ -42,7 +42,7 @@ export function FamilyTree({ familyId }: { familyId: string }) {
   const tree = treeQ.data;
   if (!tree.head) {
     return (
-      <Card title={cardHeader} size="small" style={{ border: '1px solid var(--jm-border)' }}>
+      <Card title={cardHeader} size="small" className="jm-card">
         <Empty description="No head set on this family - assign a head to render the tree." />
       </Card>
     );
@@ -56,7 +56,7 @@ export function FamilyTree({ familyId }: { familyId: string }) {
     <Card
       title={cardHeader}
       size="small"
-      style={{ border: '1px solid var(--jm-border)' }}
+      className="jm-card"
       extra={hasAnyDescendant ? (
         <Tag color="default" style={{ margin: 0 }}>
           <BranchesOutlined style={{ marginInlineEnd: 4 }} />
@@ -180,7 +180,7 @@ function SiblingRow({ children }: { children: React.ReactNode }) {
 /// One descendant subtree: the person's card on top with a stub up to the sibling bar, then
 /// either:
 ///   - their own children inline (when the linked-family expansion is collapsed), or
-///   - the linked-family expansion box (when expanded) — which itself contains the same
+///   - the linked-family expansion box (when expanded) â€” which itself contains the same
 ///     descendants AND the linked family's spouse + sibling-of-the-couple etc.
 /// The two are mutually exclusive: a member is shown in one or the other, never both, so
 /// Test Child1 doesn't appear twice on screen.
@@ -284,7 +284,7 @@ function ExpandedFamilyView({ linkedFamilyId, familyCode, familyName, onOpenMemb
         marginBlockEnd: 8, textAlign: 'center',
       }}>
         <BranchesOutlined style={{ marginInlineEnd: 4 }} />
-        {familyCode}{familyName ? ` · ${familyName}` : ''}
+        {familyCode}{familyName ? ` Â· ${familyName}` : ''}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
@@ -335,7 +335,7 @@ function PersonCard({ person, familyId, highlight, onOpenMember, canExpandFamily
   isExpanded?: boolean;
   onToggleExpand?: () => void;
 }) {
-  /// A descendant who's spun off into their own family carries a "→ F-002" tag so the user
+  /// A descendant who's spun off into their own family carries a "â†’ F-002" tag so the user
   /// understands the lineage edge crosses households. Clicking the tag NAVIGATES to that
   /// family's full page; clicking the inline-expand button keeps them on this page.
   const livesElsewhere = !person.isInThisFamily && person.currentFamilyId && person.currentFamilyId !== familyId;
@@ -388,7 +388,7 @@ function PersonCard({ person, familyId, highlight, onOpenMember, canExpandFamily
               navigate(`/families?focus=${person.currentFamilyId}`);
             }}
           >
-            → {person.currentFamilyCode}
+            â†’ {person.currentFamilyCode}
           </Tag>
           {/* Inline-expand toggle. Lazy-loads the linked family's tree below this card without
               navigating away. */}

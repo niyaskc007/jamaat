@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Button, Card, Descriptions, Space, Table, Tag, Spin, App as AntdApp, Result, Modal, Input, InputNumber, Progress, Row, Col, Alert, Statistic, Empty } from 'antd';
 import type { TableProps } from 'antd';
 import {
@@ -138,11 +138,11 @@ export function QarzanHasanaDetailPage() {
 
   return (
     <div>
-      <PageHeader title={`QH · ${loan.code}`}
+      <PageHeader title={`QH Â· ${loan.code}`}
         actions={
           <Space wrap>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/qarzan-hasana')}>Back</Button>
-            {/* Agreement is printable at any status — admins often print a draft for guarantor
+            {/* Agreement is printable at any status â€” admins often print a draft for guarantor
                 signatures before disbursement, and after disbursement the same document goes
                 into the loan file. The endpoint returns a styled QuestPDF document. */}
             <Button icon={<FileProtectOutlined />}
@@ -172,35 +172,35 @@ export function QarzanHasanaDetailPage() {
           right-column whitespace gap when LoanDecisionSupport wasn't being rendered. */}
       <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
         <Col xs={12} md={8} lg={Math.floor(24 / 5)}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <Statistic title="Requested" value={loan.amountRequested} precision={2}
               formatter={(v) => money(Number(v), loan.currency)}
               valueStyle={{ fontSize: 16 }} />
           </Card>
         </Col>
         <Col xs={12} md={8} lg={Math.floor(24 / 5)}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <Statistic title="Approved" value={loan.amountApproved} precision={2}
               formatter={(v) => money(Number(v), loan.currency)}
               valueStyle={{ fontSize: 16, color: loan.amountApproved > 0 ? '#0E5C40' : 'var(--jm-gray-400)' }} />
           </Card>
         </Col>
         <Col xs={12} md={8} lg={Math.floor(24 / 5)}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <Statistic title="Disbursed" value={loan.amountDisbursed} precision={2} prefix={<BankOutlined />}
               formatter={(v) => money(Number(v), loan.currency)}
               valueStyle={{ fontSize: 16 }} />
           </Card>
         </Col>
         <Col xs={12} md={8} lg={Math.floor(24 / 5)}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <Statistic title="Repaid" value={loan.amountRepaid} precision={2} prefix={<RiseOutlined />}
               formatter={(v) => money(Number(v), loan.currency)}
               valueStyle={{ fontSize: 16, color: '#0E5C40' }} />
           </Card>
         </Col>
         <Col xs={24} md={8} lg={Math.ceil(24 / 5)}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <Statistic title="Outstanding" value={loan.amountOutstanding} precision={2}
               formatter={(v) => money(Number(v), loan.currency)}
               valueStyle={{ fontSize: 16, fontWeight: 700, color: loan.amountOutstanding > 0 ? '#B45309' : 'inherit' }} />
@@ -354,10 +354,10 @@ export function QarzanHasanaDetailPage() {
 
       <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
         <Col xs={24} lg={inApproval ? 24 : 16}>
-          <Card size="small" title="Loan details" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" title="Loan details" className="jm-card">
             <Descriptions size="small" column={2} bordered
               items={[
-                { key: 'b', label: 'Borrower', children: `${loan.memberName} · ITS ${loan.memberItsNumber}` },
+                { key: 'b', label: 'Borrower', children: `${loan.memberName} Â· ITS ${loan.memberItsNumber}` },
                 { key: 's', label: 'Scheme', children: QhSchemeLabel[loan.scheme] },
                 { key: 'inst', label: 'Installments', children: `${loan.instalmentsApproved || loan.instalmentsRequested}` },
                 { key: 'gold', label: 'Gold amount', children: loan.goldAmount ? <span className="jm-tnum">{money(loan.goldAmount, loan.currency)}</span> : '-' },
@@ -374,17 +374,17 @@ export function QarzanHasanaDetailPage() {
                 ...(loan.level1ApprovedAtUtc ? [{ key: 'l1', label: 'L1 approval', span: 2, children: (
                   <span>
                     <UserHoverCard userId={loan.level1ApproverUserId ?? null}
-                      fallback={loan.level1ApproverName ?? '—'} />
-                    {' · '}{formatDateTime(loan.level1ApprovedAtUtc)}
-                    {loan.level1Comments ? ` · ${loan.level1Comments}` : ''}
+                      fallback={loan.level1ApproverName ?? 'â€”'} />
+                    {' Â· '}{formatDateTime(loan.level1ApprovedAtUtc)}
+                    {loan.level1Comments ? ` Â· ${loan.level1Comments}` : ''}
                   </span>
                 ) }] : []),
                 ...(loan.level2ApprovedAtUtc ? [{ key: 'l2', label: 'L2 approval', span: 2, children: (
                   <span>
                     <UserHoverCard userId={loan.level2ApproverUserId ?? null}
-                      fallback={loan.level2ApproverName ?? '—'} />
-                    {' · '}{formatDateTime(loan.level2ApprovedAtUtc)}
-                    {loan.level2Comments ? ` · ${loan.level2Comments}` : ''}
+                      fallback={loan.level2ApproverName ?? 'â€”'} />
+                    {' Â· '}{formatDateTime(loan.level2ApprovedAtUtc)}
+                    {loan.level2Comments ? ` Â· ${loan.level2Comments}` : ''}
                   </span>
                 ) }] : []),
                 ...(loan.cashflowDocumentUrl || loan.goldSlipDocumentUrl ? [{ key: 'docs', label: 'Documents', span: 2, children: (

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Drawer, Spin, Card, Space, Tag, Button, Table, Descriptions, Select, Empty, App as AntdApp, Modal, Alert, Input, Tabs, Switch, Tooltip } from 'antd';
 import type { TableProps } from 'antd';
 import { CrownOutlined, DeleteOutlined, PlusOutlined, SwapOutlined, TeamOutlined, BranchesOutlined, ApartmentOutlined, UserOutlined } from '@ant-design/icons';
@@ -75,7 +75,7 @@ export function FamilyDetailDrawer({ familyId, onClose }: { familyId: string; on
 
   return (
     <Drawer
-      title={data ? <span><TeamOutlined style={{ marginInlineEnd: 8 }} />{data.family.familyName} <span style={{ color: 'var(--jm-gray-500)', fontWeight: 400 }}>· {data.family.code}</span></span> : 'Family'}
+      title={data ? <span><TeamOutlined style={{ marginInlineEnd: 8 }} />{data.family.familyName} <span style={{ color: 'var(--jm-gray-500)', fontWeight: 400 }}>Â· {data.family.code}</span></span> : 'Family'}
       open
       onClose={onClose}
       width={760}
@@ -112,7 +112,7 @@ export function FamilyDetailDrawer({ familyId, onClose }: { familyId: string; on
                   <Space direction="vertical" size={12} style={{ inlineSize: '100%' }}>
                     <Card
                       size="small"
-                      style={{ border: '1px solid var(--jm-border)' }}
+                      className="jm-card"
                       extra={(() => {
                         // Both Branch off and Transfer headship need at least one non-head
                         // member: branch off takes a non-head member and makes them head of
@@ -154,7 +154,7 @@ export function FamilyDetailDrawer({ familyId, onClose }: { familyId: string; on
                         the operator can jump to it. */}
                     <Card
                       size="small"
-                      style={{ border: '1px solid var(--jm-border)' }}
+                      className="jm-card"
                       title={<span><BranchesOutlined style={{ marginInlineEnd: 6 }} />Extended family ({data.extendedLinks.length})</span>}
                     >
                       {data.extendedLinks.length === 0 ? (
@@ -188,7 +188,7 @@ export function FamilyDetailDrawer({ familyId, onClose }: { familyId: string; on
                               render: (_: unknown, row) => row.currentFamilyId ? (
                                 <Button type="link" size="small" style={{ padding: 0 }}
                                   onClick={() => navigate(`/families?focus=${row.currentFamilyId}`)}>
-                                  {row.currentFamilyCode}{row.currentFamilyName ? ` · ${row.currentFamilyName}` : ''}
+                                  {row.currentFamilyCode}{row.currentFamilyName ? ` Â· ${row.currentFamilyName}` : ''}
                                 </Button>
                               ) : <span style={{ color: 'var(--jm-gray-400)' }}>-</span>,
                             },
@@ -388,7 +388,7 @@ function SpinOffModal({ familyId, members, onClose, onDone }: {
   const candidates = members.filter((m) => !m.isHead);
 
   // Auto-suggest a family name from the picked member's last name. The operator can
-  // overwrite, but this saves a step in the common case (Son1's surname → "Son1's family").
+  // overwrite, but this saves a step in the common case (Son1's surname â†’ "Son1's family").
   const handlePickHead = (id: string) => {
     setNewHeadMemberId(id);
     if (!familyName) {

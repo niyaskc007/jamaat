@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Button, Card, Input, Select, Table, Tag, DatePicker, App as AntdApp, Empty, Dropdown, Space, Row, Col, Statistic } from 'antd';
 import type { TableColumnsType, MenuProps } from 'antd';
 import {
@@ -146,7 +146,7 @@ export function VouchersPage() {
       {!firstRun && (
         <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
           <Col xs={12} md={6}>
-            <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+            <Card size="small" className="jm-card">
               <Statistic title="Paid this month" value={summaryQ.data?.paidThisMonth ?? 0} precision={2}
                 formatter={(v) => money(Number(v), summaryQ.data?.currency ?? 'AED')}
                 valueStyle={{ fontSize: 18 }} />
@@ -176,7 +176,7 @@ export function VouchersPage() {
             </Card>
           </Col>
           <Col xs={12} md={6}>
-            <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+            <Card size="small" className="jm-card">
               <Statistic title="Paid this year" value={summaryQ.data?.paidThisYear ?? 0} precision={2}
                 formatter={(v) => money(Number(v), summaryQ.data?.currency ?? 'AED')}
                 valueStyle={{ fontSize: 18, color: '#0E5C40' }} />
@@ -223,7 +223,7 @@ export function VouchersPage() {
             onClick: () => navigate(`/vouchers/${row.id}`),
             style: { cursor: 'pointer' },
           })}
-          pagination={{ current: query.page, pageSize: query.pageSize, total: data?.total ?? 0, showSizeChanger: true, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
+          pagination={{ current: query.page, pageSize: query.pageSize, total: data?.total ?? 0, showSizeChanger: true, showTotal: (t, [f, to]) => `${f}â€“${to} of ${t}` }}
           onChange={(p) => setQuery((q) => ({ ...q, page: p.current ?? 1, pageSize: p.pageSize ?? 25 }))}
           locale={{
             emptyText: empty ? (

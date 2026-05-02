@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Card, Table, Tag, Button, App as AntdApp, Modal, Form, Input, Select, InputNumber, Switch, Tabs, Typography, Space } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -46,7 +46,7 @@ function CategoriesTab() {
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>New category</Button>
       </div>
 
-      <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
+      <Card className="jm-card" styles={{ body: { padding: 0 } }}>
         <Table<FundCategory>
           rowKey="id" size="middle" loading={isLoading} dataSource={data ?? []} pagination={false}
           columns={[
@@ -99,7 +99,7 @@ function CategoryModal({ open, onClose, entity }: { open: boolean; onClose: () =
   });
 
   return (
-    <Modal title={isEdit ? `Edit category · ${entity!.name}` : 'New fund category'} open={open} onCancel={onClose} destroyOnHidden
+    <Modal title={isEdit ? `Edit category Â· ${entity!.name}` : 'New fund category'} open={open} onCancel={onClose} destroyOnHidden
       onOk={() => form.submit()} okText={isEdit ? 'Save' : 'Create'} confirmLoading={mut.isPending}>
       <Form form={form} layout="vertical" requiredMark={false}
         initialValues={entity ? { ...entity } : { kind: 1, sortOrder: 0, isActive: true }}
@@ -110,7 +110,7 @@ function CategoryModal({ open, onClose, entity }: { open: boolean; onClose: () =
         </Form.Item>
         <Form.Item name="name" label="Name" rules={[{ required: true, max: 200 }]}><Input placeholder="Permanent Income" /></Form.Item>
         <Form.Item name="kind" label="Kind" rules={[{ required: true }]}
-          tooltip="Drives system behaviour. PermanentIncome→receipts post to income. TemporaryIncome→returnable obligation. LoanFund→can also issue loans.">
+          tooltip="Drives system behaviour. PermanentIncomeâ†’receipts post to income. TemporaryIncomeâ†’returnable obligation. LoanFundâ†’can also issue loans.">
           <Select options={Object.entries(FundCategoryKindLabel).map(([v, l]) => ({ value: Number(v), label: l }))} />
         </Form.Item>
         <Form.Item name="description" label="Description"><Input.TextArea rows={2} maxLength={1000} /></Form.Item>
@@ -147,11 +147,11 @@ function SubCategoriesTab() {
         </Button>
       </div>
 
-      <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
+      <Card className="jm-card" styles={{ body: { padding: 0 } }}>
         <Table<FundSubCategory>
           rowKey="id" size="middle" loading={subs.isLoading} dataSource={subs.data ?? []} pagination={false}
           columns={[
-            { title: 'Category', dataIndex: 'fundCategoryName', width: 200, render: (v: string, row) => <span style={{ fontWeight: 500 }}>{v} <span style={{ color: 'var(--jm-gray-400)', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>· {row.fundCategoryCode}</span></span> },
+            { title: 'Category', dataIndex: 'fundCategoryName', width: 200, render: (v: string, row) => <span style={{ fontWeight: 500 }}>{v} <span style={{ color: 'var(--jm-gray-400)', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>Â· {row.fundCategoryCode}</span></span> },
             { title: 'Code', dataIndex: 'code', width: 140, render: (v) => <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontWeight: 500 }}>{v}</span> },
             { title: 'Name', dataIndex: 'name', render: (v) => <span style={{ fontWeight: 500 }}>{v}</span> },
             { title: 'Description', dataIndex: 'description', render: (v?: string | null) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
@@ -197,7 +197,7 @@ function SubCategoryModal({ open, onClose, entity, categories }: { open: boolean
   });
 
   return (
-    <Modal title={isEdit ? `Edit sub-category · ${entity!.name}` : 'New fund sub-category'} open={open} onCancel={onClose} destroyOnHidden
+    <Modal title={isEdit ? `Edit sub-category Â· ${entity!.name}` : 'New fund sub-category'} open={open} onCancel={onClose} destroyOnHidden
       onOk={() => form.submit()} okText={isEdit ? 'Save' : 'Create'} confirmLoading={mut.isPending}>
       <Form form={form} layout="vertical" requiredMark={false}
         initialValues={entity ? { ...entity } : { sortOrder: 0, isActive: true }}

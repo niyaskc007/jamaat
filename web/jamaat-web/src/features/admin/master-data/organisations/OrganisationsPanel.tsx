@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Button, Card, Input, Table, Tag, Space, App as AntdApp, Drawer, Form, Switch, Empty, Dropdown } from 'antd';
 import type { TableProps, MenuProps } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, MoreOutlined, HeartOutlined } from '@ant-design/icons';
@@ -47,7 +47,7 @@ export function OrganisationsPanel() {
   ];
 
   return (
-    <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
+    <Card className="jm-card" styles={{ body: { padding: 0 } }}>
       <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderBlockEnd: '1px solid var(--jm-border)' }}>
         <Input placeholder="Search" prefix={<SearchOutlined />} allowClear value={search}
           onChange={(e) => setSearch(e.target.value)} onPressEnter={() => setPage(1)} style={{ inlineSize: 320 }} />
@@ -90,7 +90,7 @@ function OrganisationDrawer({ open, onClose, org }: { open: boolean; onClose: ()
   });
 
   return (
-    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit · ${org!.code}` : 'New organisation'} width={500} destroyOnHidden
+    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit Â· ${org!.code}` : 'New organisation'} width={500} destroyOnHidden
       footer={<Space style={{ inlineSize: '100%', justifyContent: 'flex-end' }}><Button onClick={onClose}>Cancel</Button><Button type="primary" loading={mut.isPending} onClick={() => mut.mutate(form.getFieldsValue())}>Save</Button></Space>}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={org ?? { isActive: true }}>
         {!isEdit && <Form.Item label="Code" name="code" rules={[{ required: true }]}><Input placeholder="e.g., SHABABIL" /></Form.Item>}

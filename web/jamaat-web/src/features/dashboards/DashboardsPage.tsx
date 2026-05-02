@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Card, Row, Col, Empty, Tag, Table, Button, Spin, Progress, Alert, Select, Space, Descriptions } from 'antd';
 import {
   ArrowLeftOutlined, BankOutlined, BarChartOutlined, DashboardOutlined,
@@ -25,7 +25,7 @@ import { useAuth } from '../../shared/auth/useAuth';
 import { DashboardFilterBar, useDashboardFilters, filtersToMonths, filtersToDays, downloadDashboardXlsx } from './DashboardFilterBar';
 import { UserHoverCard } from '../../shared/ui/UserHoverCard';
 
-/// Compact `yyyymmdd` filename stamp used for XLSX exports. Local time is fine here — the
+/// Compact `yyyymmdd` filename stamp used for XLSX exports. Local time is fine here â€” the
 /// suffix is just a uniqueness/freshness hint, not data.
 function todayStamp(): string {
   const d = new Date();
@@ -375,7 +375,7 @@ function QhPortfolioDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card title="Status distribution" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Status distribution" size="small" className="jm-card">
             {d.byStatus.length === 0 ? <Empty description="No loans yet" /> : (
               <ResponsiveContainer width="100%" height={260}>
                 <PieChart>
@@ -390,7 +390,7 @@ function QhPortfolioDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Repayment trend (last 12 months)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Repayment trend (last 12 months)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={trendData}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -405,10 +405,10 @@ function QhPortfolioDashboard() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Top borrowers by outstanding" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top borrowers by outstanding" size="small" className="jm-card">
             <Table rowKey="memberId" size="small" pagination={false} dataSource={d.topBorrowers}
               columns={[
-                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> · {r.fullName}</span> },
+                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> Â· {r.fullName}</span> },
                 { title: 'Loans', dataIndex: 'loanCount', key: 'l', align: 'right', width: 70, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Outstanding', dataIndex: 'outstanding', key: 'o', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, d.currency)}</span> },
               ]}
@@ -418,7 +418,7 @@ function QhPortfolioDashboard() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Upcoming installments (next 30 days)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Upcoming installments (next 30 days)" size="small" className="jm-card">
             <Table rowKey={(r) => `${r.loanId}-${r.installmentNo}`} size="small" pagination={false} dataSource={d.upcomingInstallments}
               columns={[
                 { title: 'Loan', dataIndex: 'loanCode', key: 'lc', width: 120, render: (v: string, row) => <Link to={`/qarzan-hasana/${row.loanId}`} className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{v}</Link> },
@@ -467,7 +467,7 @@ function ReceivablesAgingDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card title="Commitment aging" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Commitment aging" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={d.commitmentBuckets}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -479,7 +479,7 @@ function ReceivablesAgingDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Returnables aging" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Returnables aging" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={d.returnableBuckets}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -492,7 +492,7 @@ function ReceivablesAgingDashboard() {
         </Col>
 
         <Col xs={24}>
-          <Card title="10 oldest open obligations" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="10 oldest open obligations" size="small" className="jm-card">
             <Table rowKey={(r, i) => `${r.kind}-${r.reference}-${i}`} size="small" pagination={false} dataSource={d.oldestObligations}
               columns={[
                 { title: 'Kind', dataIndex: 'kind', key: 'k', width: 110, render: (v: string) => <Tag color={v === 'Commitment' ? 'gold' : 'volcano'} style={{ margin: 0 }}>{v}</Tag> },
@@ -576,7 +576,7 @@ function MemberEngagementDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card title="New members per month (last 12)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="New members per month (last 12)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={trendData}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -588,7 +588,7 @@ function MemberEngagementDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={6}>
-          <Card title="Member status" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Member status" size="small" className="jm-card">
             {statusData.length === 0 ? <Empty description="No members" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -602,7 +602,7 @@ function MemberEngagementDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={6}>
-          <Card title="Verification status" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Verification status" size="small" className="jm-card">
             {verifData.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -657,7 +657,7 @@ function ComplianceDashboard() {
         <Col xs={12} md={6}><KpiCard icon={<FileTextOutlined />} label="Draft receipts" value={d.draftReceipts} format="number" accent={ACCENT.neutral} /></Col>
         <Col xs={12} md={6}><KpiCard icon={<UserOutlined />} label="Unverified members" value={d.unverifiedMembers} format="number" accent={ACCENT.neutral} /></Col>
         <Col xs={12} md={12}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <div style={{ fontSize: 14, color: 'var(--jm-gray-500)', marginBlockEnd: 6 }}>Open financial period</div>
             {d.hasOpenPeriod ? (
               <Tag color="green" style={{ fontSize: 14, padding: '4px 12px' }}>{d.openPeriodName}</Tag>
@@ -673,7 +673,7 @@ function ComplianceDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card title="Audit volume (last 30 days)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Audit volume (last 30 days)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={trendData}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={2} />
@@ -685,7 +685,7 @@ function ComplianceDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={6}>
-          <Card title="Errors by severity" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Errors by severity" size="small" className="jm-card">
             {d.errorsBySeverity.length === 0 ? <Empty description="No open errors" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -699,7 +699,7 @@ function ComplianceDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={6}>
-          <Card title="Change requests" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Change requests" size="small" className="jm-card">
             {d.changeRequestsByStatus.length === 0 ? <Empty description="No change requests" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -760,7 +760,7 @@ function EventsDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card title="Registrations per month (last 12)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Registrations per month (last 12)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={trendData}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -772,7 +772,7 @@ function EventsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={6}>
-          <Card title="By status" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By status" size="small" className="jm-card">
             {d.registrationsByStatus.length === 0 ? <Empty description="No registrations" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -786,7 +786,7 @@ function EventsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={6}>
-          <Card title="By category" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By category" size="small" className="jm-card">
             {d.eventsByCategory.length === 0 ? <Empty description="No events" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -801,7 +801,7 @@ function EventsDashboard() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Top events by registrations" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top events by registrations" size="small" className="jm-card">
             <Table rowKey="eventId" size="small" pagination={false} dataSource={d.topEvents}
               columns={[
                 { title: 'Event', key: 'n', render: (_, r) => <Link to={`/dashboards/events/${r.eventId}`}>{r.name}</Link> },
@@ -810,7 +810,7 @@ function EventsDashboard() {
                 {
                   title: 'Fill', dataIndex: 'fillPercent', key: 'f', align: 'right', width: 100,
                   render: (v: number, row) => row.capacity == null
-                    ? <span style={{ color: 'var(--jm-gray-400)' }}>—</span>
+                    ? <span style={{ color: 'var(--jm-gray-400)' }}>â€”</span>
                     : <Tag color={v >= 90 ? 'red' : v >= 60 ? 'gold' : 'green'} className="jm-tnum" style={{ margin: 0 }}>{v}%</Tag>,
                 },
               ]}
@@ -819,7 +819,7 @@ function EventsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Upcoming events" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Upcoming events" size="small" className="jm-card">
             <Table rowKey="eventId" size="small" pagination={false} dataSource={d.upcomingEventsList}
               columns={[
                 { title: 'Event', key: 'n', render: (_, r) => <Link to={`/dashboards/events/${r.eventId}`}>{r.name}</Link> },
@@ -873,7 +873,7 @@ function ChequesDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card title="12-week maturity timeline" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="12-week maturity timeline" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={timelineData}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} />
@@ -886,7 +886,7 @@ function ChequesDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={6}>
-          <Card title="Status mix" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Status mix" size="small" className="jm-card">
             {d.statusMix.length === 0 ? <Empty description="No cheques" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -900,7 +900,7 @@ function ChequesDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={6}>
-          <Card title="By bank (top 8)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By bank (top 8)" size="small" className="jm-card">
             {d.byBank.length === 0 ? <Empty description="No cheques" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={d.byBank} layout="vertical" margin={{ left: 50 }}>
@@ -915,7 +915,7 @@ function ChequesDashboard() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Top pledgers" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top pledgers" size="small" className="jm-card">
             <Table rowKey={(r) => r.memberId ?? r.memberName} size="small" pagination={false} dataSource={d.topPledgers}
               columns={[
                 { title: 'Member', dataIndex: 'memberName', key: 'm' },
@@ -927,7 +927,7 @@ function ChequesDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Recent bounces" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Recent bounces" size="small" className="jm-card">
             <Table rowKey="chequeId" size="small" pagination={false} dataSource={d.recentBounces}
               columns={[
                 { title: 'Cheque #', dataIndex: 'chequeNumber', key: 'cn', width: 110, render: (v: string) => <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{v}</span> },
@@ -988,7 +988,7 @@ function FamiliesDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card title="New families per month (last 12)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="New families per month (last 12)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={trendData}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -1000,7 +1000,7 @@ function FamiliesDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Family size distribution" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Family size distribution" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={d.sizeBuckets}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -1013,10 +1013,10 @@ function FamiliesDashboard() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Top families by contribution (YTD)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top families by contribution (YTD)" size="small" className="jm-card">
             <Table rowKey="familyId" size="small" pagination={false} dataSource={d.topFamiliesByContribution}
               columns={[
-                { title: 'Family', key: 'f', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.code}</span> · {r.familyName}</span> },
+                { title: 'Family', key: 'f', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.code}</span> Â· {r.familyName}</span> },
                 { title: 'Members', dataIndex: 'memberCount', key: 'm', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'YTD total', dataIndex: 'totalAmount', key: 't', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, d.currency)}</span> },
               ]}
@@ -1025,10 +1025,10 @@ function FamiliesDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Largest families" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Largest families" size="small" className="jm-card">
             <Table rowKey="familyId" size="small" pagination={false} dataSource={d.largestFamilies}
               columns={[
-                { title: 'Family', key: 'f', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.code}</span> · {r.familyName}</span> },
+                { title: 'Family', key: 'f', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.code}</span> Â· {r.familyName}</span> },
                 { title: 'Members', dataIndex: 'memberCount', key: 'm', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{v}</span> },
                 { title: 'YTD total', dataIndex: 'totalAmount', key: 't', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum">{money(v, d.currency)}</span> },
               ]}
@@ -1084,7 +1084,7 @@ function FundEnrollmentsDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card title="Enrollments per month (last 12)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Enrollments per month (last 12)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={trendData}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -1096,7 +1096,7 @@ function FundEnrollmentsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={6}>
-          <Card title="Status mix" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Status mix" size="small" className="jm-card">
             {d.statusMix.length === 0 ? <Empty description="No enrollments" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -1110,7 +1110,7 @@ function FundEnrollmentsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={6}>
-          <Card title="Recurrence" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Recurrence" size="small" className="jm-card">
             {d.recurrenceMix.length === 0 ? <Empty description="No enrollments" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -1125,10 +1125,10 @@ function FundEnrollmentsDashboard() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Top funds by active enrollments" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top funds by active enrollments" size="small" className="jm-card">
             <Table rowKey="fundTypeId" size="small" pagination={false} dataSource={d.topFundsByActiveCount}
               columns={[
-                { title: 'Fund', key: 'f', render: (_, r) => <Link to={`/dashboards/fund-types/${r.fundTypeId}`}><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.fundCode}</span> · {r.fundName}</Link> },
+                { title: 'Fund', key: 'f', render: (_, r) => <Link to={`/dashboards/fund-types/${r.fundTypeId}`}><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.fundCode}</span> Â· {r.fundName}</Link> },
                 { title: 'Active', dataIndex: 'activeEnrollments', key: 'a', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{v}</span> },
                 { title: 'Total', dataIndex: 'totalEnrollments', key: 't', align: 'right', width: 80, render: (v: number) => <span className="jm-tnum">{v}</span> },
               ]}
@@ -1137,7 +1137,7 @@ function FundEnrollmentsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="By fund type (top 8)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By fund type (top 8)" size="small" className="jm-card">
             {d.byFundType.length === 0 ? <Empty description="No enrollments" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={d.byFundType} layout="vertical" margin={{ left: 60 }}>
@@ -1205,7 +1205,7 @@ function CashflowDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24}>
-          <Card title="Daily inflow vs outflow (last 90 days)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Daily inflow vs outflow (last 90 days)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={curve}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={6} />
@@ -1220,7 +1220,7 @@ function CashflowDashboard() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Inflow by fund (top 8)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Inflow by fund (top 8)" size="small" className="jm-card">
             {d.inflowByFund.length === 0 ? <Empty description="No inflows" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={d.inflowByFund} layout="vertical" margin={{ left: 80 }}>
@@ -1234,7 +1234,7 @@ function CashflowDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Outflow by purpose (top 8)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Outflow by purpose (top 8)" size="small" className="jm-card">
             {d.outflowByPurpose.length === 0 ? <Empty description="No outflows" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={d.outflowByPurpose} layout="vertical" margin={{ left: 80 }}>
@@ -1249,7 +1249,7 @@ function CashflowDashboard() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Inflow by payment mode" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Inflow by payment mode" size="small" className="jm-card">
             {d.inflowByPaymentMode.length === 0 ? <Empty description="No inflows" /> : (
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
@@ -1263,7 +1263,7 @@ function CashflowDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Outflow by payment mode" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Outflow by payment mode" size="small" className="jm-card">
             {d.outflowByPaymentMode.length === 0 ? <Empty description="No outflows" /> : (
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
@@ -1331,7 +1331,7 @@ function QhFunnelDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card title="Monthly requests vs disbursements" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Monthly requests vs disbursements" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={trendData}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -1345,7 +1345,7 @@ function QhFunnelDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Funnel (count + amount at each stage)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Funnel (count + amount at each stage)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={d.statusFunnel} layout="vertical" margin={{ left: 70 }}>
                 <XAxis type="number" tick={{ fontSize: 10 }} />
@@ -1358,10 +1358,10 @@ function QhFunnelDashboard() {
         </Col>
 
         <Col xs={24}>
-          <Card title="Top borrowers by current outstanding" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top borrowers by current outstanding" size="small" className="jm-card">
             <Table rowKey="memberId" size="small" pagination={false} dataSource={d.topBorrowers}
               columns={[
-                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> · {r.fullName}</span> },
+                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> Â· {r.fullName}</span> },
                 { title: 'Loans', dataIndex: 'loanCount', key: 'l', align: 'right', width: 80, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Outstanding', dataIndex: 'outstanding', key: 'o', align: 'right', width: 160, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, d.currency)}</span> },
               ]}
@@ -1409,7 +1409,7 @@ function CommitmentTypesDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card title="Creation trend (last 12 months)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Creation trend (last 12 months)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={trendData}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -1421,7 +1421,7 @@ function CommitmentTypesDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Status mix" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Status mix" size="small" className="jm-card">
             {d.statusMix.length === 0 ? <Empty description="No commitments" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -1436,7 +1436,7 @@ function CommitmentTypesDashboard() {
         </Col>
 
         <Col xs={24}>
-          <Card title="By template" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By template" size="small" className="jm-card">
             <Table rowKey={(r) => r.templateId ?? r.templateName} size="small" pagination={false} dataSource={d.byTemplate}
               columns={[
                 { title: 'Template', dataIndex: 'templateName', key: 'n' },
@@ -1453,10 +1453,10 @@ function CommitmentTypesDashboard() {
         </Col>
 
         <Col xs={24}>
-          <Card title="By fund (top 8 by committed)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By fund (top 8 by committed)" size="small" className="jm-card">
             <Table rowKey="fundTypeId" size="small" pagination={false} dataSource={d.byFund}
               columns={[
-                { title: 'Fund', key: 'f', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.fundCode}</span> · {r.fundName}</span> },
+                { title: 'Fund', key: 'f', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.fundCode}</span> Â· {r.fundName}</span> },
                 { title: 'Count', dataIndex: 'count', key: 'c', align: 'right', width: 80, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Committed', dataIndex: 'committed', key: 'co', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum">{money(v, d.currency)}</span> },
                 { title: 'Paid', dataIndex: 'paid', key: 'p', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 500 }}>{money(v, d.currency)}</span> },
@@ -1517,7 +1517,7 @@ function VouchersDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24}>
-          <Card title="Daily outflow" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Daily outflow" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={daily}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={6} />
@@ -1530,7 +1530,7 @@ function VouchersDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="Status mix" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Status mix" size="small" className="jm-card">
             {d.statusMix.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -1544,7 +1544,7 @@ function VouchersDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="By payment mode" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By payment mode" size="small" className="jm-card">
             {d.byPaymentMode.length === 0 ? <Empty description="No paid vouchers" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={d.byPaymentMode} layout="vertical" margin={{ left: 60 }}>
@@ -1558,7 +1558,7 @@ function VouchersDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="By expense type (top 8)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By expense type (top 8)" size="small" className="jm-card">
             {d.byExpenseType.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={d.byExpenseType} layout="vertical" margin={{ left: 60 }}>
@@ -1573,7 +1573,7 @@ function VouchersDashboard() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Top payees" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top payees" size="small" className="jm-card">
             <Table rowKey="label" size="small" pagination={false} dataSource={d.topPayees}
               columns={[
                 { title: 'Payee', dataIndex: 'label' },
@@ -1585,7 +1585,7 @@ function VouchersDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Top purposes" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top purposes" size="small" className="jm-card">
             <Table rowKey="label" size="small" pagination={false} dataSource={d.byPurpose}
               columns={[
                 { title: 'Purpose', dataIndex: 'label' },
@@ -1597,7 +1597,7 @@ function VouchersDashboard() {
           </Card>
         </Col>
         <Col xs={24}>
-          <Card title="Monthly voucher count (12 months)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Monthly voucher count (12 months)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={monthly}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -1661,7 +1661,7 @@ function ReceiptsDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24}>
-          <Card title="Daily inflow" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Daily inflow" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={daily}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={6} />
@@ -1673,7 +1673,7 @@ function ReceiptsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="Payment mode" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Payment mode" size="small" className="jm-card">
             {d.byPaymentMode.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -1687,7 +1687,7 @@ function ReceiptsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="By fund (top 8)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By fund (top 8)" size="small" className="jm-card">
             {d.byFund.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={d.byFund} layout="vertical" margin={{ left: 80 }}>
@@ -1701,7 +1701,7 @@ function ReceiptsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="Intention" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Intention" size="small" className="jm-card">
             {d.intentionSplit.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -1716,10 +1716,10 @@ function ReceiptsDashboard() {
         </Col>
 
         <Col xs={24}>
-          <Card title="Top contributors" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top contributors" size="small" className="jm-card">
             <Table rowKey="memberId" size="small" pagination={false} dataSource={d.topContributors}
               columns={[
-                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> · {r.fullName}</span> },
+                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> Â· {r.fullName}</span> },
                 { title: 'Receipts', dataIndex: 'receiptCount', align: 'right', width: 100, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Total', dataIndex: 'amount', align: 'right', width: 160, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, d.currency)}</span> },
               ]}
@@ -1774,7 +1774,7 @@ function ReturnablesDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card title="Age buckets (outstanding)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Age buckets (outstanding)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={d.ageBuckets}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} />
@@ -1786,7 +1786,7 @@ function ReturnablesDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="12-week maturity timeline" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="12-week maturity timeline" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={timeline}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} />
@@ -1799,7 +1799,7 @@ function ReturnablesDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="By fund (top 8)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By fund (top 8)" size="small" className="jm-card">
             {d.byFund.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={d.byFund} layout="vertical" margin={{ left: 80 }}>
@@ -1813,7 +1813,7 @@ function ReturnablesDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Maturity state" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Maturity state" size="small" className="jm-card">
             {d.maturityStateMix.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -1827,10 +1827,10 @@ function ReturnablesDashboard() {
           </Card>
         </Col>
         <Col xs={24}>
-          <Card title="Top holders by outstanding" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top holders by outstanding" size="small" className="jm-card">
             <Table rowKey="memberId" size="small" pagination={false} dataSource={d.topHolders}
               columns={[
-                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> · {r.memberName}</span> },
+                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> Â· {r.memberName}</span> },
                 { title: 'Receipts', dataIndex: 'receiptCount', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Issued', dataIndex: 'totalIssued', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum">{money(v, d.currency)}</span> },
                 { title: 'Outstanding', dataIndex: 'outstanding', align: 'right', width: 160, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, d.currency)}</span> },
@@ -1883,7 +1883,7 @@ function MemberAssetsDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card title="By kind" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By kind" size="small" className="jm-card">
             {d.byKind.length === 0 ? <Empty description="No assets" /> : (
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={d.byKind} layout="vertical" margin={{ left: 80 }}>
@@ -1897,7 +1897,7 @@ function MemberAssetsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Asset count trend (12 months)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Asset count trend (12 months)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={trend}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -1909,10 +1909,10 @@ function MemberAssetsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Top members by value" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top members by value" size="small" className="jm-card">
             <Table rowKey="memberId" size="small" pagination={false} dataSource={d.topMembersByValue}
               columns={[
-                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> · {r.fullName}</span> },
+                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> Â· {r.fullName}</span> },
                 { title: 'Assets', dataIndex: 'assetCount', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Total value', dataIndex: 'totalValue', align: 'right', width: 160, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, d.currency)}</span> },
               ]}
@@ -1921,7 +1921,7 @@ function MemberAssetsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Assets by sector (top 8)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Assets by sector (top 8)" size="small" className="jm-card">
             {d.assetsBySector.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={d.assetsBySector} layout="vertical" margin={{ left: 80 }}>
@@ -1963,10 +1963,10 @@ function SectorsDashboard() {
       </Row>
       <Row gutter={[12, 12]}>
         <Col xs={24}>
-          <Card title="Per-sector summary" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Per-sector summary" size="small" className="jm-card">
             <Table rowKey="sectorId" size="small" pagination={{ pageSize: 25 }} dataSource={d.sectors}
               columns={[
-                { title: 'Sector', key: 's', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.code}</span> · {r.name}</span> },
+                { title: 'Sector', key: 's', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.code}</span> Â· {r.name}</span> },
                 { title: 'Active?', dataIndex: 'isActive', align: 'center', width: 80, render: (v: boolean) => v ? <Tag color="green">Yes</Tag> : <Tag>No</Tag> },
                 { title: 'Members', dataIndex: 'memberCount', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Active', dataIndex: 'activeMembers', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum">{v}</span> },
@@ -2021,7 +2021,7 @@ function NotificationsDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={16}>
-          <Card title="Daily volume" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Daily volume" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={daily}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={2} />
@@ -2033,7 +2033,7 @@ function NotificationsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="Status mix" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Status mix" size="small" className="jm-card">
             {d.byStatus.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -2048,7 +2048,7 @@ function NotificationsDashboard() {
         </Col>
 
         <Col xs={24} lg={8}>
-          <Card title="By channel" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By channel" size="small" className="jm-card">
             {d.byChannel.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={d.byChannel}>
@@ -2062,7 +2062,7 @@ function NotificationsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={16}>
-          <Card title="By notification kind" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By notification kind" size="small" className="jm-card">
             {d.byKind.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={d.byKind} layout="vertical" margin={{ left: 100 }}>
@@ -2077,7 +2077,7 @@ function NotificationsDashboard() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Top failure reasons" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top failure reasons" size="small" className="jm-card">
             <Table rowKey="label" size="small" pagination={false} dataSource={d.topFailureReasons}
               columns={[
                 { title: 'Reason', dataIndex: 'label', ellipsis: true },
@@ -2088,13 +2088,13 @@ function NotificationsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Recent failures" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Recent failures" size="small" className="jm-card">
             <Table rowKey="id" size="small" pagination={false} dataSource={d.recentFailures}
               columns={[
                 { title: 'When', dataIndex: 'attemptedAtUtc', width: 130, render: (v: string) => formatDate(v) },
                 { title: 'Channel', dataIndex: 'channel', width: 90, render: (v: number) => <Tag>{NOTIF_CHANNEL_LABEL[v] ?? `#${v}`}</Tag> },
                 { title: 'Subject', dataIndex: 'subject', ellipsis: true },
-                { title: 'Reason', dataIndex: 'failureReason', ellipsis: true, render: (v: string | null) => <span style={{ color: 'var(--jm-danger-fg-strong)', fontSize: 12 }}>{v ?? '—'}</span> },
+                { title: 'Reason', dataIndex: 'failureReason', ellipsis: true, render: (v: string | null) => <span style={{ color: 'var(--jm-danger-fg-strong)', fontSize: 12 }}>{v ?? 'â€”'}</span> },
               ]}
               locale={{ emptyText: <Empty description="No failures" /> }}
             />
@@ -2143,7 +2143,7 @@ function UserActivityDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24}>
-          <Card title="Daily volume" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Daily volume" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={daily}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={2} />
@@ -2155,7 +2155,7 @@ function UserActivityDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={16}>
-          <Card title="Hour-of-day heatmap (UTC)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Hour-of-day heatmap (UTC)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={hourly}>
                 <XAxis dataKey="label" tick={{ fontSize: 9 }} interval={1} />
@@ -2167,7 +2167,7 @@ function UserActivityDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="Action mix" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Action mix" size="small" className="jm-card">
             {d.actionMix.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
@@ -2182,7 +2182,7 @@ function UserActivityDashboard() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Top users" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top users" size="small" className="jm-card">
             <Table rowKey="label" size="small" pagination={false} dataSource={d.topUsers}
               columns={[
                 { title: 'User', dataIndex: 'label' },
@@ -2193,7 +2193,7 @@ function UserActivityDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Top entities touched" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top entities touched" size="small" className="jm-card">
             <Table rowKey="label" size="small" pagination={false} dataSource={d.topEntities}
               columns={[
                 { title: 'Entity', dataIndex: 'label' },
@@ -2205,7 +2205,7 @@ function UserActivityDashboard() {
         </Col>
 
         <Col xs={24}>
-          <Card title="Recent events" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Recent events" size="small" className="jm-card">
             <Table rowKey={(r, i) => `${r.atUtc}-${i}`} size="small" pagination={false} dataSource={d.recentEvents}
               columns={[
                 { title: 'When', dataIndex: 'atUtc', width: 170, render: (v: string) => formatDate(v) },
@@ -2213,7 +2213,7 @@ function UserActivityDashboard() {
                   render: (v: string, r) => <UserHoverCard userId={r.userId ?? null} fallback={v} /> },
                 { title: 'Action', dataIndex: 'action', width: 100, render: (v: string) => <Tag color={v === 'Create' ? 'green' : v === 'Delete' ? 'red' : 'blue'}>{v}</Tag> },
                 { title: 'Entity', dataIndex: 'entityName' },
-                { title: 'Entity id', dataIndex: 'entityId', width: 280, ellipsis: true, render: (v: string | null) => <span className="jm-tnum" style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>{v ?? '—'}</span> },
+                { title: 'Entity id', dataIndex: 'entityId', width: 280, ellipsis: true, render: (v: string | null) => <span className="jm-tnum" style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>{v ?? 'â€”'}</span> },
               ]}
               locale={{ emptyText: <Empty description="No events" /> }}
             />
@@ -2258,7 +2258,7 @@ function ChangeRequestsDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={16}>
-          <Card title="Daily volume" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Daily volume" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={daily}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={2} />
@@ -2270,7 +2270,7 @@ function ChangeRequestsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="Status mix" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Status mix" size="small" className="jm-card">
             {d.byStatus.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
@@ -2284,7 +2284,7 @@ function ChangeRequestsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="By section" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="By section" size="small" className="jm-card">
             {d.bySection.length === 0 ? <Empty description="No data" /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={d.bySection} layout="vertical" margin={{ left: 80 }}>
@@ -2298,7 +2298,7 @@ function ChangeRequestsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Top requesters" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top requesters" size="small" className="jm-card">
             <Table rowKey="label" size="small" pagination={false} dataSource={d.byRequester}
               columns={[
                 { title: 'Requester', dataIndex: 'label' },
@@ -2310,10 +2310,10 @@ function ChangeRequestsDashboard() {
         </Col>
 
         <Col xs={24}>
-          <Card title="Oldest pending requests (worklist)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Oldest pending requests (worklist)" size="small" className="jm-card">
             <Table rowKey="id" size="small" pagination={false} dataSource={d.oldestPending}
               columns={[
-                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> · <Link to={`/dashboards/members/${r.memberId}`}>{r.memberName}</Link></span> },
+                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> Â· <Link to={`/dashboards/members/${r.memberId}`}>{r.memberName}</Link></span> },
                 { title: 'Section', dataIndex: 'section', width: 130, render: (v: string) => <Tag>{v}</Tag> },
                 { title: 'Requested by', dataIndex: 'requestedByUserName', width: 200,
                   render: (v: string, r) => <UserHoverCard userId={r.requestedByUserId ?? null} fallback={v} /> },
@@ -2365,7 +2365,7 @@ function ExpenseTypesDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24}>
-          <Card title="Total voucher outflow trend (last 12 months)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Total voucher outflow trend (last 12 months)" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={trend}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -2377,7 +2377,7 @@ function ExpenseTypesDashboard() {
           </Card>
         </Col>
         <Col xs={24}>
-          <Card title="Per-category usage (filter window)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Per-category usage (filter window)" size="small" className="jm-card">
             <Table rowKey="expenseTypeId" size="small" pagination={{ pageSize: 25 }} dataSource={d.rows}
               columns={[
                 { title: 'Code', dataIndex: 'code', width: 140, render: (v: string) => <span className="jm-tnum">{v}</span> },
@@ -2386,7 +2386,7 @@ function ExpenseTypesDashboard() {
                 { title: 'Vouchers', dataIndex: 'voucherCount', align: 'right', width: 100, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Total', dataIndex: 'totalAmount', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 500 }}>{money(v, d.currency)}</span> },
                 { title: 'Average', dataIndex: 'averageAmount', align: 'right', width: 130, render: (v: number) => <span className="jm-tnum">{money(v, d.currency)}</span> },
-                { title: 'Last used', dataIndex: 'lastUsed', width: 120, render: (v: string | null) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+                { title: 'Last used', dataIndex: 'lastUsed', width: 120, render: (v: string | null) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>â€”</span> },
               ]}
               locale={{ emptyText: <Empty description="No expense types" /> }}
             />
@@ -2424,24 +2424,24 @@ function PeriodsDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card title="Current period" size="small" style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 16 } }}>
+          <Card title="Current period" size="small" className="jm-card" styles={{ body: { padding: 16 } }}>
             {d.currentPeriodId ? (
               <Descriptions size="small" column={1}>
                 <Descriptions.Item label="Period"><strong>{d.currentPeriodName}</strong></Descriptions.Item>
                 <Descriptions.Item label="Open for"><span className="jm-tnum">{d.currentPeriodOpenDays} days</span></Descriptions.Item>
                 <Descriptions.Item label="Draft receipts in window">
                   {d.draftReceiptsInOpenPeriod === 0
-                    ? <Tag color="green">0 — clean</Tag>
+                    ? <Tag color="green">0 â€” clean</Tag>
                     : <Tag color="gold">{d.draftReceiptsInOpenPeriod} unconfirmed</Tag>}
                 </Descriptions.Item>
                 <Descriptions.Item label="Pending voucher approvals">
                   {d.pendingVoucherApprovalsInOpenPeriod === 0
-                    ? <Tag color="green">0 — clean</Tag>
+                    ? <Tag color="green">0 â€” clean</Tag>
                     : <Tag color="gold">{d.pendingVoucherApprovalsInOpenPeriod} pending</Tag>}
                 </Descriptions.Item>
                 <Descriptions.Item label="Ready to close">
                   {d.readyToClose
-                    ? <Tag color="green"><CheckCircleOutlined /> Yes — queue is empty</Tag>
+                    ? <Tag color="green"><CheckCircleOutlined /> Yes â€” queue is empty</Tag>
                     : <Tag color="orange"><WarningOutlined /> Drain queues first</Tag>}
                 </Descriptions.Item>
               </Descriptions>
@@ -2451,11 +2451,11 @@ function PeriodsDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="All periods" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="All periods" size="small" className="jm-card">
             <Table rowKey="id" size="small" pagination={{ pageSize: 10 }} dataSource={d.periods}
               columns={[
                 { title: 'Name', dataIndex: 'name' },
-                { title: 'Range', key: 'r', render: (_, r) => <span className="jm-tnum">{formatDate(r.startDate)} → {formatDate(r.endDate)}</span> },
+                { title: 'Range', key: 'r', render: (_, r) => <span className="jm-tnum">{formatDate(r.startDate)} â†’ {formatDate(r.endDate)}</span> },
                 { title: 'Status', dataIndex: 'status', width: 100, render: (v: number) => <Tag color={v === 1 ? 'green' : 'default'}>{PERIOD_STATUS_LABEL[v] ?? v}</Tag> },
                 { title: 'Age', dataIndex: 'ageDays', width: 80, render: (v: number) => <span className="jm-tnum">{v}d</span> },
               ]}
@@ -2518,7 +2518,7 @@ function AnnualSummaryDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24}>
-          <Card title="Income vs expense per month" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Income vs expense per month" size="small" className="jm-card">
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={monthly}>
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -2532,7 +2532,7 @@ function AnnualSummaryDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={14}>
-          <Card title={`Income by fund (${d.year})`} size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title={`Income by fund (${d.year})`} size="small" className="jm-card">
             <Table rowKey="fundTypeId" size="small" pagination={false} dataSource={d.byFund}
               columns={[
                 { title: 'Code', dataIndex: 'fundCode', width: 130, render: (v: string) => <span className="jm-tnum">{v}</span> },
@@ -2545,7 +2545,7 @@ function AnnualSummaryDashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={10}>
-          <Card title="Top voucher purposes" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Top voucher purposes" size="small" className="jm-card">
             <Table rowKey="label" size="small" pagination={false} dataSource={d.byVoucherPurpose}
               columns={[
                 { title: 'Purpose', dataIndex: 'label', ellipsis: true },
@@ -2588,7 +2588,7 @@ function ReconciliationDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24}>
-          <Card title="Bank accounts" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Bank accounts" size="small" className="jm-card">
             <Table rowKey="id" size="small" pagination={false} dataSource={d.bankAccounts}
               columns={[
                 { title: 'Bank account', key: 'b', render: (_, r) => (
@@ -2599,19 +2599,19 @@ function ReconciliationDashboard() {
                   </span>
                 ) },
                 { title: 'COA link', key: 'l', width: 200, render: (_, r) => r.accountingAccountId
-                  ? <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.accountingAccountCode}</span> · {r.accountingAccountName}</span>
+                  ? <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.accountingAccountCode}</span> Â· {r.accountingAccountName}</span>
                   : <Tag color="red">Not linked</Tag>
                 },
                 { title: 'Currency', dataIndex: 'currency', width: 80, render: (v: string) => <Tag>{v}</Tag> },
                 { title: 'Ledger balance', dataIndex: 'ledgerBalance', align: 'right', width: 150, render: (v: number, r) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, r.currency)}</span> },
                 { title: 'Pending vouchers', key: 'pv', align: 'right', width: 160, render: (_, r) => r.pendingVoucherCount > 0
                   ? <span><Tag color="gold" className="jm-tnum">{r.pendingVoucherCount}</Tag> <span className="jm-tnum">{money(r.pendingVoucherAmount, r.currency)}</span></span>
-                  : <span style={{ color: 'var(--jm-gray-400)' }}>—</span>
+                  : <span style={{ color: 'var(--jm-gray-400)' }}>â€”</span>
                 },
-                { title: 'Last entry', dataIndex: 'lastEntryDate', width: 110, render: (v: string | null) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+                { title: 'Last entry', dataIndex: 'lastEntryDate', width: 110, render: (v: string | null) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>â€”</span> },
                 { title: 'Status', dataIndex: 'readinessLabel', width: 130, render: (v: string) => {
                   const color = v === 'Healthy' ? 'green' : v === 'Inactive' ? 'default'
-                    : v === 'Stale — verify' ? 'red' : 'gold';
+                    : v === 'Stale â€” verify' ? 'red' : 'gold';
                   return <Tag color={color}>{v}</Tag>;
                 } },
               ]}
@@ -2621,7 +2621,7 @@ function ReconciliationDashboard() {
         </Col>
 
         <Col xs={24}>
-          <Card title="Chart of accounts (Asset / Liability / Equity / Fund)" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card title="Chart of accounts (Asset / Liability / Equity / Fund)" size="small" className="jm-card">
             <Table rowKey="accountId" size="small" pagination={{ pageSize: 25 }} dataSource={d.coaAccounts}
               columns={[
                 { title: 'Code', dataIndex: 'code', width: 130, render: (v: string) => <span className="jm-tnum">{v}</span> },
@@ -2629,9 +2629,9 @@ function ReconciliationDashboard() {
                 { title: 'Type', dataIndex: 'accountType', width: 110, render: (v: number) => <Tag>{ACCOUNT_TYPE_LABEL[v] ?? v}</Tag> },
                 { title: 'Balance', dataIndex: 'balance', align: 'right', width: 150, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 500 }}>{money(v, d.currency)}</span> },
                 { title: 'Entries', dataIndex: 'entryCount', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum">{v}</span> },
-                { title: 'Last entry', dataIndex: 'lastEntryDate', width: 110, render: (v: string | null) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>—</span> },
+                { title: 'Last entry', dataIndex: 'lastEntryDate', width: 110, render: (v: string | null) => v ? formatDate(v) : <span style={{ color: 'var(--jm-gray-400)' }}>â€”</span> },
                 { title: 'Days', dataIndex: 'daysSinceLastEntry', align: 'right', width: 80, render: (v: number | null, r) => {
-                  if (v === null) return <span style={{ color: 'var(--jm-gray-400)' }}>—</span>;
+                  if (v === null) return <span style={{ color: 'var(--jm-gray-400)' }}>â€”</span>;
                   return <Tag color={r.isStale ? 'red' : v > 7 ? 'gold' : 'default'} className="jm-tnum">{v}d</Tag>;
                 } },
               ]}

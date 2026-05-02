@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+﻿import { useMemo, useState, type ReactNode } from 'react';
 import {
   Card, Space, Button, Table, Tag, Descriptions, Progress, Modal, Input, App as AntdApp, Result, Spin,
 } from 'antd';
@@ -174,7 +174,7 @@ export function CommitmentDetailPage() {
   return (
     <div>
       <PageHeader
-        title={`Commitment · ${c.code}`}
+        title={`Commitment Â· ${c.code}`}
         actions={
           <Space wrap>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/commitments')}>Back</Button>
@@ -233,7 +233,7 @@ export function CommitmentDetailPage() {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
-        <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+        <Card size="small" className="jm-card">
           <Descriptions size="small" column={2} bordered
             items={[
               { key: 'code', label: 'Code', children: <span className="jm-tnum" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{c.code}</span> },
@@ -308,7 +308,7 @@ export function CommitmentDetailPage() {
       >
         <Space direction="vertical" style={{ inlineSize: '100%' }}>
           {waiving && <div>
-            Waiving installment <strong>#{waiving.installmentNo}</strong> - due {formatDate(waiving.dueDate)} · {money(waiving.scheduledAmount, c.currency)}
+            Waiving installment <strong>#{waiving.installmentNo}</strong> - due {formatDate(waiving.dueDate)} Â· {money(waiving.scheduledAmount, c.currency)}
           </div>}
           <Input.TextArea
             rows={3}
@@ -364,7 +364,7 @@ export function CommitmentDetailPage() {
       </Modal>
 
       <Modal
-        title={`Agreement · v${data.agreementTemplateVersion ?? '-'}`}
+        title={`Agreement Â· v${data.agreementTemplateVersion ?? '-'}`}
         open={agreementOpen}
         onCancel={() => setAgreementOpen(false)}
         footer={<Button onClick={() => setAgreementOpen(false)}>Close</Button>}
@@ -451,7 +451,7 @@ function CommitmentProgressCard({
   const isFailed = commitment.status === 4 || commitment.status === 5;
 
   return (
-    <Card size="small" style={{ border: '1px solid var(--jm-border)' }}
+    <Card size="small" className="jm-card"
       styles={{ body: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', blockSize: '100%', gap: 18, padding: 20 } }}>
       <div style={{
         fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -479,7 +479,7 @@ function CommitmentProgressCard({
       <div style={{ inlineSize: '100%', maxInlineSize: 260, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <ProgressRow label="Paid" value={money(commitment.paidAmount, commitment.currency)} accent="#0E5C40" />
         <ProgressRow label="Remaining" value={money(commitment.remainingAmount, commitment.currency)} />
-        <ProgressRow label="Instalments" value={`${settledByToday} settled · ${dueByToday - settledByToday} open · ${installments.length - dueByToday} upcoming`} muted />
+        <ProgressRow label="Instalments" value={`${settledByToday} settled Â· ${dueByToday - settledByToday} open Â· ${installments.length - dueByToday} upcoming`} muted />
       </div>
 
       {/* Instalment ribbon: one slim cell per instalment, colored by status. Lets the
@@ -493,7 +493,7 @@ function CommitmentProgressCard({
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${installments.length}, 1fr)`, gap: 2 }}>
             {installments.map((i) => (
               <div key={i.id}
-                title={`#${i.installmentNo} · due ${i.dueDate} · ${InstallmentStatusLabel[i.status]}`}
+                title={`#${i.installmentNo} Â· due ${i.dueDate} Â· ${InstallmentStatusLabel[i.status]}`}
                 style={{
                   blockSize: 14, borderRadius: 2,
                   background: ribbonColor(i.status),

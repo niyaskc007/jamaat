@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import {
   Button, Card, Drawer, Space, Tag, Alert, Modal, App as AntdApp, Popover, Row, Col, Switch, Typography, Dropdown,
 } from 'antd';
@@ -133,8 +133,8 @@ export function PageDesigner({ eventId, eventSlug, primaryColor, accentColor }: 
                 </Popover>
               </Space>
             }
-            style={{ border: '1px solid var(--jm-border)' }}>
-            {isLoading && <div style={{ color: 'var(--jm-gray-500)' }}>Loading…</div>}
+            className="jm-card">
+            {isLoading && <div style={{ color: 'var(--jm-gray-500)' }}>Loadingâ€¦</div>}
             {!isLoading && sections.length === 0 && (
               <div style={{ color: 'var(--jm-gray-500)', textAlign: 'center', padding: '40px 0' }}>
                 No sections yet. The portal will fall back to the default layout.
@@ -190,7 +190,7 @@ export function PageDesigner({ eventId, eventSlug, primaryColor, accentColor }: 
                 Full-page preview
               </Button>
             }
-            style={{ border: '1px solid var(--jm-border)' }}>
+            className="jm-card">
             <div
               style={{
                 ['--portal-primary' as string]: primaryColor || '#0E5C40',
@@ -228,7 +228,7 @@ export function PageDesigner({ eventId, eventSlug, primaryColor, accentColor }: 
         width="100vw"
         style={{ top: 0, paddingBlockEnd: 0 }}
         styles={{ body: { padding: 0, blockSize: 'calc(100dvh - 56px)', overflow: 'auto', background: '#F8FAFC' } }}
-        title={<Space><FullscreenOutlined /> Full-page preview · {eventSlug}</Space>}
+        title={<Space><FullscreenOutlined /> Full-page preview Â· {eventSlug}</Space>}
         destroyOnHidden
       >
         <div

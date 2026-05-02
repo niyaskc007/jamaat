@@ -1,4 +1,4 @@
-import { Card, Row, Col, Tag, Button, Space, Table, Result, Spin, App as AntdApp, Empty, Statistic, Descriptions } from 'antd';
+﻿import { Card, Row, Col, Tag, Button, Space, Table, Result, Spin, App as AntdApp, Empty, Statistic, Descriptions } from 'antd';
 import type { TableProps } from 'antd';
 import {
   ArrowLeftOutlined, WalletOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined,
@@ -131,7 +131,7 @@ export function PatronageDetailPage() {
           but flattened across the top so the eye lands on numbers first. */}
       <Row gutter={[12, 12]}>
         <Col xs={12} md={6}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <Statistic title="Total collected" value={totalCollected} precision={2}
               formatter={(v) => money(Number(v), currency)}
               valueStyle={{ fontSize: 18, color: '#0E5C40' }} />
@@ -141,7 +141,7 @@ export function PatronageDetailPage() {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <Statistic title="Receipts" value={confirmed.length} prefix={<FileTextOutlined />}
               valueStyle={{ fontSize: 18 }} />
             <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
@@ -150,7 +150,7 @@ export function PatronageDetailPage() {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <Statistic title="Last payment" value={lastPaymentDate ? formatDate(lastPaymentDate) : 'None yet'}
               valueStyle={{ fontSize: 18 }} />
             <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
@@ -159,7 +159,7 @@ export function PatronageDetailPage() {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <Statistic title="Active for" value={activeDuration} suffix="days" prefix={<CalendarOutlined />}
               valueStyle={{ fontSize: 18 }} />
             <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
@@ -174,7 +174,7 @@ export function PatronageDetailPage() {
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={14}>
           <Card title={<span><GiftOutlined /> Patronage details</span>} size="small"
-            style={{ border: '1px solid var(--jm-border)' }}>
+            className="jm-card">
             <Descriptions column={2} size="small" colon={false} labelStyle={{ color: 'var(--jm-gray-500)', fontSize: 12 }}>
               <Descriptions.Item label="Code">
                 <span className="jm-tnum" style={{ fontWeight: 600 }}>{p.code}</span>
@@ -242,7 +242,7 @@ export function PatronageDetailPage() {
       {/* Payment history - a slim ledger of every receipt that contributed under this patronage.
           Each row clicks through to /receipts/{id}. Drafts and cancelled rows are surfaced but
           visually de-emphasised so the user can still see them but knows they didn't count. */}
-      <Card title="Payment history" size="small" style={{ border: '1px solid var(--jm-border)' }}
+      <Card title="Payment history" size="small" className="jm-card"
         extra={canCollect && (p.status === 2 || p.status === 3) && (
           <Button size="small" type="primary" icon={<WalletOutlined />}
             onClick={() => navigate(`/receipts/new?memberId=${p.memberId}&fundTypeId=${p.fundTypeId}`)}>

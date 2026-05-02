@@ -1,4 +1,4 @@
-import { Card, Row, Col, Tag, Empty, Alert, Table } from 'antd';
+﻿import { Card, Row, Col, Tag, Empty, Alert, Table } from 'antd';
 import {
   InfoCircleOutlined, TeamOutlined, CheckCircleOutlined,
   QuestionCircleOutlined, TrophyOutlined,
@@ -98,13 +98,13 @@ export function ReliabilityDashboard() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
-          <Card size="small" title="Top reliable members" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" title="Top reliable members" className="jm-card">
             {(!d || d.topReliable.length === 0) ? <Empty description="No rated members yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />
               : <RankTable rows={d.topReliable} />}
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card size="small" title="Needs attention (C / D)" style={{ border: '1px solid var(--jm-border)' }}
+          <Card size="small" title="Needs attention (C / D)" className="jm-card"
             extra={<Tag color="orange">Reach out, don't restrict</Tag>}>
             {(!d || d.needsAttention.length === 0)
               ? <Empty description="No members in C or D" image={Empty.PRESENTED_IMAGE_SIMPLE} />

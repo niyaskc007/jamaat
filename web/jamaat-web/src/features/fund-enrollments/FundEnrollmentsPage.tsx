@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Button, Card, Input, Select, Table, Tag, Empty, App as AntdApp, Drawer, Form, DatePicker, Dropdown, Space } from 'antd';
 import type { TableProps, MenuProps } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, BankOutlined, GiftOutlined, CheckCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined, CheckOutlined, DownloadOutlined, WalletOutlined } from '@ant-design/icons';
@@ -43,7 +43,7 @@ export function FundEnrollmentsPage() {
         '/api/v1/fund-enrollments/bulk/approve',
         { ids: selectedIds }
       );
-      const msg = `Approved ${res.approvedCount}${res.failedCount ? ` · ${res.failedCount} failed` : ''}.`;
+      const msg = `Approved ${res.approvedCount}${res.failedCount ? ` Â· ${res.failedCount} failed` : ''}.`;
       message[res.failedCount === 0 ? 'success' : 'warning'](msg);
       setSelectedIds([]);
       await qc.invalidateQueries({ queryKey: ['enrollments'] });
@@ -156,7 +156,7 @@ export function FundEnrollmentsPage() {
           helpHref="/help"
         />
       ) : (
-      <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
+      <Card className="jm-card" styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderBlockEnd: '1px solid var(--jm-border)' }}>
           <Input placeholder="Search code" prefix={<SearchOutlined />} allowClear value={search}
             onChange={(e) => setSearch(e.target.value)} onPressEnter={() => setPage(1)} style={{ inlineSize: 240 }} />

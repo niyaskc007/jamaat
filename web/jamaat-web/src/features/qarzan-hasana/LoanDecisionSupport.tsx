@@ -1,4 +1,4 @@
-import { Card, Tag, Empty, Alert, Tooltip, Progress, Statistic, Row, Col } from 'antd';
+﻿import { Card, Tag, Empty, Alert, Tooltip, Progress, Statistic, Row, Col } from 'antd';
 import { ThunderboltOutlined, CheckCircleOutlined, WarningOutlined, BankOutlined, GiftOutlined, HistoryOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -43,7 +43,7 @@ function GuarantorTrackRecordsCard({ guarantors }: { guarantors: GuarantorTrackR
   return (
     <Card size="small" title={<span><SafetyCertificateOutlined /> Guarantor track records</span>}
       extra={<span style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Per kafil</span>}
-      style={{ border: '1px solid var(--jm-border)' }}>
+      className="jm-card">
       {guarantors.map((g, idx) => (
         <div key={g.memberId} style={{
           paddingBlock: 10,
@@ -87,7 +87,7 @@ function ReliabilityCard({ r }: { r: DS['reliability'] }) {
   return (
     <Card size="small" title={<span><ThunderboltOutlined /> Reliability</span>}
       extra={<Tag color={GradeColor[r.grade] ?? 'default'} style={{ fontWeight: 600 }}>{r.grade} - {GradeLabel[r.grade] ?? r.grade}</Tag>}
-      style={{ border: '1px solid var(--jm-border)' }}>
+      className="jm-card">
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBlockEnd: 12 }}>
         <span style={{
           inlineSize: 40, blockSize: 40, borderRadius: 10,
@@ -132,7 +132,7 @@ function FundPositionCard({ f }: { f: DS['fundPosition'] }) {
   const tight = f.percentRemainingAfter < 10;
   return (
     <Card size="small" title={<span><BankOutlined /> Fund position</span>}
-      style={{ border: '1px solid var(--jm-border)' }}>
+      className="jm-card">
       <Row gutter={[12, 12]}>
         <Col xs={12}>
           <Statistic title="Current QH pool" value={f.currentNetBalance} precision={2}
@@ -172,7 +172,7 @@ function FundPositionCard({ f }: { f: DS['fundPosition'] }) {
 function CommitmentsCard({ c, currency }: { c: DS['commitments']; currency: string }) {
   if (c.activeCount === 0) {
     return (
-      <Card size="small" title={<span><GiftOutlined /> Active commitments</span>} style={{ border: '1px solid var(--jm-border)' }}>
+      <Card size="small" title={<span><GiftOutlined /> Active commitments</span>} className="jm-card">
         <Empty description="No active commitments" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       </Card>
     );
@@ -180,7 +180,7 @@ function CommitmentsCard({ c, currency }: { c: DS['commitments']; currency: stri
   return (
     <Card size="small" title={<span><GiftOutlined /> Active commitments</span>}
       extra={<span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{c.activeCount} active</span>}
-      style={{ border: '1px solid var(--jm-border)' }}>
+      className="jm-card">
       <Row gutter={[8, 8]} style={{ marginBlockEnd: 10 }}>
         <Col xs={8}>
           <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Committed</div>
@@ -211,7 +211,7 @@ function DonationsCard({ donations, currency }: { donations: DS['donations']; cu
   return (
     <Card size="small" title={<span><HistoryOutlined /> Donation history (last {donations.months} months)</span>}
       extra={<span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{donations.receiptCount} receipts</span>}
-      style={{ border: '1px solid var(--jm-border)' }}>
+      className="jm-card">
       <div style={{ marginBlockEnd: 10 }}>
         <span className="jm-tnum" style={{ fontSize: 18, fontWeight: 700 }}>{money(donations.totalAmount, currency)}</span>
         <span style={{ fontSize: 12, color: 'var(--jm-gray-500)', marginInlineStart: 6 }}>contributed in window</span>
@@ -233,7 +233,7 @@ function DonationsCard({ donations, currency }: { donations: DS['donations']; cu
 function PastLoansCard({ p, currency }: { p: DS['pastLoans']; currency: string }) {
   if (p.loanCount === 0) {
     return (
-      <Card size="small" title={<span><HistoryOutlined /> Past loans</span>} style={{ border: '1px solid var(--jm-border)' }}>
+      <Card size="small" title={<span><HistoryOutlined /> Past loans</span>} className="jm-card">
         <div style={{ fontSize: 13, color: 'var(--jm-gray-600)' }}>This is the borrower's first Qarzan Hasana loan.</div>
       </Card>
     );
@@ -241,7 +241,7 @@ function PastLoansCard({ p, currency }: { p: DS['pastLoans']; currency: string }
   return (
     <Card size="small" title={<span><HistoryOutlined /> Past loans</span>}
       extra={<span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{p.loanCount} on record</span>}
-      style={{ border: '1px solid var(--jm-border)' }}>
+      className="jm-card">
       <Row gutter={[8, 8]}>
         <Col xs={8}>
           <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Completed</div>

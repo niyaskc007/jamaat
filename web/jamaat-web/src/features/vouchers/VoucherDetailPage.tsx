@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+﻿import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Descriptions, Tag, Table, Button, Space, Spin, Alert, App as AntdApp, Input, Row, Col, Statistic, Empty, Timeline } from 'antd';
 import {
@@ -122,7 +122,7 @@ export function VoucherDetailPage() {
           approver/auditor doesn't have to scan the descriptions card to find the basics. */}
       <Row gutter={[12, 12]}>
         <Col xs={12} md={6}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 4 }}>
               <FileDoneOutlined /> Voucher
             </div>
@@ -133,7 +133,7 @@ export function VoucherDetailPage() {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <Statistic title="Amount" value={data.amountTotal} precision={2}
               formatter={(v) => money(Number(v), data.currency)}
               valueStyle={{ fontSize: 18, fontWeight: 700 }} />
@@ -145,7 +145,7 @@ export function VoucherDetailPage() {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 4 }}>Status</div>
             <Tag style={{ background: statusCfg[data.status].bg, color: statusCfg[data.status].color, border: 'none', fontSize: 14, padding: '4px 10px', fontWeight: 600 }}>
               {VoucherStatusLabel[data.status]}
@@ -156,7 +156,7 @@ export function VoucherDetailPage() {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" className="jm-card">
             <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 4 }}>
               <CalendarOutlined /> Paid on
             </div>
@@ -174,7 +174,7 @@ export function VoucherDetailPage() {
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={16}>
           <Card size="small" title={<span><WalletOutlined /> Voucher details</span>}
-            style={{ border: '1px solid var(--jm-border)' }}>
+            className="jm-card">
             <Descriptions size="small" column={2} colon={false} labelStyle={{ color: 'var(--jm-gray-500)', fontSize: 12 }}>
               <Descriptions.Item label="Pay to" span={2}>
                 <div style={{ fontWeight: 500 }}>{data.payTo}</div>
@@ -263,7 +263,7 @@ export function VoucherDetailPage() {
       </Row>
 
       {/* Lines table - same shape as before, slightly cleaner header styling. */}
-      <Card title="Expense lines" size="small" style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
+      <Card title="Expense lines" size="small" className="jm-card" styles={{ body: { padding: 0 } }}>
         <Table
           rowKey="id" size="middle" pagination={false} dataSource={data.lines}
           columns={[
@@ -295,7 +295,7 @@ export function VoucherDetailPage() {
           postings produced. Drafts/Pending/Approved/Cancelled don't post anything; we surface
           a friendly placeholder rather than an empty card. */}
       <Card title={<span><BookOutlined /> Ledger impact</span>} size="small"
-        style={{ border: '1px solid var(--jm-border)' }}
+        className="jm-card"
         extra={<span style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>
           {isPaid ? 'Posted on payment' : isReversed ? 'Reversal entries shown below' : 'Posts when the voucher is paid'}
         </span>}>

@@ -1,4 +1,4 @@
-import { Card, Row, Col, Tag, Empty, Alert } from 'antd';
+﻿import { Card, Row, Col, Tag, Empty, Alert } from 'antd';
 import {
   BookOutlined, BarChartOutlined, CalendarOutlined,
   BankOutlined, LineChartOutlined, PieChartOutlined,
@@ -108,7 +108,7 @@ export function AccountingPage() {
           <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
             <Col xs={24} md={12}>
               <Card size="small" title={<span><CalendarOutlined /> Current period</span>}
-                style={{ border: '1px solid var(--jm-border)' }}>
+                className="jm-card">
                 {openPeriod ? (
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 16, marginBlockEnd: 4 }}>{openPeriod.name}</div>
@@ -129,7 +129,7 @@ export function AccountingPage() {
                   contributions) and any per-fund liability accounts admins have configured.
                   Visible at a glance so a treasurer knows how much they owe back. */}
               <Card size="small" title={<span><BankOutlined /> Liability breakdown</span>}
-                style={{ border: '1px solid var(--jm-border)' }}>
+                className="jm-card">
                 {balances.filter((b) => b.accountCode.startsWith('3')).length === 0 ? (
                   <Empty description="No liability balances yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                 ) : (
@@ -154,7 +154,7 @@ export function AccountingPage() {
           <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
             <Col xs={24} md={16}>
               <Card size="small" title={<span><LineChartOutlined /> Income vs Expense (last 12 months)</span>}
-                style={{ border: '1px solid var(--jm-border)' }}>
+                className="jm-card">
                 {(trendQ.data?.length ?? 0) === 0 ? <Empty description="No data" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
                   <ResponsiveContainer width="100%" height={260}>
                     <LineChart data={(trendQ.data ?? []).map((p) => ({
@@ -177,7 +177,7 @@ export function AccountingPage() {
                 "purpose" gets bucketed in the backend; chart truncates at 5 + Other so it stays readable. */}
             <Col xs={24} md={8}>
               <Card size="small" title={<span><PieChartOutlined /> Top expense categories (30d)</span>}
-                style={{ border: '1px solid var(--jm-border)' }}>
+                className="jm-card">
                 {(outflowQ.data?.length ?? 0) === 0 ? <Empty description="No vouchers in window" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={outflowQ.data ?? []} layout="vertical" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -199,7 +199,7 @@ export function AccountingPage() {
           <Row gutter={[12, 12]} style={{ marginBlockEnd: 16 }}>
             <Col xs={24} md={12}>
               <Card size="small" title={<span><PieChartOutlined /> Asset composition</span>}
-                style={{ border: '1px solid var(--jm-border)' }}>
+                className="jm-card">
                 <AssetCompositionPie balances={balances} currency={baseCurrency} />
               </Card>
             </Col>
@@ -221,7 +221,7 @@ export function AccountingPage() {
           <Row gutter={[12, 12]}>
             <Col xs={24} sm={12}>
               <Link to="/ledger" style={{ textDecoration: 'none' }}>
-                <Card hoverable style={{ border: '1px solid var(--jm-border)' }}>
+                <Card hoverable className="jm-card">
                   <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                     <span style={{
                       inlineSize: 40, blockSize: 40, borderRadius: 8,
@@ -241,7 +241,7 @@ export function AccountingPage() {
             </Col>
             <Col xs={24} sm={12}>
               <Link to="/reports" style={{ textDecoration: 'none' }}>
-                <Card hoverable style={{ border: '1px solid var(--jm-border)' }}>
+                <Card hoverable className="jm-card">
                   <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                     <span style={{
                       inlineSize: 40, blockSize: 40, borderRadius: 8,

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Card, Table, Tag, Button, Space, Empty, Tooltip, Segmented, Typography } from 'antd';
 import type { TableProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
@@ -92,7 +92,7 @@ export function CommitmentPaymentsPanel({ commitmentId, currency, installmentNoF
         if (row.bankAccountName) bits.push(`Bank: ${row.bankAccountName}`);
         return bits.length === 0
           ? <span style={{ color: 'var(--jm-gray-400)' }}>-</span>
-          : <span style={{ fontSize: 12 }}>{bits.join(' · ')}</span>;
+          : <span style={{ fontSize: 12 }}>{bits.join(' Â· ')}</span>;
       },
     },
     {
@@ -108,7 +108,7 @@ export function CommitmentPaymentsPanel({ commitmentId, currency, installmentNoF
       render: (_, row) => row.confirmedAtUtc
         ? <span style={{ fontSize: 12, color: 'var(--jm-gray-600)' }}>
             {formatDateTime(row.confirmedAtUtc)}
-            {row.confirmedByUserName && <> · <UserHoverCard userId={row.confirmedByUserId ?? null} fallback={row.confirmedByUserName} /></>}
+            {row.confirmedByUserName && <> Â· <UserHoverCard userId={row.confirmedByUserId ?? null} fallback={row.confirmedByUserName} /></>}
           </span>
         : <span style={{ color: 'var(--jm-gray-400)' }}>-</span>,
     },
@@ -136,7 +136,7 @@ export function CommitmentPaymentsPanel({ commitmentId, currency, installmentNoF
         </Space>
       }
       size="small"
-      style={{ border: '1px solid var(--jm-border)' }}
+      className="jm-card"
     >
       {filtered.length === 0 && !isLoading ? (
         <Empty description={installmentNoFilter != null
@@ -149,7 +149,7 @@ export function CommitmentPaymentsPanel({ commitmentId, currency, installmentNoF
             columns={columns} dataSource={filtered} />
           <div style={{ marginBlockStart: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {totals.count} {totals.count === 1 ? 'row' : 'rows'} {scope === 'confirmed' ? '· confirmed only' : '· all statuses'}
+              {totals.count} {totals.count === 1 ? 'row' : 'rows'} {scope === 'confirmed' ? 'Â· confirmed only' : 'Â· all statuses'}
             </Typography.Text>
             <span style={{ fontSize: 13, fontWeight: 600 }}>
               Confirmed total: <span className="jm-tnum" style={{ color: '#0E5C40' }}>{money(totals.confirmedTotal, currency)}</span>

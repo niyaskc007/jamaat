@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Button, Card, Input, Table, Tag, Space, App as AntdApp, Drawer, Form, Switch, InputNumber, Select, Dropdown } from 'antd';
 import type { TableProps, MenuProps } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, MoreOutlined } from '@ant-design/icons';
@@ -63,7 +63,7 @@ export function LookupsPanel() {
   ];
 
   return (
-    <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
+    <Card className="jm-card" styles={{ body: { padding: 0 } }}>
       <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderBlockEnd: '1px solid var(--jm-border)' }}>
         <Input placeholder="Search" prefix={<SearchOutlined />} allowClear value={search}
           onChange={(e) => setSearch(e.target.value)} onPressEnter={() => setPage(1)} style={{ inlineSize: 240 }} />
@@ -102,7 +102,7 @@ function LookupDrawer({ open, onClose, lookup, categories }: { open: boolean; on
   });
 
   return (
-    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit lookup · ${lookup!.code}` : 'New lookup'} width={460} destroyOnHidden
+    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit lookup Â· ${lookup!.code}` : 'New lookup'} width={460} destroyOnHidden
       footer={<Space style={{ inlineSize: '100%', justifyContent: 'flex-end' }}><Button onClick={onClose}>Cancel</Button><Button type="primary" loading={mut.isPending} onClick={() => mut.mutate(form.getFieldsValue())}>Save</Button></Space>}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={lookup ?? { isActive: true, sortOrder: 0 }}>
         {!isEdit && (

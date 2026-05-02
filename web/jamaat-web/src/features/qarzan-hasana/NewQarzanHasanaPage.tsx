@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import {
   Card, Form, Input, InputNumber, Select, DatePicker, Button, Space, App as AntdApp,
   Alert, Row, Col, Tooltip, Checkbox, Collapse, Typography, Divider, Tag, Upload, Statistic,
@@ -214,7 +214,7 @@ export function NewQarzanHasanaPage() {
 
       <ProcessDocCard />
 
-      <Card style={{ border: '1px solid var(--jm-border)' }}>
+      <Card className="jm-card">
         <Form layout="vertical" requiredMark={false}>
           <Typography.Title level={5} style={{ marginBlockStart: 0 }}>
             <TeamOutlined /> Borrower &amp; loan terms

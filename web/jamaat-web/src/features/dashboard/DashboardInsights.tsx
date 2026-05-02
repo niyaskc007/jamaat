@@ -1,4 +1,4 @@
-import { Card, Row, Col, Empty, Tag, List } from 'antd';
+﻿import { Card, Row, Col, Empty, Tag, List } from 'antd';
 import { Link } from 'react-router-dom';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area,
@@ -65,7 +65,7 @@ export function DashboardInsights() {
       {/* Pending obligations strip - 4 KPI tiles. Each clicks through to the relevant report. */}
       <Row gutter={[12, 12]}>
         <Col xs={12} md={6}>
-          <Card hoverable size="small" style={{ border: '1px solid var(--jm-border)' }}
+          <Card hoverable size="small" className="jm-card"
             onClick={() => navigate('/reports/outstanding-loans')}>
             <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 6 }}>QH loans outstanding</div>
             <div className="jm-tnum" style={{ fontSize: 22, fontWeight: 700 }}>
@@ -75,7 +75,7 @@ export function DashboardInsights() {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card hoverable size="small" style={{ border: '1px solid var(--jm-border)' }}
+          <Card hoverable size="small" className="jm-card"
             onClick={() => navigate('/reports/returnable')}>
             <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 6 }}>Returnable owed</div>
             <div className="jm-tnum" style={{ fontSize: 22, fontWeight: 700, color: '#92400E' }}>
@@ -87,7 +87,7 @@ export function DashboardInsights() {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card hoverable size="small" style={{ border: '1px solid var(--jm-border)' }}
+          <Card hoverable size="small" className="jm-card"
             onClick={() => navigate('/reports/pending-commitments')}>
             <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 6 }}>Pending commitments</div>
             <div className="jm-tnum" style={{ fontSize: 22, fontWeight: 700 }}>
@@ -97,7 +97,7 @@ export function DashboardInsights() {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card hoverable size="small" style={{ border: '1px solid var(--jm-border)' }}
+          <Card hoverable size="small" className="jm-card"
             onClick={() => navigate('/cheques')}>
             <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBlockEnd: 6 }}>Cheques in pipeline</div>
             <div className="jm-tnum" style={{ fontSize: 22, fontWeight: 700 }}>
@@ -112,8 +112,8 @@ export function DashboardInsights() {
 
       {/* Collection trend (last 30 days) - the single most useful chart for spotting */}
       {/* spikes / drops in incoming money. Area + line so the daily shape stands out. */}
-      <Card size="small" title="Collections - last 30 days" style={{ border: '1px solid var(--jm-border)' }}
-        extra={<span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>Daily avg <span className="jm-tnum">{money(trendAvg, insights?.currency ?? baseCurrency)}</span> · Total <span className="jm-tnum">{money(trendTotal, insights?.currency ?? baseCurrency)}</span></span>}>
+      <Card size="small" title="Collections - last 30 days" className="jm-card"
+        extra={<span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>Daily avg <span className="jm-tnum">{money(trendAvg, insights?.currency ?? baseCurrency)}</span> Â· Total <span className="jm-tnum">{money(trendTotal, insights?.currency ?? baseCurrency)}</span></span>}>
         {trend.length === 0 ? <Empty description="No data" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -140,7 +140,7 @@ export function DashboardInsights() {
       <Row gutter={[12, 12]}>
         {/* Fund share (last 30 days) - donut showing where the money came from. */}
         <Col xs={24} md={12}>
-          <Card size="small" title="Fund share - last 30 days" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" title="Fund share - last 30 days" className="jm-card">
             {slice.length === 0 ? <Empty description="No fund-attributed receipts in the window" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -158,7 +158,7 @@ export function DashboardInsights() {
         {/* Cheque pipeline - count of cheques in each lifecycle bucket. Helps the cashier */}
         {/* see "60 cheques sitting in Pledged" at a glance. */}
         <Col xs={24} md={12}>
-          <Card size="small" title="Cheque pipeline" style={{ border: '1px solid var(--jm-border)' }}
+          <Card size="small" title="Cheque pipeline" className="jm-card"
             extra={<a onClick={() => navigate('/cheques')} style={{ fontSize: 12 }}>Open workbench</a>}>
             {(insights?.chequePipeline.length ?? 0) === 0 ? <Empty description="No post-dated cheques on file" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
               <ResponsiveContainer width="100%" height={240}>
@@ -184,7 +184,7 @@ export function DashboardInsights() {
           tile clicks through to the appropriate page so the cashier / accountant can drill in. */}
       <Row gutter={[12, 12]}>
         <Col xs={24} md={8}>
-          <Card size="small" title="Top contributors (30d)" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" title="Top contributors (30d)" className="jm-card">
             {(topQ.data?.length ?? 0) === 0 ? <Empty description="No contributors in window" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
               <List size="small" dataSource={topQ.data ?? []}
                 renderItem={(c, i) => (
@@ -192,7 +192,7 @@ export function DashboardInsights() {
                     <List.Item.Meta
                       avatar={<span style={{ inlineSize: 24, blockSize: 24, borderRadius: 6, background: 'var(--jm-surface-muted)', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600 }}>{i + 1}</span>}
                       title={<Link to={`/members/${c.memberId}`} style={{ fontSize: 13 }}>{c.fullName}</Link>}
-                      description={<span className="jm-tnum" style={{ fontSize: 11 }}>ITS {c.itsNumber} · {c.receiptCount} receipts</span>}
+                      description={<span className="jm-tnum" style={{ fontSize: 11 }}>ITS {c.itsNumber} Â· {c.receiptCount} receipts</span>}
                     />
                     <span className="jm-tnum" style={{ fontWeight: 600, fontSize: 13 }}>{money(c.amount, c.currency)}</span>
                   </List.Item>
@@ -203,7 +203,7 @@ export function DashboardInsights() {
         </Col>
 
         <Col xs={24} md={8}>
-          <Card size="small" title="Voucher outflow (30d)" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" title="Voucher outflow (30d)" className="jm-card">
             {(outflowQ.data?.length ?? 0) === 0 ? <Empty description="No vouchers in window" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={outflowQ.data ?? []} layout="vertical" margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
@@ -221,7 +221,7 @@ export function DashboardInsights() {
         </Col>
 
         <Col xs={24} md={8}>
-          <Card size="small" title="Cheques due in next 30 days" style={{ border: '1px solid var(--jm-border)' }}
+          <Card size="small" title="Cheques due in next 30 days" className="jm-card"
             extra={<Link to="/cheques" style={{ fontSize: 12 }}>Workbench</Link>}>
             {(upcomingQ.data?.length ?? 0) === 0 ? <Empty description="No cheques in window" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
               <List size="small" dataSource={(upcomingQ.data ?? []).slice(0, 8)}
@@ -233,7 +233,7 @@ export function DashboardInsights() {
                         <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(c.amount, c.currency)}</span>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {c.memberName} · #{c.chequeNumber}
+                        {c.memberName} Â· #{c.chequeNumber}
                       </div>
                     </div>
                   </List.Item>

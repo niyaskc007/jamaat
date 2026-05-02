@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Card, Checkbox, Table, Tag, Spin, Alert, App as AntdApp, Space, Typography, Tooltip, Tabs } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleTwoTone, SafetyCertificateOutlined, AppstoreOutlined, CalendarOutlined } from '@ant-design/icons';
@@ -6,11 +6,11 @@ import { rolesApi, groupPermissions, type Role } from './rolesApi';
 import { extractProblem } from '../../../shared/api/client';
 
 /// Resource prefixes that belong to the Events surface. Anything not in this set is rendered
-/// under "Core system" — keeps the long permission list digestible while making event-specific
+/// under "Core system" â€” keeps the long permission list digestible while making event-specific
 /// roles (volunteers, registrars, page designers) easy to find.
 const EVENT_RESOURCES = new Set(['event']);
 
-/// Role × Permission matrix. Each row = one permission; each column = one role.
+/// Role Ã— Permission matrix. Each row = one permission; each column = one role.
 /// Toggling a checkbox calls add/remove on the role and propagates to users in that role
 /// (server side), so the change takes effect on the user's next login. Administrator role is
 /// rendered locked-on for every permission - super-admin must always have everything.
@@ -77,7 +77,7 @@ export function RolesMatrixPanel() {
           <ul style={{ margin: 0, paddingInlineStart: 18 }}>
             <li>Toggling a permission on a role updates every user currently in that role - they'll see the change at their next login.</li>
             <li>The <b>Administrator</b> role always has every permission and cannot be modified here.</li>
-            <li>To grant a one-off permission to a single user without changing their role, use the <b>Users · cross-functional</b> tab.</li>
+            <li>To grant a one-off permission to a single user without changing their role, use the <b>Users Â· cross-functional</b> tab.</li>
           </ul>
         }
       />
@@ -93,7 +93,7 @@ export function RolesMatrixPanel() {
         style={{ marginBlockEnd: 8 }}
       />
 
-      <Card size="small" style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
+      <Card size="small" className="jm-card" styles={{ body: { padding: 0 } }}>
         <Table
           rowKey={(r) => (r.kind === 'header' ? `h:${r.resource}` : `p:${r.permission}`)}
           size="small"

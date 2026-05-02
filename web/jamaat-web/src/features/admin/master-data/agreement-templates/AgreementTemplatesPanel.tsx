@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Button, Card, Input, Space, Table, Tag, Dropdown, App as AntdApp, Empty, Drawer, Form, Select, Switch, Alert } from 'antd';
 import type { TableProps, MenuProps } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, CopyOutlined } from '@ant-design/icons';
@@ -38,7 +38,7 @@ export function AgreementTemplatesPanel() {
       render: (v: string, row) => (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontWeight: 500 }}>{v}{row.isDefault && <Tag color="gold" style={{ marginInlineStart: 8 }}>Default</Tag>}</span>
-          <span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>v{row.version} · {row.language}</span>
+          <span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>v{row.version} Â· {row.language}</span>
         </div>
       ),
     },
@@ -78,7 +78,7 @@ export function AgreementTemplatesPanel() {
 
   return (
     <Card
-      style={{ border: '1px solid var(--jm-border)' }}
+      className="jm-card"
       styles={{ body: { padding: 0 } }}
     >
       <div style={{ padding: '12px 16px', display: 'flex', gap: 8, alignItems: 'center', borderBlockEnd: '1px solid var(--jm-border)' }}>
@@ -178,7 +178,7 @@ function TemplateFormDrawer({ open, onClose, template, placeholders }: {
 
   return (
     <Drawer
-      title={isEdit ? `Edit template · ${template!.code}` : 'New agreement template'}
+      title={isEdit ? `Edit template Â· ${template!.code}` : 'New agreement template'}
       open={open}
       onClose={onClose}
       width={760}
@@ -254,7 +254,7 @@ function TemplateFormDrawer({ open, onClose, template, placeholders }: {
             autoSize={{ minRows: 14, maxRows: 30 }}
             value={body} onChange={(e) => setBody(e.target.value)}
             style={{ fontFamily: 'Consolas, monospace', fontSize: 13 }}
-            placeholder="# Pledge Agreement&#10;&#10;I, {{party_name}}, pledge…"
+            placeholder="# Pledge Agreement&#10;&#10;I, {{party_name}}, pledgeâ€¦"
           />
         </Form.Item>
       </Form>

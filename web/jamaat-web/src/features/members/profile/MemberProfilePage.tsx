@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import {
   Card, Tabs, Spin, Result, Space, Button, Form, Input, InputNumber, Select, DatePicker, Switch, Tag,
   Row, Col, Descriptions, App as AntdApp, Avatar, Divider, Typography, Badge, Upload, Alert,
@@ -89,7 +89,7 @@ export function MemberProfilePage() {
     <div>
       <PageHeader
         title={profile.fullName}
-        subtitle={`ITS ${profile.itsNumber}${profile.tanzeemFileNo ? ` · File #${profile.tanzeemFileNo}` : ''}${profile.familyName ? ` · ${profile.familyName}` : ''}`}
+        subtitle={`ITS ${profile.itsNumber}${profile.tanzeemFileNo ? ` Â· File #${profile.tanzeemFileNo}` : ''}${profile.familyName ? ` Â· ${profile.familyName}` : ''}`}
         actions={<Button onClick={() => navigate('/members')}>Back</Button>}
       />
 
@@ -127,13 +127,13 @@ export function MemberProfilePage() {
                   <Tag>{profile.age != null ? `${profile.age} yrs` : `${profile.ageSnapshot} yrs (snapshot)`}</Tag>
                 )}
                 <Tag color={VerificationStatusColor[profile.dataVerificationStatus]} icon={<SafetyCertificateOutlined />}>
-                  Data · {VerificationStatusLabel[profile.dataVerificationStatus]}
+                  Data Â· {VerificationStatusLabel[profile.dataVerificationStatus]}
                 </Tag>
                 <Tag color={VerificationStatusColor[profile.photoVerificationStatus]} icon={<FileProtectOutlined />}>
-                  Photo · {VerificationStatusLabel[profile.photoVerificationStatus]}
+                  Photo Â· {VerificationStatusLabel[profile.photoVerificationStatus]}
                 </Tag>
-                {profile.sectorCode && <Tag icon={<HomeOutlined />}>{profile.sectorCode}{profile.subSectorCode ? ` · ${profile.subSectorCode}` : ''}</Tag>}
-                {profile.jamaat && <Tag icon={<GlobalOutlined />}>{profile.jamaat}{profile.jamiaat ? ` · ${profile.jamiaat}` : ''}</Tag>}
+                {profile.sectorCode && <Tag icon={<HomeOutlined />}>{profile.sectorCode}{profile.subSectorCode ? ` Â· ${profile.subSectorCode}` : ''}</Tag>}
+                {profile.jamaat && <Tag icon={<GlobalOutlined />}>{profile.jamaat}{profile.jamiaat ? ` Â· ${profile.jamiaat}` : ''}</Tag>}
               </Space>
             </div>
           </Col>
@@ -150,7 +150,7 @@ export function MemberProfilePage() {
         </Row>
       </Card>
 
-      <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
+      <Card className="jm-card" styles={{ body: { padding: 0 } }}>
         <Tabs
           tabPosition="left"
           activeKey={activeTab}
@@ -363,7 +363,7 @@ function FamilyTab({ profile }: { profile: MemberProfile; onSaved: (p: MemberPro
         />
       </Card>
 
-      <Card title="Marriage" size="small" style={{ border: '1px solid var(--jm-border)' }}>
+      <Card title="Marriage" size="small" className="jm-card">
         <Descriptions size="small" column={2} colon={false} labelStyle={{ color: 'var(--jm-gray-500)', fontSize: 12 }}
           items={[
             { key: 'nikah', label: 'Date of Nikah', children: profile.dateOfNikah ? dayjs(profile.dateOfNikah).format('DD MMM YYYY') : '-' },
@@ -948,7 +948,7 @@ function VerificationTab({ profile, onSaved, onErr }: { profile: MemberProfile; 
       </Row>
 
       {profile.lastScannedAtUtc && (
-        <Card size="small" title="Last event scan" style={{ border: '1px solid var(--jm-border)' }}>
+        <Card size="small" title="Last event scan" className="jm-card">
           <Descriptions size="small" column={2}
             items={[
               { key: 'e', label: 'Event', children: profile.lastScannedEventName ?? '-' },
@@ -1023,7 +1023,7 @@ function WealthTab({ memberId }: { memberId: string }) {
         message="Self-declared wealth"
         description="Members declare what they own; values aren't appraised. Visible only to admins, QH approvers, counters and accountants. Used as context for loan + zakat decisions; never shared in aggregate exports."
       />
-      <Card size="small" title="Assets" style={{ border: '1px solid var(--jm-border)' }}
+      <Card size="small" title="Assets" className="jm-card"
         extra={
           <Space>
             <span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>

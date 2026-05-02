@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import {
   Card, Space, Form, Input, Select, InputNumber, DatePicker, Button, Table, Radio, Alert,
   Switch, Typography, App as AntdApp, Steps, Result, Tabs,
@@ -131,7 +131,7 @@ export function NewCommitmentPage() {
       />
 
       {step === 0 && (
-        <Card style={{ border: '1px solid var(--jm-border)' }}>
+        <Card className="jm-card">
           <Form layout="vertical" requiredMark={false}>
             <Form.Item label="Pledge by">
               <Radio.Group
@@ -233,7 +233,7 @@ export function NewCommitmentPage() {
       )}
 
       {step === 1 && (
-        <Card style={{ border: '1px solid var(--jm-border)' }}>
+        <Card className="jm-card">
           <Space direction="vertical" size={16} style={{ inlineSize: '100%' }}>
             <Alert
               type="info"
@@ -281,7 +281,7 @@ export function NewCommitmentPage() {
       )}
 
       {step === 2 && createdId && (
-        <Card style={{ border: '1px solid var(--jm-border)' }}>
+        <Card className="jm-card">
           <AcceptanceStep commitmentId={createdId} />
         </Card>
       )}
@@ -384,7 +384,7 @@ function AcceptanceStep({ commitmentId }: { commitmentId: string }) {
     });
   };
 
-  if (commitmentQ.isLoading || templatesQ.isLoading) return <div>Loading…</div>;
+  if (commitmentQ.isLoading || templatesQ.isLoading) return <div>Loadingâ€¦</div>;
   if (!commitmentQ.data) return <Result status="404" title="Commitment not found" />;
 
   return (
@@ -404,7 +404,7 @@ function AcceptanceStep({ commitmentId }: { commitmentId: string }) {
             placeholder="Select agreement template"
             options={(templatesQ.data?.items ?? []).map((t) => ({
               value: t.id,
-              label: `${t.name}${t.fundTypeCode ? ` (${t.fundTypeCode})` : ''}${t.isDefault ? ' · default' : ''}`,
+              label: `${t.name}${t.fundTypeCode ? ` (${t.fundTypeCode})` : ''}${t.isDefault ? ' Â· default' : ''}`,
             }))}
           />
         </Form.Item>

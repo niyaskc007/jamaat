@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Button, Card, Input, Select, Table, Tag, Empty, Progress, Space } from 'antd';
 import type { TableProps } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, BankOutlined, DownloadOutlined } from '@ant-design/icons';
@@ -51,7 +51,7 @@ export function QarzanHasanaPage() {
           <Progress percent={Math.min(100, Number(r.progressPercent.toFixed(1)))} size="small"
             status={r.status === 7 ? 'success' : r.status === 8 || r.status === 9 || r.status === 10 ? 'exception' : 'active'} />
           <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>
-            Repaid {money(r.amountRepaid, r.currency)} · outstanding {money(r.amountOutstanding, r.currency)}
+            Repaid {money(r.amountRepaid, r.currency)} Â· outstanding {money(r.amountOutstanding, r.currency)}
           </div>
         </div>
       ) : <span style={{ color: 'var(--jm-gray-400)' }}>-</span>,
@@ -86,7 +86,7 @@ export function QarzanHasanaPage() {
           helpHref="/help"
         />
       ) : (
-      <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
+      <Card className="jm-card" styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderBlockEnd: '1px solid var(--jm-border)' }}>
           <Input placeholder="Search code" prefix={<SearchOutlined />} allowClear value={search}
             onChange={(e) => setSearch(e.target.value)} onPressEnter={() => setPage(1)} style={{ inlineSize: 240 }} />

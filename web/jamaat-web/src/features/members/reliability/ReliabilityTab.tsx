@@ -1,4 +1,4 @@
-import { Card, Row, Col, Tag, Empty, Alert, Button, Space, Typography, Progress, Tooltip } from 'antd';
+﻿import { Card, Row, Col, Tag, Empty, Alert, Button, Space, Typography, Progress, Tooltip } from 'antd';
 import { ReloadOutlined, InfoCircleOutlined, ThunderboltOutlined, CheckCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -78,7 +78,7 @@ export function ReliabilityTab({ memberId }: { memberId: string }) {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 500 }}>{l.description}</div>
                 <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>
-                  Ref <span className="jm-tnum">{l.reference}</span> · {dayjs(l.occurredOn).format('DD MMM YYYY')}
+                  Ref <span className="jm-tnum">{l.reference}</span> Â· {dayjs(l.occurredOn).format('DD MMM YYYY')}
                 </div>
               </div>
             </div>
@@ -171,7 +171,7 @@ function DimensionCard({ d }: { d: ReturnType<() => ReliabilityProfile['dimensio
   const score = d.score ?? 0;
   const color = score >= 85 ? '#0E5C40' : score >= 70 ? '#0B6E63' : score >= 55 ? '#D97706' : '#DC2626';
   return (
-    <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+    <Card size="small" className="jm-card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <div style={{ fontWeight: 500, fontSize: 13 }}>{d.name}</div>
         <Tooltip title={`${(d.weight * 100).toFixed(0)}% weight`}>

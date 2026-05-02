@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Button, Card, Input, Table, Tag, Space, App as AntdApp, Drawer, Form, Switch, Select, Empty, Dropdown } from 'antd';
 import type { TableProps, MenuProps } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, MoreOutlined, HomeOutlined } from '@ant-design/icons';
@@ -63,7 +63,7 @@ function SectorsList() {
   ];
 
   return (
-    <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
+    <Card className="jm-card" styles={{ body: { padding: 0 } }}>
       <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderBlockEnd: '1px solid var(--jm-border)' }}>
         <Input placeholder="Search sectors" prefix={<SearchOutlined />} allowClear value={search}
           onChange={(e) => setSearch(e.target.value)} onPressEnter={() => setPage(1)} style={{ inlineSize: 320 }} />
@@ -106,7 +106,7 @@ function SectorDrawer({ open, onClose, sector }: { open: boolean; onClose: () =>
   });
 
   return (
-    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit sector · ${sector!.code}` : 'New sector'} width={520} destroyOnHidden
+    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit sector Â· ${sector!.code}` : 'New sector'} width={520} destroyOnHidden
       footer={<Space style={{ inlineSize: '100%', justifyContent: 'flex-end' }}><Button onClick={onClose}>Cancel</Button><Button type="primary" loading={mut.isPending} onClick={() => mut.mutate(form.getFieldsValue())}>Save</Button></Space>}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={sector ?? { isActive: true }}>
         {!isEdit && <Form.Item label="Code" name="code" rules={[{ required: true }]}><Input placeholder="e.g., HATEMI" /></Form.Item>}
@@ -172,7 +172,7 @@ function SubSectorsList() {
   ];
 
   return (
-    <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
+    <Card className="jm-card" styles={{ body: { padding: 0 } }}>
       <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderBlockEnd: '1px solid var(--jm-border)' }}>
         <Input placeholder="Search" prefix={<SearchOutlined />} allowClear value={search}
           onChange={(e) => setSearch(e.target.value)} onPressEnter={() => setPage(1)} style={{ inlineSize: 240 }} />
@@ -215,7 +215,7 @@ function SubSectorDrawer({ open, onClose, sub, sectors }: { open: boolean; onClo
   });
 
   return (
-    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit sub-sector · ${sub!.code}` : 'New sub-sector'} width={520} destroyOnHidden
+    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit sub-sector Â· ${sub!.code}` : 'New sub-sector'} width={520} destroyOnHidden
       footer={<Space style={{ inlineSize: '100%', justifyContent: 'flex-end' }}><Button onClick={onClose}>Cancel</Button><Button type="primary" loading={mut.isPending} onClick={() => mut.mutate(form.getFieldsValue())}>Save</Button></Space>}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={sub ?? { isActive: true }}>
         {!isEdit && (

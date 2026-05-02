@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import {
   Card, Tabs, Space, Button, Form, Input, InputNumber, Select, DatePicker, Switch, Tag, Row, Col,
   App as AntdApp, Upload, Spin, Result, Table, Empty, Modal, Alert, QRCode,
@@ -58,7 +58,7 @@ export function EventDetailPage() {
     <div>
       <PageHeader
         title={event.name}
-        subtitle={`${event.categoryName ?? categoryLabelOf(categoriesQ.data, event.category) ?? EventCategoryLabel[event.category] ?? `Category ${event.category}`} · ${formatDate(event.eventDate)}${event.eventDateHijri ? ` · ${event.eventDateHijri}` : ''}${event.place ? ` · ${event.place}` : ''}`}
+        subtitle={`${event.categoryName ?? categoryLabelOf(categoriesQ.data, event.category) ?? EventCategoryLabel[event.category] ?? `Category ${event.category}`} Â· ${formatDate(event.eventDate)}${event.eventDateHijri ? ` Â· ${event.eventDateHijri}` : ''}${event.place ? ` Â· ${event.place}` : ''}`}
         actions={
           <Space>
             <Button icon={<LinkOutlined />}
@@ -90,7 +90,7 @@ export function EventDetailPage() {
         {event.capacity != null && <Statistic label="Capacity" value={event.capacity} />}
       </div>
 
-      <Card style={{ border: '1px solid var(--jm-border)' }} styles={{ body: { padding: 0 } }}>
+      <Card className="jm-card" styles={{ body: { padding: 0 } }}>
         <Tabs defaultActiveKey="overview"
           tabBarStyle={{ paddingInline: 16, marginBlockEnd: 0 }}
           items={[
@@ -160,7 +160,7 @@ function OverviewTab({ event, onSaved, categoryOptions }: {
         }}>
         <Row gutter={16}>
           <Col span={16}><Form.Item label="Slug" help={`Public URL path. Read-only - computed from the name.`}><Input value={event.slug} disabled /></Form.Item></Col>
-          <Col span={8}><Form.Item label="Category" name="category" help="Manage under Master Data ▸ Lookups (EventCategory).">
+          <Col span={8}><Form.Item label="Category" name="category" help="Manage under Master Data â–¸ Lookups (EventCategory).">
             <Select options={categoryOptions} />
           </Form.Item></Col>
           <Col span={12}><Form.Item label="Name" name="name" rules={[{ required: true }]}><Input /></Form.Item></Col>
@@ -258,7 +258,7 @@ function BrandingTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => 
     <div style={{ padding: 24 }}>
       <Row gutter={24}>
         <Col span={12}>
-          <Card size="small" title="Cover image" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" title="Cover image" className="jm-card">
             <CoverImagePreview src={event.coverImageUrl} />
             <Upload maxCount={1} showUploadList={false} accept="image/*" beforeUpload={(file) => { uploadMut.mutate(file); return false; }}>
               <Button icon={<UploadOutlined />} loading={uploadMut.isPending} style={{ marginBlockStart: 12 }}>Upload new cover</Button>
@@ -266,7 +266,7 @@ function BrandingTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => 
           </Card>
         </Col>
         <Col span={12}>
-          <Card size="small" title="Colors + logo" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" title="Colors + logo" className="jm-card">
             <Form layout="vertical">
               <Form.Item label="Primary color" help="Applied to buttons + accents on the public portal page.">
                 <ColorOrGradientPicker value={primary} onChange={(v) => setPrimary(v ?? '#0E5C40')} mode="solid" />
@@ -286,7 +286,7 @@ function BrandingTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => 
           </Card>
         </Col>
         <Col span={24} style={{ marginBlockStart: 16 }}>
-          <Card size="small" title="Live preview" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card size="small" title="Live preview" className="jm-card">
             <div style={{
               padding: 24, borderRadius: 12,
               background: `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)`,
@@ -297,7 +297,7 @@ function BrandingTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => 
               <div style={{ fontSize: 28, fontWeight: 600, marginBlockStart: 6 }}>{event.name}</div>
               {event.tagline && <div style={{ fontSize: 14, opacity: 0.9, marginBlockStart: 4 }}>{event.tagline}</div>}
               <div style={{ marginBlockStart: 12, fontSize: 13, opacity: 0.85 }}>
-                <CalendarOutlined /> {formatDate(event.eventDate)}{event.place ? ` · ${event.place}` : ''}
+                <CalendarOutlined /> {formatDate(event.eventDate)}{event.place ? ` Â· ${event.place}` : ''}
               </div>
             </div>
           </Card>
@@ -386,7 +386,7 @@ function AgendaTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => vo
     <div style={{ padding: 24 }}>
       <Space direction="vertical" size={12} style={{ inlineSize: '100%' }}>
         {items.map((r, i) => (
-          <Card key={i} size="small" style={{ border: '1px solid var(--jm-border)' }}>
+          <Card key={i} size="small" className="jm-card">
             <Row gutter={12}>
               <Col span={10}><Input placeholder="Title (e.g., Opening prayer)" value={r.title} onChange={(e) => updateRow(i, { title: e.target.value })} /></Col>
               <Col span={4}><Input placeholder="Start HH:mm" value={r.startTime ?? ''} onChange={(e) => updateRow(i, { startTime: e.target.value })} /></Col>
@@ -437,8 +437,8 @@ function RegistrationsTab({ event }: { event: Event }) {
           <div style={{ fontWeight: 500 }}>{v}</div>
           <div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
             {r.attendeeItsNumber ? `ITS ${r.attendeeItsNumber}` : 'Guest'}
-            {r.attendeeEmail ? ` · ${r.attendeeEmail}` : ''}
-            {r.attendeePhone ? ` · ${r.attendeePhone}` : ''}
+            {r.attendeeEmail ? ` Â· ${r.attendeeEmail}` : ''}
+            {r.attendeePhone ? ` Â· ${r.attendeePhone}` : ''}
           </div>
         </div>
       ),
@@ -539,9 +539,9 @@ function ShareTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => voi
               <Input placeholder={event.name} />
             </Form.Item>
             <Form.Item label="Share description" name="shareDescription" help="A short one-liner (up to ~160 chars). Shows under the title in share previews.">
-              <Input.TextArea rows={3} maxLength={160} showCount placeholder={event.tagline ?? 'Write something inviting…'} />
+              <Input.TextArea rows={3} maxLength={160} showCount placeholder={event.tagline ?? 'Write something invitingâ€¦'} />
             </Form.Item>
-            <Form.Item label="Share image" name="shareImageUrl" help="1200×630 recommended. Defaults to the event's cover image.">
+            <Form.Item label="Share image" name="shareImageUrl" help="1200Ã—630 recommended. Defaults to the event's cover image.">
               <ShareImagePicker eventId={event.id} fallback={event.coverImageUrl ?? null} />
             </Form.Item>
             <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBlockStart: 12, borderBlockStart: '1px solid var(--jm-border)' }}>

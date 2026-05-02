@@ -13,11 +13,19 @@
 
 /* Standard bordered card with elevation 1. Replaces the repeated
    `style={{ border: '1px solid var(--jm-border)', boxShadow: ... }}`
-   pattern that appeared on every Card across the app. */
+   pattern that appeared on every Card across the app.
+
+   block-size: 100% lets the card stretch to fill its parent Col so KPI
+   strips (and any flex/grid card row) stay vertically aligned even when
+   one tile has a sub-line / caption that the others lack. AntD Row has
+   default align-items: stretch on its flex Cols, so this works without
+   any extra wrapper styling. Cards in non-flex contexts ignore the rule
+   (block-size: 100% only takes effect when the parent has sized height). */
 .jm-card {
   border: 1px solid var(--jm-border);
   box-shadow: var(--jm-shadow-1);
   border-radius: var(--jm-radius-lg);
+  block-size: 100%;
 }
 
 /* ----- KPI tile ---------------------------------------------------- */

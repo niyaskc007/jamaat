@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Card, Select, Spin, Empty, Alert, Tag, Space, Button, App as AntdApp, Checkbox, Typography, Divider } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { UserOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
@@ -92,14 +92,14 @@ export function UserPermissionsPanel() {
             optionFilterProp="label"
             options={(usersQ.data?.items ?? []).map((u) => ({
               value: u.id,
-              label: `${u.fullName || u.userName} · ${u.userName}${u.isActive ? '' : ' (inactive)'}`,
+              label: `${u.fullName || u.userName} Â· ${u.userName}${u.isActive ? '' : ' (inactive)'}`,
             }))}
           />
           {detailQ.data && (
             <Space size={4}>
               <UserOutlined style={{ color: 'var(--jm-gray-500)' }} />
               <Typography.Text>{detailQ.data.fullName ?? detailQ.data.userName}</Typography.Text>
-              <span style={{ color: 'var(--jm-gray-400)' }}>·</span>
+              <span style={{ color: 'var(--jm-gray-400)' }}>Â·</span>
               {detailQ.data.roles.map((r) => <Tag key={r} color={r === 'Administrator' ? 'gold' : 'blue'}>{r}</Tag>)}
             </Space>
           )}
@@ -119,7 +119,7 @@ export function UserPermissionsPanel() {
       )}
 
       {userId && detailQ.data && (
-        <Card size="small" style={{ border: '1px solid var(--jm-border)' }}>
+        <Card size="small" className="jm-card">
           {groups.map((g, idx) => (
             <div key={g.resource}>
               {idx > 0 && <Divider style={{ marginBlock: 8 }} />}
