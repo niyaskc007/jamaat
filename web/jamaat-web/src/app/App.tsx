@@ -1,7 +1,11 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { AppLayout } from './AppLayout';
 import { LoginPage } from '../features/auth/LoginPage';
 import { ChangePasswordPage } from '../features/auth/ChangePasswordPage';
+import { SetupWizardPage } from '../features/setup/SetupWizardPage';
+import { setupApi } from '../features/setup/setupApi';
 import { MemberPortalLayout } from '../features/portal/me/MemberPortalLayout';
 import { MemberHomePage } from '../features/portal/me/MemberHomePage';
 import { MemberLoginHistoryPage } from '../features/portal/me/MemberLoginHistoryPage';
@@ -66,9 +70,42 @@ const Gate = ({ anyOf, children }: { anyOf: string[]; children: ReactNode }) => 
 );
 
 
+/// Boot-time guard: probe /setup/status once. If the backend reports no admin user yet,
+/// shove the operator at /setup; if setup is already complete and they somehow landed on
+/// /setup, redirect them to /login. The probe runs in the background — children render
+/// immediately so the public /setup route can paint without a blocking spinner.
+function SetupGate({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { data } = useQuery({
+    queryKey: ['setup-status'],
+    queryFn: setupApi.status,
+    // The status flips at most once per install (no admin -> has admin) so cache aggressively.
+    // After completion the SPA never needs to re-probe in this session.
+    staleTime: 60_000,
+    retry: 1,
+  });
+  useEffect(() => {
+    if (!data) return;
+    const onSetup = location.pathname.startsWith('/setup');
+    // Public surfaces that should keep working even before the wizard runs (e.g. event
+    // portal pages don't need an admin). Anything else redirects to /setup.
+    const isPublicSurface = location.pathname.startsWith('/portal/events')
+      || location.pathname.startsWith('/portal/qh-consent');
+    if (data.requiresSetup && !onSetup && !isPublicSurface) {
+      navigate('/setup', { replace: true });
+    } else if (!data.requiresSetup && onSetup) {
+      navigate('/login', { replace: true });
+    }
+  }, [data, location.pathname, navigate]);
+  return <>{children}</>;
+}
+
 export function App() {
   return (
+    <SetupGate>
     <Routes>
+      <Route path="/setup" element={<SetupWizardPage />} />
       <Route path="/login" element={<LoginPage />} />
       {/* Forced first-login change-password screen + free-form rotation. Uses its own
           layout (no AppLayout chrome) and is accessible without a JWT for the forced flow. */}
@@ -150,5 +187,6 @@ export function App() {
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
+    </SetupGate>
   );
 }

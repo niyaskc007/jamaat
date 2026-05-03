@@ -151,8 +151,19 @@ public static class DatabaseSeeder
         }
 
         // --- Admin user -----------------------------------------------------
+        // When `Setup:UseWizard` is true (set by the one-click installer), skip auto-creating
+        // the default admin. The first-run wizard at /setup creates it interactively from
+        // operator-supplied credentials. Dev environments leave this flag false so the seed
+        // continues to provision admin@jamaat.local / Admin@12345 the way it always has.
+        var useWizard = config.GetValue<bool>("Setup:UseWizard");
         var adminEmail = config["Seed:AdminEmail"] ?? "admin@jamaat.local";
         var adminPassword = config["Seed:AdminPassword"] ?? "Admin@12345";
+
+        if (useWizard)
+        {
+            logger.LogInformation("Setup:UseWizard=true — skipping seeded admin. First-run wizard will create one.");
+            return;
+        }
 
         var admin = await userMgr.FindByEmailAsync(adminEmail);
         if (admin is null)
