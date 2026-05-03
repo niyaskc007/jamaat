@@ -155,6 +155,10 @@ app.UseCors(CorsPolicy);
 
 app.UseAuthentication();
 app.UseMiddleware<TenantMiddleware>();
+// Activity tracker runs AFTER auth so it can read the JWT principal but BEFORE the
+// authorization gate (so we still record requests that get rejected with 403, since those
+// are also signal). Cheap: two dict touches + an interlocked increment per request.
+app.UseMiddleware<ActivityTrackerMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();

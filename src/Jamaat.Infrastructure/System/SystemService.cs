@@ -18,6 +18,7 @@ public sealed class SystemService(
     JamaatDbContext db,
     UserManager<ApplicationUser> userMgr,
     IHostEnvironment env,
+    IUserActivityTracker activityTracker,
     ILogger<SystemService> logger) : ISystemService
 {
     public async Task<ServerStatsDto> GetServerStatsAsync(CancellationToken ct = default)
@@ -286,7 +287,54 @@ ORDER BY [SizeKb] DESC;";
         try { database = await GetDatabaseStatsAsync(ct); } catch (Exception ex) { logger.LogWarning(ex, "Database stats failed in overview"); }
         var tenants = await GetTenantsAsync(ct);
         var logs = await GetRecentLogsAsync(logTake, ct);
-        return new SystemOverviewDto(server, database, tenants, logs);
+        var liveOps = await GetLiveOpsAsync(ct);
+        return new SystemOverviewDto(server, database, tenants, logs, liveOps);
+    }
+
+    public async Task<LiveOpsDto> GetLiveOpsAsync(CancellationToken ct = default)
+    {
+        var online = activityTracker.GetOnline(TimeSpan.FromMinutes(5));
+        var rate = activityTracker.GetRequestRate();
+
+        // Recent logins (success + failure mixed). IgnoreQueryFilters because we want them
+        // across tenants for the SuperAdmin's view.
+        var recentLogins = await db.LoginAttempts.IgnoreQueryFilters()
+            .OrderByDescending(la => la.AttemptedAtUtc)
+            .Take(25)
+            .Select(la => new RecentLoginDto(
+                la.Id, la.UserId, la.Identifier, la.Success, la.FailureReason,
+                la.IpAddress, la.UserAgent, la.GeoCountry, la.GeoCity, la.AttemptedAtUtc))
+            .ToListAsync(ct);
+
+        // Failed login count in the last hour - useful for spotting brute-force.
+        var oneHourAgo = DateTimeOffset.UtcNow.AddHours(-1);
+        var failedLastHour = await db.LoginAttempts.IgnoreQueryFilters()
+            .CountAsync(la => !la.Success && la.AttemptedAtUtc >= oneHourAgo, ct);
+
+        // Recent errors. Project to RecentErrorDto with stringified enums.
+        var recentErrors = await db.ErrorLogs.IgnoreQueryFilters()
+            .OrderByDescending(e => e.OccurredAtUtc)
+            .Take(25)
+            .Select(e => new RecentErrorDto(
+                e.Id,
+                e.Source.ToString(),
+                e.Severity.ToString(),
+                e.Status.ToString(),
+                e.Message,
+                e.ExceptionType,
+                e.Endpoint,
+                e.HttpStatus,
+                e.UserName,
+                e.OccurredAtUtc))
+            .ToListAsync(ct);
+
+        return new LiveOpsDto(
+            OnlineUsers: online,
+            OnlineUserCount: online.Count,
+            Requests: rate,
+            RecentLogins: recentLogins,
+            RecentErrors: recentErrors,
+            FailedLoginsLastHour: failedLastHour);
     }
 
     private static IReadOnlyList<DriveStatDto> SafeEnumerateDrives()

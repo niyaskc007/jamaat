@@ -11,4 +11,9 @@ public interface ISystemService
     Task<LogTailDto?> GetRecentLogsAsync(int take = 200, CancellationToken ct = default);
     Task<IReadOnlyList<TenantSummaryDto>> GetTenantsAsync(CancellationToken ct = default);
     Task<SystemOverviewDto> GetOverviewAsync(int logTake = 200, CancellationToken ct = default);
+
+    /// <summary>"Live ops": users online (in-memory tracker), recent logins (last 25 from
+    /// LoginAttempt), recent errors (last 25 from ErrorLog), and request-rate trend.
+    /// Designed to be polled at the same cadence as the rest of the monitor.</summary>
+    Task<LiveOpsDto> GetLiveOpsAsync(CancellationToken ct = default);
 }

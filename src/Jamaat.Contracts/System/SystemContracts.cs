@@ -79,4 +79,58 @@ public sealed record SystemOverviewDto(
     ServerStatsDto Server,
     DatabaseStatsDto? Database,
     IReadOnlyList<TenantSummaryDto> Tenants,
-    LogTailDto? RecentLogs);
+    LogTailDto? RecentLogs,
+    LiveOpsDto LiveOps);
+
+// ----------------------------------------------------------------------------
+// Live ops: who's hitting the box right now, recent logins, recent errors,
+// request-rate trend. Together these answer "is anything wrong _right now_".
+// ----------------------------------------------------------------------------
+
+public sealed record OnlineUserDto(
+    Guid UserId,
+    string UserName,
+    DateTimeOffset FirstSeenUtc,
+    DateTimeOffset LastSeenUtc,
+    string? IpAddress,
+    string? UserAgent,
+    long RequestCount);
+
+public sealed record RequestRateDto(
+    int Last1Min,
+    int Last5Min,
+    /// <summary>60 ints, oldest -> newest minute. Drives the spark/area chart.</summary>
+    int[] PerMinuteLast60,
+    long TotalSinceStartup);
+
+public sealed record RecentLoginDto(
+    long Id,
+    Guid? UserId,
+    string Identifier,
+    bool Success,
+    string? FailureReason,
+    string? IpAddress,
+    string? UserAgent,
+    string? GeoCountry,
+    string? GeoCity,
+    DateTimeOffset AttemptedAtUtc);
+
+public sealed record RecentErrorDto(
+    long Id,
+    string Source,
+    string Severity,
+    string Status,
+    string Message,
+    string? ExceptionType,
+    string? Endpoint,
+    int? HttpStatus,
+    string? UserName,
+    DateTimeOffset OccurredAtUtc);
+
+public sealed record LiveOpsDto(
+    IReadOnlyList<OnlineUserDto> OnlineUsers,
+    int OnlineUserCount,
+    RequestRateDto Requests,
+    IReadOnlyList<RecentLoginDto> RecentLogins,
+    IReadOnlyList<RecentErrorDto> RecentErrors,
+    int FailedLoginsLastHour);

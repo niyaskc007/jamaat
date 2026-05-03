@@ -8,12 +8,25 @@ import {
   TeamOutlined,
   FileSearchOutlined,
   ApiOutlined,
+  UserOutlined,
+  LoginOutlined,
+  WarningOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip } from 'recharts';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { KpiCard } from '../../shared/ui/KpiCard';
 import { formatDate } from '../../shared/format/format';
-import { systemApi, type DriveStat, type TableStat, type TenantSummary } from './systemApi';
+import {
+  systemApi,
+  type DriveStat,
+  type TableStat,
+  type TenantSummary,
+  type OnlineUser,
+  type RecentLogin,
+  type RecentError,
+} from './systemApi';
 
 const ACCENT = {
   positive: '#0E5C40',
@@ -52,12 +65,19 @@ export function SystemMonitorPage() {
     );
   }
 
-  const { server, database, tenants, recentLogs } = q.data;
+  const { server, database, tenants, recentLogs, liveOps } = q.data;
   const primaryDrive = server.drives.find(d => d.name.toUpperCase().startsWith('C')) ?? server.drives[0];
 
   const kpiCpuAccent = pickAccent(server.cpuPercent, 60, 85);
   const kpiRamAccent = pickAccent(server.systemRamPercent, 70, 90);
   const kpiDiskAccent = pickAccent(primaryDrive?.usedPercent ?? 0, 80, 95);
+  const failedAccent = liveOps.failedLoginsLastHour >= 20 ? ACCENT.danger
+                       : liveOps.failedLoginsLastHour >= 5 ? ACCENT.warn
+                       : ACCENT.positive;
+  const reqRateData = liveOps.requests.perMinuteLast60.map((count, i) => ({
+    label: i === 59 ? 'now' : `${59 - i}m`,
+    Requests: count,
+  }));
 
   return (
     <div>
@@ -66,7 +86,52 @@ export function SystemMonitorPage() {
         subtitle={`${server.machineName} · ${server.environment} · auto-refreshing every 5 s`}
       />
 
-      {/* -- KPI strip -------------------------------------------------------- */}
+      {/* -- Live ops KPI strip ---------------------------------------------- */}
+      <Row gutter={[16, 16]} style={{ marginBlockEnd: 16 }}>
+        <Col xs={12} md={6}>
+          <KpiCard
+            icon={<UserOutlined />}
+            label="Users online"
+            value={liveOps.onlineUserCount}
+            format="number"
+            caption="active in last 5 min"
+            accent={ACCENT.cyan}
+          />
+        </Col>
+        <Col xs={12} md={6}>
+          <KpiCard
+            icon={<LineChartOutlined />}
+            label="Requests / min"
+            value={liveOps.requests.last1Min}
+            format="number"
+            caption={`${liveOps.requests.last5Min} in last 5 min · ${liveOps.requests.totalSinceStartup.toLocaleString()} since startup`}
+            sparkline={liveOps.requests.perMinuteLast60.slice(-30)}
+            accent={ACCENT.financial}
+          />
+        </Col>
+        <Col xs={12} md={6}>
+          <KpiCard
+            icon={<LoginOutlined />}
+            label="Failed logins (1h)"
+            value={liveOps.failedLoginsLastHour}
+            format="number"
+            caption="lockout / brute-force signal"
+            accent={failedAccent}
+          />
+        </Col>
+        <Col xs={12} md={6}>
+          <KpiCard
+            icon={<WarningOutlined />}
+            label="Recent errors"
+            value={liveOps.recentErrors.length}
+            format="number"
+            caption={liveOps.recentErrors.length === 0 ? 'all quiet' : `latest: ${shorten(liveOps.recentErrors[0].message, 36)}`}
+            accent={liveOps.recentErrors.length > 0 ? ACCENT.warn : ACCENT.positive}
+          />
+        </Col>
+      </Row>
+
+      {/* -- Host KPI strip --------------------------------------------------- */}
       <Row gutter={[16, 16]} style={{ marginBlockEnd: 16 }}>
         <Col xs={12} md={6}>
           <KpiCard
@@ -113,6 +178,98 @@ export function SystemMonitorPage() {
           />
         </Col>
       </Row>
+
+      {/* -- Request rate trend (60-min sparkline) --------------------------- */}
+      <Card title={<span><LineChartOutlined /> &nbsp; Request rate (last 60 minutes)</span>} className="jm-card" style={{ marginBlockEnd: 16 }}>
+        <div style={{ width: '100%', height: 140 }}>
+          <ResponsiveContainer>
+            <AreaChart data={reqRateData} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
+              <defs>
+                <linearGradient id="rrate" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#7C3AED" stopOpacity={0.4} />
+                  <stop offset="100%" stopColor="#7C3AED" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="label" interval={9} fontSize={11} stroke="#94a3b8" />
+              <YAxis allowDecimals={false} fontSize={11} stroke="#94a3b8" width={32} />
+              <RTooltip />
+              <Area type="monotone" dataKey="Requests" stroke="#7C3AED" strokeWidth={2} fill="url(#rrate)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      {/* -- Online users ----------------------------------------------------- */}
+      <Card title={<span><UserOutlined /> &nbsp; Users online (last 5 min)</span>} className="jm-card" style={{ marginBlockEnd: 16 }}>
+        <Table<OnlineUser>
+          rowKey="userId"
+          dataSource={liveOps.onlineUsers}
+          pagination={false}
+          size="small"
+          columns={[
+            { title: 'User', dataIndex: 'userName' },
+            { title: 'IP', dataIndex: 'ipAddress', render: (v: string | null) => v ?? <Tag>—</Tag> },
+            { title: 'Agent', dataIndex: 'userAgent', render: (v: string | null) => v ? <Tooltip title={v}>{shorten(v, 32)}</Tooltip> : <Tag>—</Tag> },
+            { title: 'First seen', dataIndex: 'firstSeenUtc', render: (v: string) => formatDate(v) },
+            { title: 'Last seen', dataIndex: 'lastSeenUtc', render: (v: string) => <Tooltip title={v}>{relativeFromNow(v)}</Tooltip> },
+            { title: 'Requests', dataIndex: 'requestCount', align: 'right', render: (v: number) => v.toLocaleString() },
+          ]}
+          locale={{ emptyText: <Empty description="No users active right now" /> }}
+        />
+      </Card>
+
+      {/* -- Recent logins ---------------------------------------------------- */}
+      <Card title={<span><LoginOutlined /> &nbsp; Recent login attempts</span>} className="jm-card" style={{ marginBlockEnd: 16 }}>
+        <Table<RecentLogin>
+          rowKey="id"
+          dataSource={liveOps.recentLogins}
+          pagination={false}
+          size="small"
+          columns={[
+            {
+              title: 'When',
+              dataIndex: 'attemptedAtUtc',
+              render: (v: string) => <Tooltip title={v}>{relativeFromNow(v)}</Tooltip>,
+              width: 120,
+            },
+            {
+              title: 'Result',
+              dataIndex: 'success',
+              render: (s: boolean) => s ? <Tag color="green">success</Tag> : <Tag color="red">fail</Tag>,
+              width: 90,
+            },
+            { title: 'Identifier', dataIndex: 'identifier' },
+            { title: 'Reason', dataIndex: 'failureReason', render: (v?: string | null) => v ?? '' },
+            { title: 'IP', dataIndex: 'ipAddress', render: (v?: string | null) => v ?? <Tag>—</Tag>, width: 140 },
+            {
+              title: 'Location',
+              render: (_, r) => [r.geoCity, r.geoCountry].filter(Boolean).join(', ') || <Tag>—</Tag>,
+              width: 160,
+            },
+          ]}
+          locale={{ emptyText: <Empty description="No login attempts recorded yet" /> }}
+        />
+      </Card>
+
+      {/* -- Recent errors ---------------------------------------------------- */}
+      <Card title={<span><WarningOutlined /> &nbsp; Recent errors</span>} className="jm-card" style={{ marginBlockEnd: 16 }}>
+        <Table<RecentError>
+          rowKey="id"
+          dataSource={liveOps.recentErrors}
+          pagination={false}
+          size="small"
+          columns={[
+            { title: 'When', dataIndex: 'occurredAtUtc', render: (v: string) => <Tooltip title={v}>{relativeFromNow(v)}</Tooltip>, width: 120 },
+            { title: 'Severity', dataIndex: 'severity', render: severityTag, width: 90 },
+            { title: 'Source', dataIndex: 'source', width: 90 },
+            { title: 'Status', dataIndex: 'httpStatus', render: (v?: number | null) => v ?? '', width: 70 },
+            { title: 'Endpoint', dataIndex: 'endpoint', render: (v?: string | null) => v ? <Tooltip title={v}>{shorten(v, 32)}</Tooltip> : '', width: 220 },
+            { title: 'Message', dataIndex: 'message', render: (v: string) => <Tooltip title={v}>{shorten(v, 80)}</Tooltip> },
+            { title: 'User', dataIndex: 'userName', render: (v?: string | null) => v ?? <Tag>—</Tag>, width: 140 },
+          ]}
+          locale={{ emptyText: <Empty description="All quiet — no errors recorded" /> }}
+        />
+      </Card>
 
       {/* -- Server details + Process details -------------------------------- */}
       <Row gutter={[16, 16]} style={{ marginBlockEnd: 16 }}>
@@ -327,4 +484,23 @@ function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${bytes} B`;
+}
+
+function shorten(s: string | null | undefined, max: number): string {
+  if (!s) return '';
+  return s.length <= max ? s : s.slice(0, max - 1) + '…';
+}
+
+function relativeFromNow(iso: string): string {
+  const t = new Date(iso).getTime();
+  const diffSec = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (diffSec < 60) return `${diffSec}s ago`;
+  if (diffSec < 3600) return `${Math.round(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.round(diffSec / 3600)}h ago`;
+  return `${Math.round(diffSec / 86400)}d ago`;
+}
+
+function severityTag(s: string): React.ReactNode {
+  const colour = s === 'Critical' ? 'red' : s === 'Error' ? 'volcano' : s === 'Warning' ? 'orange' : 'blue';
+  return <Tag color={colour}>{s}</Tag>;
 }

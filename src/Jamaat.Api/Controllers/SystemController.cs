@@ -48,4 +48,12 @@ public sealed class SystemController(ISystemService svc) : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<TenantSummaryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Tenants(CancellationToken ct)
         => Ok(await svc.GetTenantsAsync(ct));
+
+    /// <summary>"Live ops" snapshot: users online, recent logins, recent errors, request-rate
+    /// trend. Same cadence as /overview - intended for the live tile strip.</summary>
+    [HttpGet("live")]
+    [Authorize(Policy = "system.view")]
+    [ProducesResponseType(typeof(LiveOpsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Live(CancellationToken ct)
+        => Ok(await svc.GetLiveOpsAsync(ct));
 }
