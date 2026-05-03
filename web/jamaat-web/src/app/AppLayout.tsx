@@ -341,6 +341,31 @@ export function AppLayout() {
         <Content style={{ padding: 24, maxInlineSize: 1440, inlineSize: '100%', marginInline: 'auto' }}>
           <Outlet />
         </Content>
+
+        {/* Brand footer: subtle, low-contrast - present on every authenticated page so the
+            "Jamaat is a product of Ubrixy Technologies" attribution is consistent without
+            stealing focus from the working surface. */}
+        <footer
+          style={{
+            paddingBlock: 12,
+            paddingInline: 24,
+            textAlign: 'center',
+            fontSize: 11,
+            color: 'var(--jm-gray-500)',
+            borderBlockStart: '1px solid var(--jm-border)',
+            background: 'var(--jm-bg-subtle, transparent)',
+          }}
+        >
+          © {new Date().getFullYear()} Jamaat · A product of{' '}
+          <a
+            href="https://www.ubrixy.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'var(--jm-primary-700)', textDecoration: 'none' }}
+          >
+            Ubrixy Technologies
+          </a>
+        </footer>
       </Layout>
     </Layout>
   );

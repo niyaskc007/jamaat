@@ -1,5 +1,6 @@
 Jamaat Web Application
-Copyright (c) 2026 Jamaat. All rights reserved.
+A product of Ubrixy Technologies (https://www.ubrixy.com/)
+Copyright (c) 2026 Ubrixy Technologies. All rights reserved.
 
 This software is proprietary. By installing this software you agree to use it
 only as authorized by the publisher.

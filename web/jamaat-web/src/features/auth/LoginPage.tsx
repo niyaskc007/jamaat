@@ -124,7 +124,17 @@ export function LoginPage() {
         </div>
 
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
-          <span>© {new Date().getFullYear()} Jamaat Finance</span>
+          <span>
+            © {new Date().getFullYear()} Jamaat · A product of{' '}
+            <a
+              href="https://www.ubrixy.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'underline' }}
+            >
+              Ubrixy Technologies
+            </a>
+          </span>
           <span>v0.1 · M0</span>
         </div>
       </div>

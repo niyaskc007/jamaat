@@ -15,10 +15,12 @@
 #endif
 
 #define MyAppName        "Jamaat"
-#define MyAppPublisher   "Jamaat"
-#define MyAppURL         "https://github.com/niyaskc007/jamaat"
+#define MyAppPublisher   "Ubrixy Technologies"
+#define MyAppURL         "https://www.ubrixy.com/"
+#define MyAppRepoURL     "https://github.com/niyaskc007/jamaat"
 #define MyAppId          "{{8C4A1E3B-2D14-4F7C-9F9B-1C8E45A3B2C1}"
 #define MyServiceName    "JamaatApi"
+#define MyAppCopyright   "Copyright (c) 2026 Ubrixy Technologies. All rights reserved."
 
 [Setup]
 AppId={#MyAppId}
@@ -44,7 +46,9 @@ ArchitecturesAllowed=x64compatible
 UninstallDisplayName={#MyAppName} {#MyAppVersion}
 VersionInfoVersion={#MyAppVersion}
 VersionInfoCompany={#MyAppPublisher}
-VersionInfoDescription={#MyAppName} community management web app
+VersionInfoCopyright={#MyAppCopyright}
+VersionInfoDescription={#MyAppName} - a product of {#MyAppPublisher}
+AppCopyright={#MyAppCopyright}
 ChangesEnvironment=no
 CloseApplications=force
 RestartApplications=no
@@ -52,9 +56,21 @@ RestartApplications=no
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+; Brand the standard wizard labels so "Powered by Ubrixy Technologies" is visible on the
+; welcome and finish pages without us having to hand-build a custom WelcomePage.
+[Messages]
+WelcomeLabel2=This will install [name/ver] on your computer.%n%nJamaat is a product of Ubrixy Technologies (https://www.ubrixy.com/).%n%nIt is recommended that you close all other applications before continuing.
+FinishedLabel=Setup has finished installing [name] on your computer.%n%nJamaat is a product of Ubrixy Technologies. The application may be launched by selecting the installed shortcuts.
+BeveledLabel=Powered by Ubrixy Technologies
+
 [Files]
 Source: "..\build\api\*";        DestDir: "{app}\Api";     Flags: recursesubdirs createallsubdirs ignoreversion
-Source: "scripts\test-db.ps1";   DestDir: "{tmp}";         Flags: deleteafterinstall
+; test-db.ps1 is needed BEFORE the install phase begins (the Database wizard page calls it
+; via the Test connection button). Inno's normal [Files] extraction happens during install,
+; not during the wizard, so we tag it `dontcopy` and extract it on demand from Pascal via
+; ExtractTemporaryFile('test-db.ps1').
+Source: "scripts\test-db.ps1";   DestDir: "{tmp}";         Flags: dontcopy
+; post-install.ps1 runs DURING the install via [Run], so the normal extraction path is fine.
 Source: "scripts\post-install.ps1"; DestDir: "{tmp}";      Flags: deleteafterinstall
 ; Optional - the .NET 10 Hosting Bundle. build.ps1 downloads into installer\redist\ and
 ; renames to "dotnet-hosting.exe" (fixed name so Inno [Files] doesn't need wildcards).
@@ -318,21 +334,35 @@ begin
   ApplyAuthVisibility();
 end;
 
-// "Test connection" - shells out to scripts\test-db.ps1 (extracted to {tmp}).
+// "Test connection" - shells out to scripts\test-db.ps1. The script is tagged `dontcopy`
+// in [Files] so Inno doesn't extract it during install (the wizard runs BEFORE that phase).
+// We extract it on demand here via ExtractTemporaryFile, then invoke PowerShell against
+// the path. ExtractTemporaryFile is idempotent - safe to call on every click.
 procedure TestDbClick(Sender: TObject);
 var
   ResultCode: Integer;
-  OutputFile, AuthMode, Cmd: String;
+  OutputFile, AuthMode, Cmd, ScriptPath: String;
   Output: AnsiString;  // LoadStringFromFile var-param type
 begin
   lbDbResult.Caption := 'Testing...';
   lbDbResult.Font.Color := clNavy;
 
+  // Extract the script the first time the button is clicked. Cheap on subsequent clicks -
+  // ExtractTemporaryFile no-ops once the file is already in {tmp}.
+  try
+    ExtractTemporaryFile('test-db.ps1');
+  except
+    lbDbResult.Caption := 'Failed to extract test-db.ps1 from the installer payload.';
+    lbDbResult.Font.Color := clRed;
+    exit;
+  end;
+  ScriptPath := ExpandConstant('{tmp}\test-db.ps1');
+
   if rbAuthWindows.Checked then AuthMode := 'Windows' else AuthMode := 'Sql';
   OutputFile := ExpandConstant('{tmp}\db-test-result.txt');
 
   // Quote everything that might contain a space. PowerShell parses these as positional/named.
-  Cmd := '/c powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\test-db.ps1') + '"' +
+  Cmd := '/c powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '"' +
          ' -Server "' + edDbServer.Text + '"' +
          ' -Database "' + edDbName.Text + '"' +
          ' -AuthMode ' + AuthMode +
