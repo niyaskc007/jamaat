@@ -71,7 +71,11 @@ builder.Services
     });
 
 // ---- Controllers + OpenAPI (native .NET 10) -------------------------------
-builder.Services.AddControllers();
+// Global UsageTrackingActionFilter emits a UsageEvent on every authenticated controller
+// action invocation (analytics aggregations roll up from these rows). The filter is
+// transient/per-request via DI - its dependencies are scoped (ITenantContext) and a
+// singleton (IUsageEventQueue), so AddMvc resolves a fresh one per request.
+builder.Services.AddControllers(o => o.Filters.Add<Jamaat.Api.Filters.UsageTrackingActionFilter>());
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 

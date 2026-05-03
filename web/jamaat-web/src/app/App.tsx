@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AppLayout } from './AppLayout';
 import { LoginPage } from '../features/auth/LoginPage';
@@ -58,6 +58,8 @@ import { AdministrationPage } from '../features/admin/AdministrationPage';
 import { ReliabilityDashboard } from '../features/admin/reliability/ReliabilityDashboard';
 import { ChangeRequestsPage } from '../features/admin/change-requests/ChangeRequestsPage';
 import { SystemMonitorPage } from '../features/system/SystemMonitorPage';
+import { SystemAnalyticsPage } from '../features/system/SystemAnalyticsPage';
+import { analyticsApi } from '../features/system/analyticsApi';
 import { AccountingPage } from '../features/accounting/AccountingPage';
 import { HelpPage } from '../features/help/HelpPage';
 import { MePage } from '../features/me/MePage';
@@ -102,9 +104,35 @@ function SetupGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/// Fires a /api/v1/usage/page event on every route change. Measures the duration of the
+/// previous page from one navigation to the next so the analytics dashboard can rank pages
+/// by engagement (long dwells) as well as raw views. Skips public-portal + setup + login
+/// (no JWT, nothing to attribute) and skips path-equality re-renders.
+function PageTracker() {
+  const location = useLocation();
+  const lastPathRef = useRef<{ path: string; at: number } | null>(null);
+  useEffect(() => {
+    const path = location.pathname + location.search;
+    // Skip public/anonymous surfaces - the API rejects unauthenticated tracker calls anyway.
+    if (path.startsWith('/login') || path.startsWith('/setup') || path.startsWith('/change-password')
+        || path.startsWith('/portal/events') || path.startsWith('/portal/qh-consent')) {
+      lastPathRef.current = null;
+      return;
+    }
+    // De-duplicate identical paths (some Router changes fire twice in StrictMode).
+    if (lastPathRef.current?.path === path) return;
+    const now = Date.now();
+    const durationMs = lastPathRef.current ? now - lastPathRef.current.at : undefined;
+    analyticsApi.trackPage(path, durationMs);
+    lastPathRef.current = { path, at: now };
+  }, [location.pathname, location.search]);
+  return null;
+}
+
 export function App() {
   return (
     <SetupGate>
+      <PageTracker />
     <Routes>
       <Route path="/setup" element={<SetupWizardPage />} />
       <Route path="/login" element={<LoginPage />} />
@@ -184,6 +212,7 @@ export function App() {
         <Route path="admin/reliability" element={<Gate anyOf={['admin.reliability']}><ReliabilityDashboard /></Gate>} />
         <Route path="admin/change-requests" element={<Gate anyOf={['member.changes.approve']}><ChangeRequestsPage /></Gate>} />
         <Route path="system" element={<Gate anyOf={['system.view']}><SystemMonitorPage /></Gate>} />
+        <Route path="system/analytics" element={<Gate anyOf={['system.analytics.view']}><SystemAnalyticsPage /></Gate>} />
         <Route path="help" element={<HelpPage />} />
         <Route path="me" element={<MePage />} />
       </Route>

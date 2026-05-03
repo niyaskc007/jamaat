@@ -1,6 +1,7 @@
 using FluentValidation;
 using Jamaat.Application.Accounting;
 using Jamaat.Application.Accounts;
+using Jamaat.Application.Analytics;
 using Jamaat.Application.BankAccounts;
 using Jamaat.Application.Commitments;
 using Jamaat.Application.Currencies;
@@ -155,6 +156,12 @@ public static class DependencyInjection
         // Singleton: in-memory user-activity + request-rate tracker. State must persist across
         // requests; the impl is internally thread-safe (ConcurrentDictionary + Interlocked).
         services.AddSingleton<IUserActivityTracker, SystemMonitor.UserActivityTracker>();
+
+        // Analytics: bounded queue (singleton, lock-free Channel) + scoped service that uses
+        // it + hosted background flush worker that drains the queue in batches.
+        services.AddSingleton<IUsageEventQueue, Analytics.UsageEventQueue>();
+        services.AddScoped<IAnalyticsService, Analytics.AnalyticsService>();
+        services.AddHostedService<Analytics.UsageEventFlushService>();
 
         // PDF renderers
         services.AddSingleton<IReceiptPdfRenderer, ReceiptPdfRenderer>();

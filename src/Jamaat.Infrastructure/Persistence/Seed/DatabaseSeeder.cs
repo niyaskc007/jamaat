@@ -892,9 +892,10 @@ Accepted on {{today}}.
     /// the admin UI, which is not what we want in a multi-tenant install.</summary>
     public static readonly string[] SystemPermissions =
     [
-        "system.view",          // read aggregate dashboard tiles (server / DB summary, drives, RAM)
-        "system.admin",         // umbrella permission for any future write actions (purge logs, force GC, etc.)
-        "system.logs.view",     // tail the API log files
-        "system.tenants.view",  // enumerate tenants with member / receipt counts
+        "system.view",            // read aggregate dashboard tiles (server / DB summary, drives, RAM)
+        "system.admin",           // umbrella permission for any future write actions (purge logs, force GC, etc.)
+        "system.logs.view",       // tail the API log files
+        "system.tenants.view",    // enumerate tenants with member / receipt counts
+        "system.analytics.view",  // usage analytics: top pages / actions / DAU / heatmap / top users
     ];
 }

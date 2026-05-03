@@ -153,6 +153,8 @@ export function AppLayout() {
     const sys: any[] = [];
     if (any('system.view'))
       sys.push({ key: '/system', icon: <CloudServerOutlined />, label: 'System Monitor' });
+    if (any('system.analytics.view'))
+      sys.push({ key: '/system/analytics', icon: <PieChartOutlined />, label: 'Usage Analytics' });
 
     const help: any[] = [{ key: '/help', icon: <QuestionCircleOutlined />, label: 'Help & Docs' }];
 
