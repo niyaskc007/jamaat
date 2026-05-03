@@ -165,6 +165,26 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
     Predicate = r => r.Tags.Contains("ready")
 });
 
+// SPA static-file serving. When the React bundle has been copied into wwwroot/ (production
+// install via install-gui.ps1), serve it from this same Kestrel process so there's a single
+// origin for both UI and API calls — no CORS gymnastics, single port to open in the firewall,
+// single Windows Service to install. Dev environments still run Vite separately on :5173 and
+// don't have a populated wwwroot, so this block is a no-op there.
+var wwwroot = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+if (Directory.Exists(wwwroot) && File.Exists(Path.Combine(wwwroot, "index.html")))
+{
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+    // SPA fallback: any non-API GET that didn't match a static file lands on index.html so
+    // React Router can take over. Excludes /api and /health so those still 404 cleanly when
+    // the path is wrong rather than silently rendering the SPA shell.
+    app.MapFallbackToFile("index.html").Add(b =>
+    {
+        // No additional filtering needed — MapControllers + MapHealthChecks above are already
+        // matched by the routing pipeline before the fallback runs.
+    });
+}
+
 app.Run();
 
 public partial class Program;
