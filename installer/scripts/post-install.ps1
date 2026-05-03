@@ -53,8 +53,22 @@ try {
     } else {
         $cs = "Server=$DbServer;Database=$DbDatabase;User Id=$DbUser;Password=$DbPassword;TrustServerCertificate=True;Encrypt=True;MultipleActiveResultSets=true"
     }
-    if (-not $cfg.ConnectionStrings) { $cfg | Add-Member -NotePropertyName ConnectionStrings -NotePropertyValue ([pscustomobject]@{}) -Force }
-    $cfg.ConnectionStrings.Default = $cs
+    # Helper: idempotently set a property on a pscustomobject. Required because PS 5.1
+    # `ConvertFrom-Json` returns objects you can't dot-assign new properties to: $cfg.Foo.Bar
+    # = ... blows up with "The property 'Bar' cannot be found on this object" when Bar
+    # didn't already exist. Add-Member -Force handles both create and overwrite.
+    function Set-NestedJsonProp { param($Obj, [string]$Name, $Value)
+        $Obj | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
+    }
+    function Initialize-JsonSection { param($Parent, [string]$Name)
+        if ($null -eq $Parent.$Name) {
+            $Parent | Add-Member -NotePropertyName $Name -NotePropertyValue ([pscustomobject]@{}) -Force
+        }
+        return $Parent.$Name
+    }
+
+    $csSection = Initialize-JsonSection $cfg 'ConnectionStrings'
+    Set-NestedJsonProp $csSection 'Default' $cs
 
     # CORS: always include the public hostname; append any extras.
     $origins = @("http://${PublicHost}:$Port", "https://${PublicHost}:$Port")
@@ -62,28 +76,36 @@ try {
         $extra = $CorsOrigins -split "[\r\n,]+" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
         $origins += $extra
     }
-    if (-not $cfg.Cors) { $cfg | Add-Member -NotePropertyName Cors -NotePropertyValue ([pscustomobject]@{}) -Force }
-    $cfg.Cors.Origins = @($origins | Select-Object -Unique)
+    $corsSection = Initialize-JsonSection $cfg 'Cors'
+    Set-NestedJsonProp $corsSection 'Origins' @($origins | Select-Object -Unique)
 
     # Bake the seed admin so DatabaseSeeder hooks pick it up if Setup:UseWizard is false.
     # We default to UseWizard=false for installer-driven installs (admin already chosen here).
-    if (-not $cfg.Setup) { $cfg | Add-Member -NotePropertyName Setup -NotePropertyValue ([pscustomobject]@{}) -Force }
-    $cfg.Setup.UseWizard = $false
-    if (-not $cfg.Seed) { $cfg | Add-Member -NotePropertyName Seed -NotePropertyValue ([pscustomobject]@{}) -Force }
-    $cfg.Seed.AdminEmail = $AdminEmail
-    $cfg.Seed.AdminPassword = $AdminPassword
-    $cfg.Seed.AdminFullName = $AdminFullName
-    $cfg.Seed.TenantName = $TenantName
-    $cfg.Seed.BaseCurrency = $BaseCurrency
+    $setupSection = Initialize-JsonSection $cfg 'Setup'
+    Set-NestedJsonProp $setupSection 'UseWizard' $false
+
+    $seedSection = Initialize-JsonSection $cfg 'Seed'
+    Set-NestedJsonProp $seedSection 'AdminEmail' $AdminEmail
+    Set-NestedJsonProp $seedSection 'AdminPassword' $AdminPassword
+    Set-NestedJsonProp $seedSection 'AdminFullName' $AdminFullName
+    Set-NestedJsonProp $seedSection 'TenantName' $TenantName
+    Set-NestedJsonProp $seedSection 'BaseCurrency' $BaseCurrency
 
     # Rotate the JWT signing key. The shipped value is a placeholder; on a fresh install
     # we generate a 64-byte random secret so two installs of the same MSI don't share a key.
     $bytes = New-Object byte[] 64
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    if (-not $cfg.Jwt) { $cfg | Add-Member -NotePropertyName Jwt -NotePropertyValue ([pscustomobject]@{}) -Force }
-    $cfg.Jwt.Key = [Convert]::ToBase64String($bytes)
+    $jwtSection = Initialize-JsonSection $cfg 'Jwt'
+    Set-NestedJsonProp $jwtSection 'Key' ([Convert]::ToBase64String($bytes))
 
-    $cfg | ConvertTo-Json -Depth 16 | Set-Content -Path $cfgPath -Encoding UTF8
+    # Direct .NET write rather than Set-Content. Set-Content does an atomic temp-write +
+    # move which Defender / EDR sometimes blocks on Program Files (the temp file's hash
+    # doesn't match a trusted EXE so it gets quarantined mid-rename, surfacing as "access
+    # denied" on the original target). WriteAllText is a single in-place write that's much
+    # less likely to trip those rules.
+    $jsonOut = $cfg | ConvertTo-Json -Depth 16
+    $utf8 = New-Object System.Text.UTF8Encoding($false)  # no BOM, ASP.NET config reader doesn't need one
+    [System.IO.File]::WriteAllText($cfgPath, $jsonOut, $utf8)
 
     # ---- Register Windows Service ----------------------------------------
     Write-Step "Registering JamaatApi Windows Service"
