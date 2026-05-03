@@ -112,29 +112,47 @@ try {
     $apiExe = Join-Path $apiDir 'Jamaat.Api.exe'
     if (-not (Test-Path $apiExe)) { throw "Jamaat.Api.exe not found at $apiExe" }
 
-    # If the service exists from a prior install, stop and delete first so binPath updates.
-    & sc.exe query JamaatApi 2>&1 | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        & sc.exe stop JamaatApi 2>&1 | Out-Null
-        Start-Sleep -Seconds 1
-        & sc.exe delete JamaatApi 2>&1 | Out-Null
-        Start-Sleep -Seconds 1
+    # Stop + remove any existing service from a prior install so binPath updates.
+    $existing = Get-Service -Name 'JamaatApi' -ErrorAction SilentlyContinue
+    if ($existing) {
+        Write-Step "Removing existing JamaatApi service"
+        if ($existing.Status -ne 'Stopped') {
+            try { Stop-Service -Name 'JamaatApi' -Force -ErrorAction Stop } catch { }
+            Start-Sleep -Seconds 1
+        }
+        # Remove-Service is PS 6+. On 5.1 we use sc.exe delete which DOES work for delete -
+        # the create command is the only one that PS 5.1 mangles in this script.
+        if (Get-Command Remove-Service -ErrorAction SilentlyContinue) {
+            Remove-Service -Name 'JamaatApi' -ErrorAction SilentlyContinue
+        } else {
+            & sc.exe delete JamaatApi 2>&1 | Out-Null
+        }
+        Start-Sleep -Seconds 2
     }
 
-    # binPath syntax: each space-separated piece is a token. We need quotes around the exe
-    # because of the program-files path with spaces, and we wrap the whole binPath value in
-    # quotes (with embedded escaped double-quotes around the exe). sc.exe is fussy about the
-    # space after each `=`.
+    # New-Service is the right tool here: clean named parameters, no sc.exe `key= value`
+    # quoting mess. The earlier `sc.exe create` route was failing with exit 1639 ("invalid
+    # command line argument") because PowerShell collapses spaces around `=` and sc.exe
+    # ends up seeing nonsense.
     $binPath = "`"$apiExe`" --urls http://*:$Port"
-    & sc.exe create JamaatApi binPath= $binPath start= auto DisplayName= "Jamaat API" 2>&1 | Out-String | Write-Output
-    if ($LASTEXITCODE -ne 0) { throw "sc.exe create failed (exit $LASTEXITCODE)" }
-    & sc.exe description JamaatApi "Jamaat community management web API." 2>&1 | Out-Null
-    # Restart on crash: 60s delay, max 3 retries inside 24h.
+    New-Service `
+        -Name 'JamaatApi' `
+        -BinaryPathName $binPath `
+        -DisplayName 'Jamaat API' `
+        -Description 'Jamaat community management web API.' `
+        -StartupType Automatic | Out-Null
+
+    # Restart on crash: 60s delay, three retries inside 24h. sc.exe failure DOES work
+    # because its arguments don't include a `=` followed by a space-separated value -
+    # they're all single tokens so PS arg-parsing is happy.
     & sc.exe failure JamaatApi reset= 86400 actions= restart/60000/restart/60000/restart/60000 2>&1 | Out-Null
 
     Write-Step "Starting JamaatApi service"
-    & sc.exe start JamaatApi 2>&1 | Out-String | Write-Output
-    if ($LASTEXITCODE -ne 0) { throw "sc.exe start failed (exit $LASTEXITCODE) - check $logsDir for stderr" }
+    try {
+        Start-Service -Name 'JamaatApi' -ErrorAction Stop
+    } catch {
+        throw "Start-Service failed: $($_.Exception.Message). Check $logsDir and the JamaatApi service status / event log."
+    }
 
     # ---- Wait for health -------------------------------------------------
     Write-Step "Waiting for API to respond on http://localhost:$Port"
