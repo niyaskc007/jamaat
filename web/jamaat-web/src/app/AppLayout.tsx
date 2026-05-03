@@ -36,6 +36,7 @@ import {
   ThunderboltOutlined,
   CreditCardOutlined,
   InfoCircleOutlined,
+  CloudServerOutlined,
 } from '@ant-design/icons';
 import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -146,6 +147,13 @@ export function AppLayout() {
     if (any('admin.reliability'))
       adm.push({ key: '/admin/reliability', icon: <ThunderboltOutlined />, label: 'Reliability' });
 
+    // -- System: SuperAdmin-only host & DB monitor (separate group from Admin so it
+    //    visually signals the elevated scope - SuperAdmins see both Admin and System,
+    //    tenant Administrators only see Admin).
+    const sys: any[] = [];
+    if (any('system.view'))
+      sys.push({ key: '/system', icon: <CloudServerOutlined />, label: 'System Monitor' });
+
     const help: any[] = [{ key: '/help', icon: <QuestionCircleOutlined />, label: 'Help & Docs' }];
 
     // When the sider is collapsed, AntD Menu renders submenus as popovers - useful for icon
@@ -160,6 +168,8 @@ export function AppLayout() {
       groups.push({ key: 'accounting', icon: <CalculatorOutlined />, label: t('nav.sectionAccounting'), children: acc });
     if (adm.length)
       groups.push({ key: 'admin', icon: <SettingOutlined />, label: t('nav.sectionAdmin'), children: adm });
+    if (sys.length)
+      groups.push({ key: 'system', icon: <CloudServerOutlined />, label: 'System', children: sys });
     groups.push({ key: 'support', icon: <InfoCircleOutlined />, label: 'Support', children: help });
     return groups;
   }, [t, hasPermission, user?.id]);

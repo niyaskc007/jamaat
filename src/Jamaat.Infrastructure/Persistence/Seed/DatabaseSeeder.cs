@@ -81,6 +81,20 @@ public static class DatabaseSeeder
             }
         }
 
+        // SuperAdmin is system-scoped (TenantId = null). It is intentionally the only role
+        // that grants the system.* permission set, which gates the cross-tenant System Monitor
+        // page (server health, DB size, logs, tenant inventory). The first installer-driven
+        // admin and the dev-mode auto-admin both get this role on top of Administrator.
+        if (await roleMgr.FindByNameAsync("SuperAdmin") is null)
+        {
+            await roleMgr.CreateAsync(new ApplicationRole
+            {
+                Name = "SuperAdmin",
+                Description = "System-scope administrator; can monitor the host, DB, logs, and all tenants.",
+                TenantId = null,
+            });
+        }
+
         // --- Permission claims on Administrator role -----------------------
         var adminRole = await roleMgr.FindByNameAsync("Administrator");
         if (adminRole is not null)
@@ -90,6 +104,21 @@ public static class DatabaseSeeder
             {
                 if (!existingClaims.Contains(perm))
                     await roleMgr.AddClaimAsync(adminRole, new Claim("permission", perm));
+            }
+        }
+
+        // --- Permission claims on SuperAdmin role --------------------------
+        // SuperAdmin gets EVERY permission - the tenant-level ones plus system.*. So a
+        // SuperAdmin can always step in and act as a tenant Administrator if needed without
+        // having to also grant the Administrator role separately.
+        var superAdminRole = await roleMgr.FindByNameAsync("SuperAdmin");
+        if (superAdminRole is not null)
+        {
+            var existingSuper = (await roleMgr.GetClaimsAsync(superAdminRole)).Where(c => c.Type == "permission").Select(c => c.Value).ToHashSet();
+            foreach (var perm in AllPermissions.Concat(SystemPermissions))
+            {
+                if (!existingSuper.Contains(perm))
+                    await roleMgr.AddClaimAsync(superAdminRole, new Claim("permission", perm));
             }
         }
 
@@ -189,24 +218,31 @@ public static class DatabaseSeeder
                 return;
             }
             await userMgr.AddToRoleAsync(admin, "Administrator");
+            await userMgr.AddToRoleAsync(admin, "SuperAdmin");
 
-            // Grant the admin user every permission claim as well (so JWT claims reflect it directly)
-            foreach (var perm in AllPermissions)
+            // Grant the admin user every permission claim as well (so JWT claims reflect it
+            // directly). Includes system.* so the dev admin lands on the System Monitor too.
+            foreach (var perm in AllPermissions.Concat(SystemPermissions))
                 await userMgr.AddClaimAsync(admin, new Claim("permission", perm));
 
             logger.LogInformation("Seeded admin user {Email} with password '{Password}'", adminEmail, adminPassword);
         }
         else
         {
-            // Admin already exists - idempotently reconcile permission claims so that
-            // permissions added in a later release flow to the existing admin user.
+            // Admin already exists - idempotently reconcile role membership and permission
+            // claims so that permissions / roles added in a later release flow to the existing
+            // admin user. SuperAdmin was added in a later phase, so older installs need it
+            // attached on next startup.
+            if (!await userMgr.IsInRoleAsync(admin, "SuperAdmin"))
+                await userMgr.AddToRoleAsync(admin, "SuperAdmin");
+
             var currentClaims = (await userMgr.GetClaimsAsync(admin))
                 .Where(c => c.Type == "permission")
                 .Select(c => c.Value)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var added = 0;
-            foreach (var perm in AllPermissions)
+            foreach (var perm in AllPermissions.Concat(SystemPermissions))
             {
                 if (!currentClaims.Contains(perm))
                 {
@@ -847,5 +883,18 @@ Accepted on {{today}}.
         "portal.events.view",              // see published events on the portal
         "portal.events.register",          // register self / family for events
         "portal.login_history.view.own",   // own login attempts
+    ];
+
+    /// <summary>System-scope permissions. Distinct from <see cref="AllPermissions"/> so that
+    /// regular Administrators (tenant-level) do not get system.* by default - those are reserved
+    /// for the SuperAdmin role and the first installer-provisioned admin. Adding system.* to
+    /// AllPermissions would leak the System Monitor to every tenant Administrator created via
+    /// the admin UI, which is not what we want in a multi-tenant install.</summary>
+    public static readonly string[] SystemPermissions =
+    [
+        "system.view",          // read aggregate dashboard tiles (server / DB summary, drives, RAM)
+        "system.admin",         // umbrella permission for any future write actions (purge logs, force GC, etc.)
+        "system.logs.view",     // tail the API log files
+        "system.tenants.view",  // enumerate tenants with member / receipt counts
     ];
 }

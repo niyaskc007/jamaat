@@ -19,6 +19,7 @@ using Jamaat.Application.Persistence;
 using Jamaat.Application.QarzanHasana;
 using Jamaat.Application.Receipts;
 using Jamaat.Application.Sectors;
+using Jamaat.Application.SystemMonitor;
 using Jamaat.Application.Tenants;
 using Jamaat.Application.Vouchers;
 using Jamaat.Domain.Abstractions;
@@ -150,6 +151,7 @@ public static class DependencyInjection
         services.AddScoped<IEventPortalService, EventPortalService>();
         services.AddScoped<IEventPageDesignerService, EventPageDesignerService>();
         services.AddScoped<ITenantService, TenantService>();
+        services.AddScoped<ISystemService, SystemMonitor.SystemService>();
 
         // PDF renderers
         services.AddSingleton<IReceiptPdfRenderer, ReceiptPdfRenderer>();

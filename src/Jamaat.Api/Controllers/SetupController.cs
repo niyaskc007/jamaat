@@ -134,8 +134,11 @@ public sealed class SetupController(
             // guard above passed). Promote them to admin instead of failing - this is the
             // friendly path when the operator created a user via the seeder but no admin role.
             await userMgr.AddToRoleAsync(existingUser, "Administrator");
+            // The installer-driven admin is also the SuperAdmin for the box.
+            if (await roleMgr.RoleExistsAsync("SuperAdmin"))
+                await userMgr.AddToRoleAsync(existingUser, "SuperAdmin");
             await GrantAllPermissionsAsync(existingUser);
-            logger.LogInformation("Setup: promoted existing user {Email} to admin.", email);
+            logger.LogInformation("Setup: promoted existing user {Email} to admin + SuperAdmin.", email);
             return Ok(new InitializeSetupResultDto(tenant.Id, existingUser.Id, email));
         }
 
@@ -163,20 +166,24 @@ public sealed class SetupController(
             });
         }
         await userMgr.AddToRoleAsync(admin, "Administrator");
+        if (await roleMgr.RoleExistsAsync("SuperAdmin"))
+            await userMgr.AddToRoleAsync(admin, "SuperAdmin");
         await GrantAllPermissionsAsync(admin);
         logger.LogInformation("Setup completed: admin {Email} created for tenant {TenantId}.", email, tenant.Id);
         return Ok(new InitializeSetupResultDto(tenant.Id, admin.Id, email));
     }
 
-    /// <summary>Grant the full permission catalog to the user as security claims, mirroring
-    /// the DatabaseSeeder pattern so JWTs reflect the permissions directly without a role lookup.</summary>
+    /// <summary>Grant the full permission catalog (tenant + system) to the user as security
+    /// claims, mirroring the DatabaseSeeder pattern so JWTs reflect the permissions directly
+    /// without a role lookup. The first installer-driven admin is also the SuperAdmin so we
+    /// include SystemPermissions explicitly here.</summary>
     private async Task GrantAllPermissionsAsync(ApplicationUser user)
     {
         var existing = (await userMgr.GetClaimsAsync(user))
             .Where(c => c.Type == "permission")
             .Select(c => c.Value)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var perm in DatabaseSeeder.AllPermissions)
+        foreach (var perm in DatabaseSeeder.AllPermissions.Concat(DatabaseSeeder.SystemPermissions))
         {
             if (existing.Contains(perm)) continue;
             await userMgr.AddClaimAsync(user, new Claim("permission", perm));
