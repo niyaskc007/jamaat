@@ -897,5 +897,6 @@ Accepted on {{today}}.
         "system.logs.view",       // tail the API log files
         "system.tenants.view",    // enumerate tenants with member / receipt counts
         "system.analytics.view",  // usage analytics: top pages / actions / DAU / heatmap / top users
+        "system.alerts.manage",   // acknowledge / dismiss system alerts raised by the alert evaluator
     ];
 }

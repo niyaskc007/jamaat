@@ -157,6 +157,12 @@ public static class DependencyInjection
         // requests; the impl is internally thread-safe (ConcurrentDictionary + Interlocked).
         services.AddSingleton<IUserActivityTracker, SystemMonitor.UserActivityTracker>();
 
+        // Alert evaluator: hosted background service that polls thresholds every 60s and
+        // raises SystemAlert rows + emails. Recipients = explicit Alerts:Recipients[] list,
+        // else the SuperAdmin role members' emails.
+        services.Configure<SystemAlertOptions>(config.GetSection(SystemAlertOptions.SectionName));
+        services.AddHostedService<SystemMonitor.SystemAlertEvaluator>();
+
         // Analytics: bounded queue (singleton, lock-free Channel) + scoped service that uses
         // it + hosted background flush worker that drains the queue in batches + daily purge
         // worker that ages out events past the configured retention window (default 90 days).

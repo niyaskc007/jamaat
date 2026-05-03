@@ -133,4 +133,20 @@ public sealed record LiveOpsDto(
     RequestRateDto Requests,
     IReadOnlyList<RecentLoginDto> RecentLogins,
     IReadOnlyList<RecentErrorDto> RecentErrors,
-    int FailedLoginsLastHour);
+    int FailedLoginsLastHour,
+    IReadOnlyList<SystemAlertDto> RecentAlerts,
+    int OpenAlertCount);
+
+public sealed record SystemAlertDto(
+    long Id,
+    string Fingerprint,
+    string Kind,
+    string Severity,
+    string Title,
+    string Detail,
+    DateTimeOffset FirstSeenAtUtc,
+    DateTimeOffset LastSeenAtUtc,
+    int RepeatCount,
+    int RecipientCount,
+    bool Acknowledged,
+    DateTimeOffset? AcknowledgedAtUtc);

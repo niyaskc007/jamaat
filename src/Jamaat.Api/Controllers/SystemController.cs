@@ -1,7 +1,10 @@
+using System.Security.Claims;
 using Jamaat.Application.SystemMonitor;
 using Jamaat.Contracts.SystemMonitor;
+using Jamaat.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Jamaat.Api.Controllers;
 
@@ -13,7 +16,7 @@ namespace Jamaat.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/system")]
-public sealed class SystemController(ISystemService svc) : ControllerBase
+public sealed class SystemController(ISystemService svc, JamaatDbContext db) : ControllerBase
 {
     [HttpGet("overview")]
     [Authorize(Policy = "system.view")]
@@ -56,4 +59,23 @@ public sealed class SystemController(ISystemService svc) : ControllerBase
     [ProducesResponseType(typeof(LiveOpsDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Live(CancellationToken ct)
         => Ok(await svc.GetLiveOpsAsync(ct));
+
+    /// <summary>Acknowledge an open alert. Idempotent - re-acking an already-acknowledged
+    /// alert returns 204 (the operator just clicked twice). The alert row remains for the
+    /// audit trail; it just gets deprioritised on the UI.</summary>
+    [HttpPost("alerts/{id:long}/acknowledge")]
+    [Authorize(Policy = "system.alerts.manage")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AcknowledgeAlert(long id, CancellationToken ct)
+    {
+        var alert = await db.SystemAlerts.FirstOrDefaultAsync(a => a.Id == id, ct);
+        if (alert is null) return NotFound();
+        if (alert.Acknowledged) return NoContent();
+        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+        var userId = Guid.TryParse(idClaim, out var u) ? u : Guid.Empty;
+        alert.Acknowledge(userId, DateTimeOffset.UtcNow);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
 }

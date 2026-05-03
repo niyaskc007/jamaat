@@ -117,6 +117,21 @@ export type RecentError = {
   occurredAtUtc: string;
 };
 
+export type SystemAlert = {
+  id: number;
+  fingerprint: string;
+  kind: string;
+  severity: string;
+  title: string;
+  detail: string;
+  firstSeenAtUtc: string;
+  lastSeenAtUtc: string;
+  repeatCount: number;
+  recipientCount: number;
+  acknowledged: boolean;
+  acknowledgedAtUtc?: string | null;
+};
+
 export type LiveOps = {
   onlineUsers: OnlineUser[];
   onlineUserCount: number;
@@ -124,6 +139,8 @@ export type LiveOps = {
   recentLogins: RecentLogin[];
   recentErrors: RecentError[];
   failedLoginsLastHour: number;
+  recentAlerts: SystemAlert[];
+  openAlertCount: number;
 };
 
 export type SystemOverview = {
@@ -142,4 +159,7 @@ export const systemApi = {
   logs: async (take = 500) => (await api.get<LogTail>('/api/v1/system/logs', { params: { take } })).data,
   tenants: async () => (await api.get<TenantSummary[]>('/api/v1/system/tenants')).data,
   live: async () => (await api.get<LiveOps>('/api/v1/system/live')).data,
+  acknowledgeAlert: async (id: number) => {
+    await api.post(`/api/v1/system/alerts/${id}/acknowledge`);
+  },
 };

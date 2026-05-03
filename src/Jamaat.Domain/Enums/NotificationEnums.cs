@@ -20,6 +20,10 @@ public enum NotificationKind
     /// <summary>An admin re-issued a temporary password - notify the user that their old
     /// temp pw is no longer valid and share the new one.</summary>
     TempPasswordIssued = 7,
+    /// <summary>System-level operational alert raised by the SuperAdmin alert evaluator.
+    /// Subject + body are pre-formatted by the evaluator; recipients are SuperAdmin role
+    /// members (or the explicit list in Alerts:Recipients).</summary>
+    SystemAlert = 8,
 }
 
 /// <summary>How the notification was delivered (or attempted). Multiple channels can be

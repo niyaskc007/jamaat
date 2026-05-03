@@ -328,13 +328,28 @@ ORDER BY [SizeKb] DESC;";
                 e.OccurredAtUtc))
             .ToListAsync(ct);
 
+        // Recent system alerts: 25 most-recent fires, with the unacknowledged ones counted
+        // separately so the SuperAdmin gets a single "X open alerts" badge.
+        var recentAlerts = await db.SystemAlerts
+            .OrderByDescending(a => a.LastSeenAtUtc)
+            .Take(25)
+            .Select(a => new SystemAlertDto(
+                a.Id, a.Fingerprint, a.Kind, a.Severity, a.Title, a.Detail,
+                a.FirstSeenAtUtc, a.LastSeenAtUtc, a.RepeatCount, a.RecipientCount,
+                a.Acknowledged, a.AcknowledgedAtUtc))
+            .ToListAsync(ct);
+
+        var openAlertCount = await db.SystemAlerts.CountAsync(a => !a.Acknowledged, ct);
+
         return new LiveOpsDto(
             OnlineUsers: online,
             OnlineUserCount: online.Count,
             Requests: rate,
             RecentLogins: recentLogins,
             RecentErrors: recentErrors,
-            FailedLoginsLastHour: failedLastHour);
+            FailedLoginsLastHour: failedLastHour,
+            RecentAlerts: recentAlerts,
+            OpenAlertCount: openAlertCount);
     }
 
     private static IReadOnlyList<DriveStatDto> SafeEnumerateDrives()

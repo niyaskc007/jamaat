@@ -1,4 +1,4 @@
-import { Card, Col, Row, Table, Tag, Spin, Alert, Progress, Empty, Tooltip } from 'antd';
+import { Card, Col, Row, Table, Tag, Spin, Alert, Progress, Empty, Tooltip, Button, message } from 'antd';
 import {
   CloudServerOutlined,
   DatabaseOutlined,
@@ -12,8 +12,10 @@ import {
   LoginOutlined,
   WarningOutlined,
   LineChartOutlined,
+  AlertOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip } from 'recharts';
 import { PageHeader } from '../../shared/ui/PageHeader';
 import { KpiCard } from '../../shared/ui/KpiCard';
@@ -26,6 +28,7 @@ import {
   type OnlineUser,
   type RecentLogin,
   type RecentError,
+  type SystemAlert as SystemAlertRow,
 } from './systemApi';
 
 const ACCENT = {
@@ -41,11 +44,21 @@ const ACCENT = {
 /// query) doesn't blank the whole page. Designed for at-a-glance health: a single look should
 /// answer "is the box ok, is the DB ok, are the logs angry, what tenants are using it".
 export function SystemMonitorPage() {
+  const qc = useQueryClient();
   const q = useQuery({
     queryKey: ['system', 'overview'],
     queryFn: () => systemApi.overview(200),
     refetchInterval: 5_000,
     refetchOnWindowFocus: true,
+  });
+
+  const ackMutation = useMutation({
+    mutationFn: (id: number) => systemApi.acknowledgeAlert(id),
+    onSuccess: () => {
+      message.success('Alert acknowledged.');
+      qc.invalidateQueries({ queryKey: ['system', 'overview'] });
+    },
+    onError: (e: Error) => message.error(`Failed to ack: ${e.message}`),
   });
 
   if (q.isLoading || !q.data) {
@@ -85,6 +98,18 @@ export function SystemMonitorPage() {
         title="System Monitor"
         subtitle={`${server.machineName} · ${server.environment} · auto-refreshing every 5 s`}
       />
+
+      {/* -- Open alerts banner ---------------------------------------------- */}
+      {liveOps.openAlertCount > 0 && (
+        <Alert
+          type={liveOps.recentAlerts.some(a => !a.acknowledged && a.severity === 'Critical') ? 'error' : 'warning'}
+          showIcon
+          icon={<AlertOutlined />}
+          message={`${liveOps.openAlertCount} open alert${liveOps.openAlertCount === 1 ? '' : 's'}`}
+          description={liveOps.recentAlerts.find(a => !a.acknowledged)?.title ?? 'See the Alerts section below.'}
+          style={{ marginBlockEnd: 16 }}
+        />
+      )}
 
       {/* -- Live ops KPI strip ---------------------------------------------- */}
       <Row gutter={[16, 16]} style={{ marginBlockEnd: 16 }}>
@@ -268,6 +293,48 @@ export function SystemMonitorPage() {
             { title: 'User', dataIndex: 'userName', render: (v?: string | null) => v ?? <Tag>—</Tag>, width: 140 },
           ]}
           locale={{ emptyText: <Empty description="All quiet — no errors recorded" /> }}
+        />
+      </Card>
+
+      {/* -- System alerts --------------------------------------------------- */}
+      <Card
+        title={<span><AlertOutlined /> &nbsp; System alerts</span>}
+        extra={<span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
+          {liveOps.openAlertCount} open · {liveOps.recentAlerts.length} recent
+        </span>}
+        className="jm-card"
+        style={{ marginBlockEnd: 16 }}
+      >
+        <Table<SystemAlertRow>
+          rowKey="id"
+          dataSource={liveOps.recentAlerts}
+          pagination={false}
+          size="small"
+          rowClassName={(r) => r.acknowledged ? 'jm-alert-acked' : ''}
+          columns={[
+            { title: 'Severity', dataIndex: 'severity', render: severityAlertTag, width: 100 },
+            { title: 'Kind', dataIndex: 'kind', render: (v: string) => <Tag>{v}</Tag>, width: 140 },
+            { title: 'Title', dataIndex: 'title', render: (v: string, r: SystemAlertRow) => (
+              <Tooltip title={r.detail}>
+                <span style={{ opacity: r.acknowledged ? 0.55 : 1 }}>{v}</span>
+              </Tooltip>
+            ) },
+            { title: 'First seen', dataIndex: 'firstSeenAtUtc', render: (v: string) => <Tooltip title={v}>{relativeFromNow(v)}</Tooltip>, width: 110 },
+            { title: 'Last seen', dataIndex: 'lastSeenAtUtc', render: (v: string) => <Tooltip title={v}>{relativeFromNow(v)}</Tooltip>, width: 110 },
+            { title: 'Repeats', dataIndex: 'repeatCount', align: 'right', width: 80,
+              render: (v: number) => v > 1 ? <Tag color="orange">×{v}</Tag> : <span style={{ color: 'var(--jm-gray-400)' }}>×1</span> },
+            { title: 'Notified', dataIndex: 'recipientCount', align: 'right', width: 80,
+              render: (v: number) => v === 0 ? <Tooltip title="No recipients resolved — check Alerts:Recipients or SuperAdmin emails"><Tag color="red">0</Tag></Tooltip> : v },
+            {
+              title: 'Status',
+              width: 130,
+              render: (_, r: SystemAlertRow) => r.acknowledged
+                ? <Tooltip title={r.acknowledgedAtUtc ?? ''}><Tag color="green" icon={<CheckCircleOutlined />}>acked</Tag></Tooltip>
+                : <Button size="small" type="primary" loading={ackMutation.isPending && ackMutation.variables === r.id}
+                    onClick={() => ackMutation.mutate(r.id)}>Acknowledge</Button>,
+            },
+          ]}
+          locale={{ emptyText: <Empty description="All clear — no alerts have fired" /> }}
         />
       </Card>
 
@@ -503,4 +570,10 @@ function relativeFromNow(iso: string): string {
 function severityTag(s: string): React.ReactNode {
   const colour = s === 'Critical' ? 'red' : s === 'Error' ? 'volcano' : s === 'Warning' ? 'orange' : 'blue';
   return <Tag color={colour}>{s}</Tag>;
+}
+
+function severityAlertTag(s: string): React.ReactNode {
+  const colour = s === 'Critical' ? 'red' : s === 'Warning' ? 'orange' : 'blue';
+  const icon = s === 'Critical' ? <AlertOutlined /> : <WarningOutlined />;
+  return <Tag color={colour} icon={icon}>{s}</Tag>;
 }
