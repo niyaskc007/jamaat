@@ -125,47 +125,67 @@ public sealed class AnalyticsService(
     public async Task<IReadOnlyList<TopActionDto>> TopActionsAsync(DateOnly from, DateOnly to, int take, Guid? tenantId, CancellationToken ct)
     {
         var (fromDto, toDto) = Range(from, to);
+
+        // Single raw SQL pass for stats + real p95. PERCENTILE_CONT is a window function in
+        // SQL Server (no GROUP BY support), so we use it as a window with PARTITION BY +
+        // SELECT DISTINCT to collapse to one row per (Action, Module, HttpMethod) bucket.
+        // Tenant filter is applied conditionally via ISNULL trick: when tenantId is null we
+        // pass Guid.Empty as the parameter and the predicate becomes a tautology against the
+        // real TenantId column. Cleaner than two near-identical SQL strings.
+        var tenantFilter = tenantId ?? Guid.Empty;
+        var rows = await db.Database
+            .SqlQuery<TopActionRaw>(
+                $@"
+SELECT TOP ({take})
+    Action, Module, HttpMethod, Calls, AvgMs, P95Ms
+FROM (
+    SELECT DISTINCT
+        Action,
+        Module,
+        HttpMethod,
+        CAST(COUNT(*) OVER (PARTITION BY Action, Module, HttpMethod) AS bigint) AS Calls,
+        AVG(CAST(DurationMs AS float)) OVER (PARTITION BY Action, Module, HttpMethod) AS AvgMs,
+        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY DurationMs)
+                                       OVER (PARTITION BY Action, Module, HttpMethod) AS P95Ms
+    FROM UsageEvents
+    WHERE Kind = 'action'
+      AND Action IS NOT NULL
+      AND DurationMs IS NOT NULL
+      AND OccurredAtUtc >= {fromDto}
+      AND OccurredAtUtc <= {toDto}
+      AND ({tenantFilter} = '00000000-0000-0000-0000-000000000000' OR TenantId = {tenantFilter})
+) g
+ORDER BY Calls DESC")
+            .ToListAsync(ct);
+
+        if (rows.Count == 0) return [];
+
+        // Distinct-user count per action - separate query because window functions can't
+        // express COUNT(DISTINCT) per partition without a self-join. EF translates this fine.
         var q = db.UsageEvents.IgnoreQueryFilters()
             .Where(e => e.Kind == "action" && e.Action != null && e.OccurredAtUtc >= fromDto && e.OccurredAtUtc <= toDto);
         if (tenantId is { } tid) q = q.Where(e => e.TenantId == tid);
 
-        // Pass 1: top actions by call count, with avg duration. Avoids nested-distinct.
-        var grouped = await q.GroupBy(e => new { e.Action, e.Module, e.HttpMethod })
-            .Select(g => new
-            {
-                g.Key.Action,
-                g.Key.Module,
-                g.Key.HttpMethod,
-                Calls = g.LongCount(),
-                AvgMs = g.Where(e => e.DurationMs != null).Average(e => (double?)e.DurationMs) ?? 0,
-                MaxMs = g.Where(e => e.DurationMs != null).Max(e => (int?)e.DurationMs) ?? 0,
-            })
-            .OrderByDescending(x => x.Calls)
-            .Take(take)
-            .ToListAsync(ct);
-
-        if (grouped.Count == 0) return [];
-
-        // Pass 2: distinct-user count per action (split because EF won't translate nested
-        // .Where(...).Select(...).Distinct().Count() inside a GroupBy projection).
-        var actionNames = grouped.Select(g => g.Action).Where(a => a != null).ToHashSet();
+        var actionNames = rows.Select(r => r.Action).ToHashSet();
         var userCounts = await q
-            .Where(e => actionNames.Contains(e.Action) && e.UserId != null)
-            .GroupBy(e => e.Action)
+            .Where(e => e.Action != null && actionNames.Contains(e.Action!) && e.UserId != null)
+            .GroupBy(e => e.Action!)
             .Select(g => new { Action = g.Key, Users = g.Select(x => x.UserId).Distinct().Count() })
-            .ToDictionaryAsync(x => x.Action!, x => x.Users, ct);
+            .ToDictionaryAsync(x => x.Action, x => x.Users, ct);
 
-        return grouped.Select(g => new TopActionDto(
-            g.Action ?? "",
-            g.Module,
-            g.HttpMethod ?? "",
-            g.Calls,
-            userCounts.GetValueOrDefault(g.Action ?? "", 0),
-            (int)g.AvgMs,
-            // p95 stand-in: EF Core doesn't translate ntile. Use Max for now; revisit with raw
-            // SQL via Database.SqlQuery<...>() if real p95 matters.
-            g.MaxMs)).ToList();
+        return rows.Select(r => new TopActionDto(
+            r.Action,
+            r.Module,
+            r.HttpMethod,
+            r.Calls,
+            userCounts.GetValueOrDefault(r.Action, 0),
+            (int)Math.Round(r.AvgMs),
+            (int)Math.Round(r.P95Ms))).ToList();
     }
+
+    /// <summary>Raw projection type for the PERCENTILE_CONT query. Property names must match
+    /// the SQL aliases exactly; SqlQuery binds by name.</summary>
+    private sealed record TopActionRaw(string Action, string Module, string HttpMethod, long Calls, double AvgMs, double P95Ms);
 
     public async Task<IReadOnlyList<DailyActiveUsersDto>> DailyActiveUsersAsync(DateOnly from, DateOnly to, Guid? tenantId, CancellationToken ct)
     {

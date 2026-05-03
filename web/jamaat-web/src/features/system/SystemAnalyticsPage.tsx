@@ -189,10 +189,12 @@ export function SystemAnalyticsPage() {
               pagination={false}
               size="small"
               columns={[
-                { title: 'Action', dataIndex: 'action', render: (v: string) => <Tooltip title={v}><span style={{ fontFamily: "'JetBrains Mono', 'Consolas', monospace", fontSize: 12 }}>{shorten(v, 28)}</span></Tooltip> },
-                { title: 'Method', dataIndex: 'httpMethod', render: (v: string) => <Tag color={methodColor(v)}>{v}</Tag>, width: 80 },
-                { title: 'Calls', dataIndex: 'calls', align: 'right', render: (v: number) => v.toLocaleString() },
-                { title: 'Avg', dataIndex: 'avgDurationMs', align: 'right', render: (v: number) => `${v} ms` },
+                { title: 'Action', dataIndex: 'action', render: (v: string) => <Tooltip title={v}><span style={{ fontFamily: "'JetBrains Mono', 'Consolas', monospace", fontSize: 12 }}>{shorten(v, 24)}</span></Tooltip> },
+                { title: 'Method', dataIndex: 'httpMethod', render: (v: string) => <Tag color={methodColor(v)}>{v}</Tag>, width: 70 },
+                { title: 'Calls', dataIndex: 'calls', align: 'right', render: (v: number) => v.toLocaleString(), width: 70 },
+                { title: 'Avg', dataIndex: 'avgDurationMs', align: 'right', render: (v: number) => `${v} ms`, width: 70 },
+                { title: 'p95', dataIndex: 'p95DurationMs', align: 'right',
+                  render: (v: number) => <span style={{ color: v > 500 ? 'var(--jm-danger)' : v > 200 ? 'var(--jm-caution)' : undefined }}>{v} ms</span>, width: 70 },
               ]}
               locale={{ emptyText: <Empty description="No API calls yet in this range" /> }}
             />

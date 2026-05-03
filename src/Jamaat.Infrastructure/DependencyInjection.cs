@@ -158,10 +158,13 @@ public static class DependencyInjection
         services.AddSingleton<IUserActivityTracker, SystemMonitor.UserActivityTracker>();
 
         // Analytics: bounded queue (singleton, lock-free Channel) + scoped service that uses
-        // it + hosted background flush worker that drains the queue in batches.
+        // it + hosted background flush worker that drains the queue in batches + daily purge
+        // worker that ages out events past the configured retention window (default 90 days).
         services.AddSingleton<IUsageEventQueue, Analytics.UsageEventQueue>();
         services.AddScoped<IAnalyticsService, Analytics.AnalyticsService>();
         services.AddHostedService<Analytics.UsageEventFlushService>();
+        services.Configure<AnalyticsRetentionOptions>(config.GetSection(AnalyticsRetentionOptions.SectionName));
+        services.AddHostedService<Analytics.UsageEventPurgeService>();
 
         // PDF renderers
         services.AddSingleton<IReceiptPdfRenderer, ReceiptPdfRenderer>();
