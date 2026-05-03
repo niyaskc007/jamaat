@@ -69,6 +69,7 @@ public class JamaatDbContext : IdentityDbContext<ApplicationUser, ApplicationRol
     public DbSet<LoginAttempt> LoginAttempts => Set<LoginAttempt>();
     public DbSet<UsageEvent> UsageEvents => Set<UsageEvent>();
     public DbSet<SystemAlert> SystemAlerts => Set<SystemAlert>();
+    public DbSet<SystemAuditLog> SystemAuditLogs => Set<SystemAuditLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

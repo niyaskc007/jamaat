@@ -150,3 +150,15 @@ public sealed record SystemAlertDto(
     int RecipientCount,
     bool Acknowledged,
     DateTimeOffset? AcknowledgedAtUtc);
+
+/// <summary>One row in the operator-audit feed - a SuperAdmin took a system-level action.</summary>
+public sealed record SystemAuditLogDto(
+    long Id,
+    string ActionKey,
+    string Summary,
+    string? TargetRef,
+    string? DetailJson,
+    Guid? UserId,
+    string UserName,
+    string? IpAddress,
+    DateTimeOffset AtUtc);

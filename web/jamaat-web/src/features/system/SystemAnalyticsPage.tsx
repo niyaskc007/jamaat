@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Card, Col, Row, Table, Tag, Spin, Alert, Empty, DatePicker, Tooltip } from 'antd';
+import { Card, Col, Row, Table, Tag, Spin, Alert, Empty, DatePicker, Tooltip, Button, Dropdown } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
+import { api } from '../../shared/api/client';
 import {
   PieChartOutlined,
   EyeOutlined,
@@ -86,10 +88,24 @@ export function SystemAnalyticsPage() {
         title="Usage Analytics"
         subtitle={`${summary.from} → ${summary.to} · auto-refreshing every 30 s`}
         actions={
-          // RangePicker supports custom date selection from the calendar by default; the
-          // presets are quick-jump shortcuts. We disable future dates because there's no
-          // event data there. The query key on the upstream useQuery includes from+to so
-          // any change triggers a refetch automatically.
+          <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+          <Dropdown
+            menu={{
+              items: [
+                { key: 'xlsx', label: 'XLSX (all sheets)' },
+                { key: 'csv-pages', label: 'CSV — Top pages' },
+                { key: 'csv-actions', label: 'CSV — Top actions' },
+                { key: 'csv-dau', label: 'CSV — Daily activity' },
+              ],
+              onClick: (info) => downloadExport(info.key, fromStr, toStr),
+            }}
+          >
+            <Button icon={<DownloadOutlined />}>Export</Button>
+          </Dropdown>
+          {/* RangePicker supports custom date selection from the calendar by default; the
+              presets are quick-jump shortcuts. We disable future dates because there's no
+              event data there. The query key on the upstream useQuery includes from+to so
+              any change triggers a refetch automatically. */}
           <RangePicker
             value={range}
             onChange={(v) => { if (v && v[0] && v[1]) setRange([v[0], v[1]]); }}
@@ -110,6 +126,7 @@ export function SystemAnalyticsPage() {
               { label: 'Last 12 months', value: [dayjs().subtract(12, 'month').startOf('day'), dayjs()] },
             ]}
           />
+          </span>
         }
       />
 
@@ -356,5 +373,38 @@ function methodColor(m: string): string {
     case 'PATCH': return 'orange';
     case 'DELETE': return 'red';
     default: return 'default';
+  }
+}
+
+/// Streams the export endpoint as a Blob and triggers a browser download. The endpoint
+/// auto-audits via SystemAuditLog so we don't need to record anything client-side.
+async function downloadExport(formatKey: string, fromStr: string, toStr: string) {
+  // formatKey is one of: xlsx | csv-pages | csv-actions | csv-dau
+  const isXlsx = formatKey === 'xlsx';
+  const sheet = formatKey.startsWith('csv-') ? formatKey.slice(4) : 'pages';
+  const params: Record<string, string> = {
+    from: fromStr,
+    to: toStr,
+    format: isXlsx ? 'xlsx' : 'csv',
+    sheet,
+  };
+  try {
+    const r = await api.get<Blob>('/api/v1/system/analytics/export', { params, responseType: 'blob' });
+    const blob = r.data;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    // Honour the server-supplied filename if it was sent in Content-Disposition; otherwise
+    // fall back to a sensible default. Axios doesn't surface that header by default - the
+    // default name below is what the user will see.
+    a.download = `jamaat-analytics-${fromStr}-${toStr}.${isXlsx ? 'xlsx' : 'csv'}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Export failed';
+    // eslint-disable-next-line no-alert
+    alert(`Export failed: ${msg}`);
   }
 }

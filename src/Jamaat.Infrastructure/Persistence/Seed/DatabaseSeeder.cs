@@ -898,5 +898,8 @@ Accepted on {{today}}.
         "system.tenants.view",    // enumerate tenants with member / receipt counts
         "system.analytics.view",  // usage analytics: top pages / actions / DAU / heatmap / top users
         "system.alerts.manage",   // acknowledge / dismiss system alerts raised by the alert evaluator
+        "system.audit.view",      // read the operator-audit feed (who did what at the system level)
+        "system.service.manage",  // restart the JamaatApi service / force GC / runtime control actions
+        "system.analytics.export",// download usage-analytics rollups as CSV
     ];
 }

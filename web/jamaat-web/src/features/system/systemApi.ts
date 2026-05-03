@@ -162,4 +162,43 @@ export const systemApi = {
   acknowledgeAlert: async (id: number) => {
     await api.post(`/api/v1/system/alerts/${id}/acknowledge`);
   },
+
+  audit: async (params: { actionKey?: string; from?: string; to?: string; take?: number } = {}) =>
+    (await api.get<SystemAuditLogRow[]>('/api/v1/system/audit', { params })).data,
+
+  runtimeInfo: async () => (await api.get<RuntimeInfo>('/api/v1/system/runtime')).data,
+  forceGc: async () => (await api.post<GcResult>('/api/v1/system/runtime/gc')).data,
+  resetActivity: async () => { await api.post('/api/v1/system/runtime/reset-activity'); },
+};
+
+export type SystemAuditLogRow = {
+  id: number;
+  actionKey: string;
+  summary: string;
+  targetRef?: string | null;
+  detailJson?: string | null;
+  userId?: string | null;
+  userName: string;
+  ipAddress?: string | null;
+  atUtc: string;
+};
+
+export type RuntimeInfo = {
+  isServerGc: boolean;
+  isConcurrentGc: boolean;
+  gen0Collections: number;
+  gen1Collections: number;
+  gen2Collections: number;
+  managedHeapBytes: number;
+  totalAllocatedBytes: number;
+  processId: number;
+  processName: string;
+  machineName: string;
+};
+
+export type GcResult = {
+  heapBytesBefore: number;
+  heapBytesAfter: number;
+  freedBytes: number;
+  durationMs: number;
 };

@@ -3550,6 +3550,66 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.ToTable("SystemAlerts", (string)null);
                 });
 
+            modelBuilder.Entity("Jamaat.Domain.Entities.SystemAuditLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ActionKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTimeOffset>("AtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("DetailJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("TargetRef")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtUtc");
+
+                    b.HasIndex("ActionKey", "AtUtc");
+
+                    b.HasIndex("UserId", "AtUtc");
+
+                    b.ToTable("SystemAuditLog", (string)null);
+                });
+
             modelBuilder.Entity("Jamaat.Domain.Entities.Tenant", b =>
                 {
                     b.Property<Guid>("Id")

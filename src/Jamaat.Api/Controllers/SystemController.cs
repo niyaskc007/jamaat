@@ -16,7 +16,7 @@ namespace Jamaat.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/system")]
-public sealed class SystemController(ISystemService svc, JamaatDbContext db) : ControllerBase
+public sealed class SystemController(ISystemService svc, JamaatDbContext db, ISystemAuditLogger audit) : ControllerBase
 {
     [HttpGet("overview")]
     [Authorize(Policy = "system.view")]
@@ -76,6 +76,41 @@ public sealed class SystemController(ISystemService svc, JamaatDbContext db) : C
         var userId = Guid.TryParse(idClaim, out var u) ? u : Guid.Empty;
         alert.Acknowledge(userId, DateTimeOffset.UtcNow);
         await db.SaveChangesAsync(ct);
+
+        // Operator-audit: every system.* write writes one row here. Distinct from domain
+        // AuditLog so SuperAdmin actions aren't buried in the per-tenant audit feed.
+        await audit.RecordAsync(
+            actionKey: "alert.acknowledge",
+            summary: $"Acknowledged alert: {alert.Title}",
+            targetRef: alert.Fingerprint,
+            detail: new { alertId = alert.Id, severity = alert.Severity, repeatCount = alert.RepeatCount },
+            ct: ct);
         return NoContent();
+    }
+
+    /// <summary>Paged operator-audit feed: every system.* write action lands here. Defaults
+    /// to last 50 rows; supports `actionKey` and `from`/`to` filters for drill-down.</summary>
+    [HttpGet("audit")]
+    [Authorize(Policy = "system.audit.view")]
+    [ProducesResponseType(typeof(IReadOnlyList<SystemAuditLogDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Audit(
+        [FromQuery] string? actionKey = null,
+        [FromQuery] DateTimeOffset? from = null,
+        [FromQuery] DateTimeOffset? to = null,
+        [FromQuery] int take = 50,
+        CancellationToken ct = default)
+    {
+        var q = db.SystemAuditLogs.AsNoTracking().AsQueryable();
+        if (!string.IsNullOrWhiteSpace(actionKey)) q = q.Where(a => a.ActionKey == actionKey);
+        if (from is { } f) q = q.Where(a => a.AtUtc >= f);
+        if (to is { } t) q = q.Where(a => a.AtUtc <= t);
+        var rows = await q
+            .OrderByDescending(a => a.AtUtc)
+            .Take(Math.Clamp(take, 1, 500))
+            .Select(a => new SystemAuditLogDto(
+                a.Id, a.ActionKey, a.Summary, a.TargetRef, a.DetailJson,
+                a.UserId, a.UserName, a.IpAddress, a.AtUtc))
+            .ToListAsync(ct);
+        return Ok(rows);
     }
 }

@@ -29,6 +29,7 @@ import {
   type RecentLogin,
   type RecentError,
   type SystemAlert as SystemAlertRow,
+  type SystemAuditLogRow,
 } from './systemApi';
 
 const ACCENT = {
@@ -52,13 +53,30 @@ export function SystemMonitorPage() {
     refetchOnWindowFocus: true,
   });
 
+  const auditQ = useQuery({
+    queryKey: ['system', 'audit'],
+    queryFn: () => systemApi.audit({ take: 25 }),
+    refetchInterval: 30_000,
+  });
+
   const ackMutation = useMutation({
     mutationFn: (id: number) => systemApi.acknowledgeAlert(id),
     onSuccess: () => {
       message.success('Alert acknowledged.');
       qc.invalidateQueries({ queryKey: ['system', 'overview'] });
+      qc.invalidateQueries({ queryKey: ['system', 'audit'] });
     },
     onError: (e: Error) => message.error(`Failed to ack: ${e.message}`),
+  });
+
+  const gcMutation = useMutation({
+    mutationFn: () => systemApi.forceGc(),
+    onSuccess: (r) => {
+      message.success(`GC freed ${(r.freedBytes / 1024 / 1024).toFixed(1)} MB in ${r.durationMs} ms.`);
+      qc.invalidateQueries({ queryKey: ['system', 'overview'] });
+      qc.invalidateQueries({ queryKey: ['system', 'audit'] });
+    },
+    onError: (e: Error) => message.error(`GC failed: ${e.message}`),
   });
 
   if (q.isLoading || !q.data) {
@@ -338,6 +356,34 @@ export function SystemMonitorPage() {
         />
       </Card>
 
+      {/* -- Operator audit feed --------------------------------------------- */}
+      <Card
+        title={<span><FileSearchOutlined /> &nbsp; Operator audit</span>}
+        extra={<span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
+          last {auditQ.data?.length ?? 0} actions · refresh 30 s
+        </span>}
+        className="jm-card"
+        style={{ marginBlockEnd: 16 }}
+      >
+        <Table<SystemAuditLogRow>
+          rowKey="id"
+          dataSource={auditQ.data ?? []}
+          pagination={false}
+          size="small"
+          loading={auditQ.isLoading}
+          columns={[
+            { title: 'When', dataIndex: 'atUtc', render: (v: string) => <Tooltip title={v}>{relativeFromNow(v)}</Tooltip>, width: 110 },
+            { title: 'Action', dataIndex: 'actionKey', render: (v: string) => <Tag>{v}</Tag>, width: 200 },
+            { title: 'Operator', dataIndex: 'userName', width: 200 },
+            { title: 'Summary', dataIndex: 'summary', render: (v: string, r: SystemAuditLogRow) => (
+              <Tooltip title={r.detailJson ?? v}>{v}</Tooltip>
+            ) },
+            { title: 'IP', dataIndex: 'ipAddress', render: (v?: string | null) => v ?? <Tag>—</Tag>, width: 140 },
+          ]}
+          locale={{ emptyText: <Empty description="No operator actions logged yet" /> }}
+        />
+      </Card>
+
       {/* -- Server details + Process details -------------------------------- */}
       <Row gutter={[16, 16]} style={{ marginBlockEnd: 16 }}>
         <Col xs={24} md={12}>
@@ -355,7 +401,20 @@ export function SystemMonitorPage() {
           </Card>
         </Col>
         <Col xs={24} md={12}>
-          <Card title={<span><ApiOutlined /> &nbsp; Process</span>} className="jm-card">
+          <Card
+            title={<span><ApiOutlined /> &nbsp; Process</span>}
+            className="jm-card"
+            extra={
+              <Button
+                size="small"
+                onClick={() => gcMutation.mutate()}
+                loading={gcMutation.isPending}
+                title="Force a full Gen-2 GC. Use sparingly - this is a 'settle the heap' tool, not a routine action."
+              >
+                Force GC
+              </Button>
+            }
+          >
             <KvList rows={[
               ['Working set', `${server.processWorkingSetMb} MB`],
               ['Private memory', `${server.processPrivateMemoryMb} MB`],

@@ -156,6 +156,8 @@ public static class DependencyInjection
         // Singleton: in-memory user-activity + request-rate tracker. State must persist across
         // requests; the impl is internally thread-safe (ConcurrentDictionary + Interlocked).
         services.AddSingleton<IUserActivityTracker, SystemMonitor.UserActivityTracker>();
+        services.AddScoped<ISystemAuditLogger, SystemMonitor.SystemAuditLogger>();
+        services.AddSingleton<IServiceControl, SystemMonitor.ServiceControl>();
 
         // Alert evaluator: hosted background service that polls thresholds every 60s and
         // raises SystemAlert rows + emails. Recipients = explicit Alerts:Recipients[] list,
