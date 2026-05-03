@@ -86,14 +86,28 @@ export function SystemAnalyticsPage() {
         title="Usage Analytics"
         subtitle={`${summary.from} → ${summary.to} · auto-refreshing every 30 s`}
         actions={
+          // RangePicker supports custom date selection from the calendar by default; the
+          // presets are quick-jump shortcuts. We disable future dates because there's no
+          // event data there. The query key on the upstream useQuery includes from+to so
+          // any change triggers a refetch automatically.
           <RangePicker
             value={range}
             onChange={(v) => { if (v && v[0] && v[1]) setRange([v[0], v[1]]); }}
             allowClear={false}
+            disabledDate={(d) => !!d && d.isAfter(dayjs().endOf('day'))}
             presets={[
-              { label: 'Last 7 days', value: [dayjs().subtract(6, 'day'), dayjs()] },
-              { label: 'Last 30 days', value: [dayjs().subtract(29, 'day'), dayjs()] },
-              { label: 'Last 90 days', value: [dayjs().subtract(89, 'day'), dayjs()] },
+              { label: 'Today', value: [dayjs().startOf('day'), dayjs()] },
+              { label: 'Yesterday', value: [dayjs().subtract(1, 'day').startOf('day'), dayjs().subtract(1, 'day').endOf('day')] },
+              { label: 'Last 7 days', value: [dayjs().subtract(6, 'day').startOf('day'), dayjs()] },
+              { label: 'Last 14 days', value: [dayjs().subtract(13, 'day').startOf('day'), dayjs()] },
+              { label: 'Last 30 days', value: [dayjs().subtract(29, 'day').startOf('day'), dayjs()] },
+              { label: 'Last 90 days', value: [dayjs().subtract(89, 'day').startOf('day'), dayjs()] },
+              { label: 'This week', value: [dayjs().startOf('week'), dayjs()] },
+              { label: 'This month', value: [dayjs().startOf('month'), dayjs()] },
+              { label: 'Last month', value: [dayjs().subtract(1, 'month').startOf('month'), dayjs().subtract(1, 'month').endOf('month')] },
+              { label: 'Last 6 months', value: [dayjs().subtract(6, 'month').startOf('day'), dayjs()] },
+              { label: 'Year to date', value: [dayjs().startOf('year'), dayjs()] },
+              { label: 'Last 12 months', value: [dayjs().subtract(12, 'month').startOf('day'), dayjs()] },
             ]}
           />
         }
