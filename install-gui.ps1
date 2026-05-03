@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Jamaat one-click installer with a WPF wizard UI.
 
@@ -359,8 +359,17 @@ $script:Pages += @{
             $script:NextBtn.IsEnabled = $okDotnet -and $okNode -and $okNpm -and $okDisk
             $script:AllOk = $okDotnet -and $okNode -and $okNpm -and $okDisk
         }
-        $el.FindName('RecheckBtn').Add_Click($check)
-        & $check
+        # Wrap the click handler so any unhandled exception can't tear down the
+        # WPF dispatcher and close the wizard. WPF treats unhandled exceptions
+        # in event handlers as fatal by default.
+        $el.FindName('RecheckBtn').Add_Click({
+            try { & $check } catch {
+                $el.FindName('HelpText').Text = "Re-check failed: $($_.Exception.Message)"
+            }
+        })
+        try { & $check } catch {
+            $el.FindName('HelpText').Text = "Initial check failed: $($_.Exception.Message)"
+        }
         Set-NextHandler { Show-Page ($script:CurIndex + 1) }
     }
 }
