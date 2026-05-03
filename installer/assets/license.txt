@@ -1,0 +1,9 @@
+Jamaat Web Application
+Copyright (c) 2026 Jamaat. All rights reserved.
+
+This software is proprietary. By installing this software you agree to use it
+only as authorized by the publisher.
+
+This installer also bundles the Microsoft .NET 10 Hosting Bundle, which is
+licensed separately under the MIT License (https://github.com/dotnet/runtime
+/blob/main/LICENSE.TXT).
