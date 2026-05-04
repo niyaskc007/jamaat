@@ -300,6 +300,8 @@ public static class DatabaseSeeder
         await EnsureEventCategoryLookupsAsync(db, defaultTenantId, logger, ct);
         await SeedSectorsAsync(db, defaultTenantId, logger, ct);
         await SeedOrganisationsAsync(db, defaultTenantId, logger, ct);
+        await SeedCmsDefaultsAsync(db, logger, ct);
+        await ReconcileAdminUserPermissionsAsync(userMgr, logger);
         await SeedTestUsersAsync(userMgr, defaultTenantId, logger, config);
 
         // Dev-only bulk data generator - populates members/families/enrollments/commitments/events
@@ -847,6 +849,139 @@ Accepted on {{today}}.
         logger.LogInformation("Seeded default bank account + expense types.");
     }
 
+    /// Reconcile user-level permission claims for every user in the Administrator or SuperAdmin
+    /// role. The role's claim set is the source of truth (extended every release as new
+    /// permissions get added to AllPermissions); user-level claims are what the JWT actually
+    /// reads, so we copy any role claim that isn't already on the user. Catches both:
+    ///  - Dev seeded admins whose Seed:AdminEmail no longer matches a different installer admin
+    ///  - Installer-provisioned admins (the wizard creates the user but our per-release perms
+    ///    flow through Administrator role, not directly).
+    /// Idempotent and additive: never strips a claim, so admin-tweaked grants survive.
+    private static async Task ReconcileAdminUserPermissionsAsync(UserManager<ApplicationUser> userMgr, ILogger logger)
+    {
+        foreach (var roleName in new[] { "Administrator", "SuperAdmin" })
+        {
+            var users = await userMgr.GetUsersInRoleAsync(roleName);
+            // SuperAdmin gets system.* on top of AllPermissions; tenant-level Administrator does not.
+            var perms = roleName == "SuperAdmin"
+                ? AllPermissions.Concat(SystemPermissions).ToArray()
+                : AllPermissions;
+            var totalAdded = 0;
+            foreach (var u in users)
+            {
+                var existing = (await userMgr.GetClaimsAsync(u))
+                    .Where(c => c.Type == "permission")
+                    .Select(c => c.Value)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                foreach (var p in perms)
+                {
+                    if (!existing.Contains(p))
+                    {
+                        await userMgr.AddClaimAsync(u, new Claim("permission", p));
+                        totalAdded++;
+                    }
+                }
+            }
+            if (totalAdded > 0)
+                logger.LogInformation("Reconciled {Count} new permission claim(s) across {RoleName} users.", totalAdded, roleName);
+        }
+    }
+
+    private static async Task SeedCmsDefaultsAsync(JamaatDbContext db, ILogger logger, CancellationToken ct)
+    {
+        // Only seed when there is no existing CMS content (admins editing the seeded copy
+        // should not have their changes reset by a redeploy). Both tables are checked
+        // independently so a partial seed in a previous run is still completed here.
+        var hasBlocks = await db.CmsBlocks.AnyAsync(ct);
+        var hasPages  = await db.CmsPages.AnyAsync(ct);
+        if (hasBlocks && hasPages) return;
+
+        if (!hasBlocks)
+        {
+            var blocks = new (string Key, string Value)[]
+            {
+                ("login.eyebrow",   "DONATION, RECEIPT, PAYMENT & ACCOUNTING"),
+                ("login.title",     "One ledger for every receipt, voucher, and fund."),
+                ("login.subtitle",  "A single, auditable system for your Jamaat's day-to-day finance - from counter receipts to double-entry ledgers."),
+                ("login.feature.1", "Complete audit trail on every transaction"),
+                ("login.feature.2", "Bilingual receipts (English, Arabic, Hindi, Urdu)"),
+                ("login.feature.3", "Automatic double-entry posting"),
+                ("footer.tagline",  "Jamaat - a product of Ubrixy Technologies."),
+            };
+            foreach (var (k, v) in blocks)
+            {
+                db.CmsBlocks.Add(new CmsBlock(Guid.NewGuid(), k, v));
+            }
+        }
+
+        if (!hasPages)
+        {
+            var pages = new (string Slug, string Title, CmsPageSection Section, string Body)[]
+            {
+                ("terms",  "Terms of Service", CmsPageSection.Legal, DefaultTermsBody()),
+                ("privacy","Privacy Policy",   CmsPageSection.Legal, DefaultPrivacyBody()),
+                ("cookies","Cookies Policy",   CmsPageSection.Legal, DefaultCookiesBody()),
+                ("faq",    "Frequently Asked Questions", CmsPageSection.Help, DefaultFaqBody()),
+                ("about",  "About Jamaat",     CmsPageSection.Marketing, DefaultAboutBody()),
+            };
+            foreach (var (slug, title, section, body) in pages)
+            {
+                var p = new CmsPage(Guid.NewGuid(), slug, title, body, section);
+                p.Update(title, body, section, isPublished: true);
+                db.CmsPages.Add(p);
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("Seeded default CMS blocks and pages.");
+    }
+
+    private static string DefaultTermsBody() => @"## Terms of Service
+
+These default Terms are placeholder copy. Replace this content from the Admin > CMS screen with your organisation's actual terms before going live.
+
+### 1. Acceptance
+By using this system you agree to be bound by these Terms.
+
+### 2. Use of the System
+You will use the system only for legitimate Jamaat administration.
+
+### 3. Data Ownership
+All data entered remains the property of your organisation.
+
+### 4. Liability
+The system is provided as-is. Refer to your service agreement for warranty and liability terms.";
+
+    private static string DefaultPrivacyBody() => @"## Privacy Policy
+
+This is a placeholder Privacy Policy. Replace it from Admin > CMS with your organisation's actual privacy practices.
+
+We collect personal data (name, contact, transaction history) for the purpose of operating Jamaat administration. Data is stored on infrastructure controlled by your organisation. We do not sell or share personal data with third parties unless required by law.
+
+For data access or deletion requests, contact your Jamaat administrator.";
+
+    private static string DefaultCookiesBody() => @"## Cookies Policy
+
+This system uses cookies and local storage to keep you signed in, remember your UI preferences (language, theme, sidebar state), and protect against forged requests. We do not use third-party advertising or tracking cookies.";
+
+    private static string DefaultFaqBody() => @"## Frequently Asked Questions
+
+### How do I reset my password?
+Use the 'Forgot password' link on the login screen, or ask an administrator to reset it for you.
+
+### How do I add a new member?
+Members > Add. You will need at least a name and ITS number.
+
+### How do I issue a receipt?
+Receipts > New Receipt. Pick a fund, member, amount and confirm. The system will generate a numbered receipt and post the corresponding ledger entry.
+
+### Where can I see all my contributions?
+Open the member portal at /portal/me - it lists all receipts, commitments, loans, and event registrations associated with your account.";
+
+    private static string DefaultAboutBody() => @"## About Jamaat
+
+Jamaat is a community-finance platform that gives your organisation a single, auditable system for receipts, vouchers, commitments, and double-entry accounting. It is a product of Ubrixy Technologies.";
+
     public static readonly string[] AllPermissions =
     [
         // Members
@@ -911,6 +1046,10 @@ Accepted on {{today}}.
         "portal.events.view",              // see published events on the portal
         "portal.events.register",          // register self / family for events
         "portal.login_history.view.own",   // own login attempts
+        // CMS - manage marketing copy on the login screen, legal pages (terms/privacy),
+        // help articles, FAQ, etc. Reads are anonymous (the login page hits /api/v1/cms/blocks
+        // pre-auth) so there is no separate cms.view permission - only the write side is gated.
+        "cms.manage",
     ];
 
     /// <summary>System-scope permissions. Distinct from <see cref="AllPermissions"/> so that

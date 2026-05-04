@@ -53,6 +53,8 @@ public abstract class JamaatDbContextFacade
     public abstract DbSet<MemberEducation> MemberEducations { get; }
     public abstract DbSet<MemberChangeRequest> MemberChangeRequests { get; }
     public abstract DbSet<MemberAsset> MemberAssets { get; }
+    public abstract DbSet<CmsPage> CmsPages { get; }
+    public abstract DbSet<CmsBlock> CmsBlocks { get; }
     public abstract DatabaseFacade Database { get; }
 
     // Aliases used by some helpers

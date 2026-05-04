@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button, Form, Input, Typography, Alert, Checkbox, Collapse, Tag } from 'antd';
 import { LockOutlined, MailOutlined, SafetyCertificateFilled, GlobalOutlined, FileDoneOutlined } from '@ant-design/icons';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi, isPasswordChangeRequired } from './authApi';
 import { authStore } from '../../shared/auth/authStore';
@@ -12,6 +12,7 @@ import { extractProblem } from '../../shared/api/client';
 import { Logo } from '../../shared/ui/Logo';
 import { IslamicPattern } from '../../shared/ui/IslamicPattern';
 import { LanguageSwitcher } from '../../shared/i18n/LanguageSwitcher';
+import { fetchFooterBlocks, fetchLoginBlocks } from '../cms/cmsApi';
 
 const schema = z.object({
   email: z.string().min(1, 'Email is required'),
@@ -33,6 +34,17 @@ export function LoginPage() {
     resolver: zodResolver(schema),
     defaultValues: { email: 'admin@jamaat.local', password: 'Admin@12345', remember: true },
   });
+  // CMS-driven marketing copy on the brand panel. Static fallbacks (i18n strings) are used until
+  // the network call returns, and forever if it fails - the login screen MUST render even when
+  // the API is down.
+  const [cms, setCms] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([fetchLoginBlocks(), fetchFooterBlocks()]).then(([login, footer]) => {
+      if (!cancelled) setCms({ ...login, ...footer });
+    });
+    return () => { cancelled = true; };
+  }, []);
   // AntD Inputs aren't auto-controlled by react-hook-form's `register` - the DOM value
   // doesn't refresh when we call setValue from the dev-account picker. Watching here and
   // passing `value` makes the inputs fully controlled so clicks visibly fill both fields.
@@ -96,7 +108,7 @@ export function LoginPage() {
               marginBlockEnd: 16,
             }}
           >
-            {t('login.marketingTitle')}
+            {cms['login.eyebrow'] ?? t('login.marketingTitle')}
           </div>
           <Typography.Title
             level={1}
@@ -109,33 +121,29 @@ export function LoginPage() {
               margin: 0,
             }}
           >
-            One ledger for every receipt, voucher, and fund.
+            {cms['login.title'] ?? 'One ledger for every receipt, voucher, and fund.'}
           </Typography.Title>
           <Typography.Paragraph
             style={{ color: 'rgba(255,255,255,0.75)', fontSize: 15, marginBlockStart: 16, marginBlockEnd: 32 }}
           >
-            {t('login.marketingBody')}
+            {cms['login.subtitle'] ?? t('login.marketingBody')}
           </Typography.Paragraph>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <Feature icon={<SafetyCertificateFilled />} text={t('login.featureAudit')} />
-            <Feature icon={<GlobalOutlined />} text={t('login.featureBilingual')} />
-            <Feature icon={<FileDoneOutlined />} text={t('login.featureLedger')} />
+            <Feature icon={<SafetyCertificateFilled />} text={cms['login.feature.1'] ?? t('login.featureAudit')} />
+            <Feature icon={<GlobalOutlined />} text={cms['login.feature.2'] ?? t('login.featureBilingual')} />
+            <Feature icon={<FileDoneOutlined />} text={cms['login.feature.3'] ?? t('login.featureLedger')} />
           </div>
         </div>
 
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'rgba(255,255,255,0.55)', fontSize: 12, gap: 16, flexWrap: 'wrap' }}>
           <span>
-            © {new Date().getFullYear()} Jamaat · A product of{' '}
-            <a
-              href="https://www.ubrixy.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'underline' }}
-            >
-              Ubrixy Technologies
-            </a>
+            © {new Date().getFullYear()} {cms['footer.tagline'] ?? 'Jamaat · A product of Ubrixy Technologies.'}
           </span>
-          <span>v0.1 · M0</span>
+          <span style={{ display: 'flex', gap: 12 }}>
+            <Link to="/legal/terms" style={{ color: 'rgba(255,255,255,0.85)' }}>Terms</Link>
+            <Link to="/legal/privacy" style={{ color: 'rgba(255,255,255,0.85)' }}>Privacy</Link>
+            <Link to="/help/faq" style={{ color: 'rgba(255,255,255,0.85)' }}>FAQ</Link>
+          </span>
         </div>
       </div>
 

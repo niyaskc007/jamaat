@@ -70,6 +70,8 @@ public class JamaatDbContext : IdentityDbContext<ApplicationUser, ApplicationRol
     public DbSet<UsageEvent> UsageEvents => Set<UsageEvent>();
     public DbSet<SystemAlert> SystemAlerts => Set<SystemAlert>();
     public DbSet<SystemAuditLog> SystemAuditLogs => Set<SystemAuditLog>();
+    public DbSet<CmsPage> CmsPages => Set<CmsPage>();
+    public DbSet<CmsBlock> CmsBlocks => Set<CmsBlock>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

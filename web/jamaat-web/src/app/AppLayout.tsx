@@ -146,6 +146,8 @@ export function AppLayout() {
       adm.push({ key: '/admin/notifications', icon: <BellOutlined />, label: 'Notifications' });
     if (any('admin.reliability'))
       adm.push({ key: '/admin/reliability', icon: <ThunderboltOutlined />, label: 'Reliability' });
+    if (any('cms.manage'))
+      adm.push({ key: '/admin/cms', icon: <FileTextOutlined />, label: 'Content (CMS)' });
 
     // -- System: SuperAdmin-only host & DB monitor (separate group from Admin so it
     //    visually signals the elevated scope - SuperAdmins see both Admin and System,
@@ -378,7 +380,7 @@ function resolveActiveKey(path: string): string {
   const known = [
     '/dashboards', '/dashboard', '/members', '/families', '/events', '/commitments', '/fund-enrollments', '/qarzan-hasana',
     '/receipts', '/cheques', '/vouchers', '/ledger', '/reports', '/accounting', '/help',
-    '/admin/users', '/admin/master-data', '/admin/integrations', '/admin/audit', '/admin/error-logs', '/admin/notifications', '/admin/reliability',
+    '/admin/users', '/admin/master-data', '/admin/integrations', '/admin/audit', '/admin/error-logs', '/admin/notifications', '/admin/reliability', '/admin/cms',
     '/admin',
   ];
   return known.find((k) => path === k || path.startsWith(k + '/')) ?? '/dashboard';

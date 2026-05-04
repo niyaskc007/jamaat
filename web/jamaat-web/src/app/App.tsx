@@ -57,6 +57,8 @@ import { NotificationLogPage } from '../features/admin/notifications/Notificatio
 import { AdministrationPage } from '../features/admin/AdministrationPage';
 import { ReliabilityDashboard } from '../features/admin/reliability/ReliabilityDashboard';
 import { ChangeRequestsPage } from '../features/admin/change-requests/ChangeRequestsPage';
+import { CmsAdminPage } from '../features/admin/CmsPage';
+import { CmsPageView } from '../features/cms/CmsPageView';
 import { SystemMonitorPage } from '../features/system/SystemMonitorPage';
 import { SystemAnalyticsPage } from '../features/system/SystemAnalyticsPage';
 import { analyticsApi } from '../features/system/analyticsApi';
@@ -143,6 +145,9 @@ export function App() {
       <Route path="/portal/events" element={<PortalEventsListPage />} />
       <Route path="/portal/events/:slug" element={<PortalEventPage />} />
       <Route path="/portal/qh-consent/:token" element={<PortalGuarantorConsentPage />} />
+      {/* Public CMS pages (Terms, Privacy, FAQ, etc.). Anonymous - reachable from the login footer. */}
+      <Route path="/legal/:slug" element={<CmsPageView />} />
+      <Route path="/help/:slug" element={<CmsPageView />} />
       {/* Member self-service portal - signed-in members with portal.access. Uses its own
           MemberPortalLayout (no admin nav). E1 + E8 + E9 are wired this turn; E2-E7 land
           subsequently and route to placeholder cards until then. */}
@@ -211,6 +216,7 @@ export function App() {
         <Route path="admin/notifications" element={<Gate anyOf={['admin.audit']}><NotificationLogPage /></Gate>} />
         <Route path="admin/reliability" element={<Gate anyOf={['admin.reliability']}><ReliabilityDashboard /></Gate>} />
         <Route path="admin/change-requests" element={<Gate anyOf={['member.changes.approve']}><ChangeRequestsPage /></Gate>} />
+        <Route path="admin/cms" element={<Gate anyOf={['cms.manage']}><CmsAdminPage /></Gate>} />
         <Route path="system" element={<Gate anyOf={['system.view']}><SystemMonitorPage /></Gate>} />
         <Route path="system/analytics" element={<Gate anyOf={['system.analytics.view']}><SystemAnalyticsPage /></Gate>} />
         <Route path="help" element={<HelpPage />} />
