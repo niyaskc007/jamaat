@@ -16,7 +16,8 @@ public sealed class LocalFileSystemReceiptDocumentStorage : IReceiptDocumentStor
     {
         _options = options.Value;
         _logger = logger;
-        Directory.CreateDirectory(ResolveRoot());
+        try { Directory.CreateDirectory(ResolveRoot()); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Could not create receipt-document storage root {Path}", ResolveRoot()); }
     }
 
     public async Task<string> StoreAsync(Guid receiptId, Stream content, string contentType, CancellationToken ct = default)

@@ -105,6 +105,19 @@ Source: "redist\dotnet-hosting.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 ; service account already has write access; we still pre-create with explicit permissions so
 ; the install state is self-documenting.
 Name: "{app}\Logs"; Permissions: users-modify
+; App_Data subdirectories used by IPhotoStorage / IEventAssetStorage / IReceiptDocumentStorage /
+; IQarzanHasanaDocumentStorage. Without these the storage adapters call Directory.CreateDirectory
+; on first request and hit ACL denial under Program Files, which used to surface as a fake 401.
+; The post-install data-dirs step ALSO grants Modify to the actual chosen service identity
+; (NT SERVICE\JamaatApi, custom domain account, etc); the users-modify here is a baseline
+; so non-elevated diagnostics still work.
+Name: "{app}\Api\App_Data";                                    Permissions: users-modify
+Name: "{app}\Api\App_Data\photos";                             Permissions: users-modify
+Name: "{app}\Api\App_Data\photos\members";                     Permissions: users-modify
+Name: "{app}\Api\App_Data\event-assets";                       Permissions: users-modify
+Name: "{app}\Api\App_Data\documents";                          Permissions: users-modify
+Name: "{app}\Api\App_Data\documents\receipt-agreements";       Permissions: users-modify
+Name: "{app}\Api\App_Data\documents\qarzan-hasana";            Permissions: users-modify
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
@@ -172,6 +185,9 @@ Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\Logs"
 Type: files;          Name: "{app}\install-state.json"
+; NOTE: {app}\Api\App_Data is intentionally NOT removed on uninstall - it holds uploaded
+; member photos, event assets, and receipt/qarzan-hasana agreements. Operators who want
+; to wipe it can delete the install dir manually after uninstall.
 Type: files;          Name: "{app}\open-browser.cmd"
 
 ; ============================================================================

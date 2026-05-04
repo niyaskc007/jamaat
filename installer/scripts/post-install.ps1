@@ -25,7 +25,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('patch-config','sql-prep','firewall','service-register','service-failure','service-start','init-admin','shortcut','all')]
+    [ValidateSet('patch-config','sql-prep','firewall','service-register','service-failure','data-dirs','service-start','init-admin','shortcut','all')]
     [string] $Step,
 
     [Parameter(Mandatory = $true)] [string] $StateFile,
@@ -283,6 +283,54 @@ function Step-ServiceFailure {
     return 'Configured restart-on-crash (3x60s)'
 }
 
+function Resolve-ServicePrincipal {
+    param($p)
+    # Returns the actual Windows principal the service process runs as. Used for ACL grants.
+    switch ($p.ServiceIdentityType) {
+        'Virtual'        { return 'NT SERVICE\JamaatApi' }
+        'LocalSystem'    { return 'NT AUTHORITY\SYSTEM' }
+        'NetworkService' { return 'NT AUTHORITY\NETWORK SERVICE' }
+        'SqlLogin'       { return 'NT AUTHORITY\SYSTEM' }
+        'Custom'         { return $p.ServiceAccount }
+        default          { return 'NT AUTHORITY\SYSTEM' }
+    }
+}
+
+function Step-DataDirs {
+    param($p)
+    # Pre-create App_Data subdirectories used by IPhotoStorage / IEventAssetStorage /
+    # IReceiptDocumentStorage / IQarzanHasanaDocumentStorage and grant Modify to the
+    # service identity. Without this the storage adapters' Directory.CreateDirectory()
+    # calls hit ACL denial under Program Files and the controllers using them throw
+    # UnauthorizedAccessException on every request.
+    $apiRoot = Join-Path $p.AppDir 'Api'
+    $dirs = @(
+        (Join-Path $apiRoot 'App_Data\photos\members'),
+        (Join-Path $apiRoot 'App_Data\event-assets'),
+        (Join-Path $apiRoot 'App_Data\documents\receipt-agreements'),
+        (Join-Path $apiRoot 'App_Data\documents\qarzan-hasana')
+    )
+    foreach ($d in $dirs) {
+        if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
+    }
+
+    $principal = Resolve-ServicePrincipal $p
+    # Grant Modify on the App_Data root recursively. icacls /grant uses (OI)(CI) for inheritance
+    # so newly created subdirs inherit. /T applies to existing children too.
+    $appDataRoot = Join-Path $apiRoot 'App_Data'
+    $grantArg = "$principal" + ':(OI)(CI)M'
+    & icacls.exe "$appDataRoot" /grant "$grantArg" /T /C 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        # icacls returns non-zero for warnings (e.g. "files skipped"); only treat as failure
+        # when it didn't actually grant. Re-query to verify.
+        $verify = & icacls.exe "$appDataRoot" 2>&1 | Out-String
+        if ($verify -notmatch [regex]::Escape($principal)) {
+            throw "icacls grant failed for $principal on $appDataRoot. Output: $verify"
+        }
+    }
+    return "Provisioned App_Data dirs and granted Modify to $principal"
+}
+
 function Step-ServiceStart {
     param($p)
     Start-Service -Name 'JamaatApi' -ErrorAction Stop
@@ -352,6 +400,7 @@ function Invoke-Step {
             'firewall'          { Step-Firewall $Params }
             'service-register'  { Step-ServiceRegister $Params }
             'service-failure'   { Step-ServiceFailure $Params }
+            'data-dirs'         { Step-DataDirs $Params }
             'service-start'     { Step-ServiceStart $Params }
             'init-admin'        { Step-InitAdmin $Params }
             'shortcut'          { Step-Shortcut $Params }
@@ -384,7 +433,7 @@ $logsDir = Join-Path $params.AppDir 'Logs'
 New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
 
 if ($Step -eq 'all') {
-    $allSteps = @('patch-config','sql-prep','firewall','service-register','service-failure','service-start','init-admin','shortcut')
+    $allSteps = @('patch-config','sql-prep','firewall','service-register','service-failure','data-dirs','service-start','init-admin','shortcut')
     foreach ($s in $allSteps) {
         $ok = Invoke-Step -Name $s -Params $params -State $state
         if (-not $ok) { exit 1 }

@@ -13,7 +13,11 @@ public sealed class LocalFileSystemPhotoStorage : IPhotoStorage
     {
         _options = options.Value;
         _logger = logger;
-        Directory.CreateDirectory(ResolveRoot());
+        // Don't let a permission failure here poison the singleton (every controller that
+        // takes IPhotoStorage as a dep would 500 on every request). Log it; uploads will
+        // fail later with a proper exception, listing/reading still works.
+        try { Directory.CreateDirectory(ResolveRoot()); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Could not create photo storage root {Path}", ResolveRoot()); }
     }
 
     public async Task<string> StoreAsync(Guid memberId, Stream content, string contentType, CancellationToken ct = default)

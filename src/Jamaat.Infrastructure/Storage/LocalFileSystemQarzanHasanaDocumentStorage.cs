@@ -17,7 +17,8 @@ public sealed class LocalFileSystemQarzanHasanaDocumentStorage : IQarzanHasanaDo
     {
         _options = options.Value;
         _logger = logger;
-        Directory.CreateDirectory(ResolveRoot());
+        try { Directory.CreateDirectory(ResolveRoot()); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Could not create qarzan-hasana document storage root {Path}", ResolveRoot()); }
     }
 
     public async Task<string> StoreAsync(Guid loanId, QhDocumentKind kind, Stream content, string contentType, CancellationToken ct = default)

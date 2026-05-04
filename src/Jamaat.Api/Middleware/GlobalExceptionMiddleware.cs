@@ -48,12 +48,12 @@ public sealed class GlobalExceptionMiddleware
             _logger.LogWarning("Business rule violation: {Code} {Message}", br.Code, br.Message);
             await Record(errorLogs, br, context, correlation, ErrorSeverity.Warning, 422);
         }
-        catch (UnauthorizedAccessException ua)
-        {
-            await WriteProblem(context, correlation, StatusCodes.Status401Unauthorized, "unauthorized", ua.Message, null);
-        }
         catch (Exception ex)
         {
+            // System.IO.UnauthorizedAccessException (file-system permission denial) is NOT an
+            // HTTP authentication failure - mapping it to 401 would tell the SPA to clear the token
+            // and redirect to /login, masking a real server-side config bug. Any UnauthorizedAccessException
+            // that bubbles this far is a server fault and goes through the generic 500 handler.
             _logger.LogError(ex, "Unhandled exception. TraceId={TraceId}", correlation.CorrelationId);
             var detail = _env.IsDevelopment() ? ex.ToString() : "An unexpected error occurred. Please contact support with the traceId.";
             await WriteProblem(context, correlation, StatusCodes.Status500InternalServerError, "internal_error", detail, null);
