@@ -32,14 +32,26 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
-DisableProgramGroupPage=yes
+DefaultGroupName=Jamaat
 OutputDir=output
 OutputBaseFilename=JamaatInstaller-{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-; SetupIconFile=assets\jamaat.ico  ; uncomment once a real icon exists; default is fine for now
+SetupIconFile=assets\jamaat.ico
+UninstallDisplayIcon={app}\Api\jamaat.ico
 LicenseFile=assets\license.txt
+
+; ---- Code-signing (stub) ---------------------------------------------------
+; To enable Authenticode signing of JamaatInstaller-X.Y.Z.exe and the embedded uninstaller:
+;   1. In the Inno Setup IDE: Tools > Configure Sign Tools > Add a tool named "ubrixy"
+;      with a command line like:
+;        "C:\Program Files (x86)\Windows Kits\10\bin\10.0.x\x64\signtool.exe" sign /f "<path-to-cert.pfx>" /p "<password>" /tr http://timestamp.sectigo.com /td sha256 /fd sha256 $f
+;   2. Uncomment the two lines below.
+;   3. Re-run installer/build.ps1 -Version X.Y.Z; the resulting EXE will be signed.
+;
+;SignTool=ubrixy
+;SignedUninstaller=yes
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
 ArchitecturesAllowed=x64compatible
@@ -64,7 +76,15 @@ FinishedLabel=Setup has finished installing [name] on your computer.%n%nJamaat i
 BeveledLabel=Powered by Ubrixy Technologies
 
 [Files]
+; Brand icon used by the installer EXE, the Add/Remove Programs entry, and Start Menu
+; shortcuts. We copy it next to the API exe so {app}\Api\jamaat.ico is the canonical path
+; (UninstallDisplayIcon, [Icons], desktop shortcut all reference it).
+Source: "assets\jamaat.ico";     DestDir: "{app}\Api";     Flags: ignoreversion
 Source: "..\build\api\*";        DestDir: "{app}\Api";     Flags: recursesubdirs createallsubdirs ignoreversion
+; Tray helper - lives in the system tray, monitors service state, one-click Open / Restart.
+Source: "..\build\tray\*";       DestDir: "{app}\Tray";    Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
+; Admin console - WPF native shell over the SuperAdmin web pages.
+Source: "..\build\admin\*";      DestDir: "{app}\AdminConsole"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 ; test-db.ps1 is needed BEFORE the install phase begins (the Database wizard page calls it
 ; via the Test connection button). Inno's normal [Files] extraction happens during install,
 ; not during the wizard, so we tag it `dontcopy` and extract it on demand from Pascal via
@@ -85,6 +105,38 @@ Source: "redist\dotnet-hosting.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 ; service account already has write access; we still pre-create with explicit permissions so
 ; the install state is self-documenting.
 Name: "{app}\Logs"; Permissions: users-modify
+
+[Tasks]
+Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
+Name: "trayautostart"; Description: "Start &Jamaat tray helper at login"; GroupDescription: "Additional options:"
+
+[Icons]
+; Start Menu group "Jamaat" (set via DefaultGroupName). Entries cover the day-to-day ops
+; touchpoints: the app itself, the two native helpers, the service control panel, the log
+; folder, and the standard uninstaller.
+Name: "{group}\Jamaat"; Filename: "{cmd}"; Parameters: "/c start http://{code:GetPublicHost}:{code:GetPort}/login"; \
+    IconFilename: "{app}\Api\jamaat.ico"; Comment: "Open Jamaat in your default browser"; WorkingDir: "{app}"
+Name: "{group}\Jamaat Admin Console"; Filename: "{app}\AdminConsole\JamaatAdminConsole.exe"; \
+    IconFilename: "{app}\AdminConsole\jamaat.ico"; Comment: "Native admin / monitoring app"; \
+    Check: FileExists(ExpandConstant('{app}\AdminConsole\JamaatAdminConsole.exe'))
+Name: "{group}\Jamaat Tray Helper"; Filename: "{app}\Tray\JamaatTray.exe"; \
+    IconFilename: "{app}\Tray\jamaat.ico"; Comment: "System tray status + service controls"; \
+    Check: FileExists(ExpandConstant('{app}\Tray\JamaatTray.exe'))
+Name: "{group}\Jamaat Service"; Filename: "{sys}\services.msc"; \
+    IconFilename: "{sys}\services.msc"; Comment: "Manage the JamaatApi Windows Service"
+Name: "{group}\View Install Logs"; Filename: "{app}\Logs"; \
+    IconFilename: "{sys}\imageres.dll"; IconIndex: 3; Comment: "Open the Jamaat logs folder"
+Name: "{group}\Uninstall Jamaat"; Filename: "{uninstallexe}"; \
+    IconFilename: "{app}\Api\jamaat.ico"; Comment: "Remove Jamaat from this computer"
+
+; Optional desktop shortcut, controlled by the [Tasks] checkbox above.
+Name: "{autodesktop}\Jamaat"; Filename: "{cmd}"; Parameters: "/c start http://{code:GetPublicHost}:{code:GetPort}/login"; \
+    IconFilename: "{app}\Api\jamaat.ico"; Tasks: desktopicon; WorkingDir: "{app}"
+
+; Auto-start the tray helper at user login (controlled by the trayautostart task).
+Name: "{userstartup}\Jamaat Tray"; Filename: "{app}\Tray\JamaatTray.exe"; \
+    IconFilename: "{app}\Tray\jamaat.ico"; Tasks: trayautostart; \
+    Check: FileExists(ExpandConstant('{app}\Tray\JamaatTray.exe'))
 
 [Run]
 ; 1) Install .NET 10 Hosting Bundle if it wasn't detected on PATH.
@@ -198,6 +250,7 @@ function  IsValidPasswordRules(const S: String): Boolean; forward;
 function  IsPortFree(const Port: String): Boolean; forward;
 procedure WriteParamsFile(); forward;
 function  Esc(const S: String): String; forward;
+function  IsExistingInstall(): Boolean; forward;
 
 // -- Helper: trim a string -----------------------------------------------------
 function StrTrim(const S: String): String;
@@ -618,6 +671,17 @@ begin
     '}';
 
   SaveStringToFile(jsonPath, json, False);
+end;
+
+// Detect an existing Jamaat install. The Inno setup-uninstaller registry path uses our
+// AppId; if the entry exists, we're upgrading or repairing rather than fresh-installing.
+function IsExistingInstall(): Boolean;
+var
+  uninstallKey, displayName: String;
+begin
+  uninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' + '{#emit MyAppId}_is1';
+  Result := RegQueryStringValue(HKLM, uninstallKey, 'DisplayName', displayName)
+         or RegQueryStringValue(HKCU, uninstallKey, 'DisplayName', displayName);
 end;
 
 // JSON-escape a Pascal string (backslash, double-quote, control chars).

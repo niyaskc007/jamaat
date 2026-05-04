@@ -1,0 +1,43 @@
+<Application x:Class="Jamaat.AdminConsole.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <!-- Brand colours pulled from the SPA theme. Used for accents + the green title bar. -->
+        <SolidColorBrush x:Key="BrandPrimary" Color="#0E5C40"/>
+        <SolidColorBrush x:Key="BrandPrimaryDark" Color="#083C2A"/>
+        <SolidColorBrush x:Key="BrandText" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrandMuted" Color="#475569"/>
+        <SolidColorBrush x:Key="BrandSurface" Color="#F8FAFC"/>
+        <SolidColorBrush x:Key="BrandBorder" Color="#E5E9EF"/>
+        <SolidColorBrush x:Key="StatusGood" Color="#0E5C40"/>
+        <SolidColorBrush x:Key="StatusWarn" Color="#D97706"/>
+        <SolidColorBrush x:Key="StatusBad" Color="#DC2626"/>
+
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource BrandPrimary}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="MinWidth" Value="92"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="{StaticResource BrandText}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrandBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <Style x:Key="KpiBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrandBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Margin" Value="6,0"/>
+            <Setter Property="MinHeight" Value="80"/>
+        </Style>
+    </Application.Resources>
+</Application>

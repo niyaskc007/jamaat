@@ -35,9 +35,13 @@ $repoRoot     = Resolve-Path (Join-Path $PSScriptRoot '..')
 $installerDir = $PSScriptRoot
 $buildRoot    = Join-Path $repoRoot 'build'
 $apiOut       = Join-Path $buildRoot 'api'
+$trayOut      = Join-Path $buildRoot 'tray'
+$adminOut     = Join-Path $buildRoot 'admin'
 $webRoot      = Join-Path $repoRoot 'web\jamaat-web'
 $webDist      = Join-Path $webRoot  'dist'
 $apiCsproj    = Join-Path $repoRoot 'src\Jamaat.Api\Jamaat.Api.csproj'
+$trayCsproj   = Join-Path $repoRoot 'src\Jamaat.Tray\Jamaat.Tray.csproj'
+$adminCsproj  = Join-Path $repoRoot 'src\Jamaat.AdminConsole\Jamaat.AdminConsole.csproj'
 $redistDir    = Join-Path $installerDir 'redist'
 $outputDir    = Join-Path $installerDir 'output'
 
@@ -80,6 +84,20 @@ function Build-Api {
         -p:PublishReadyToRun=false `
         -o $apiOut
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit $LASTEXITCODE)" }
+}
+
+function Build-Tray {
+    Step "Publishing tray app to $trayOut"
+    if (Test-Path $trayOut) { Remove-Item $trayOut -Recurse -Force }
+    & dotnet publish $trayCsproj -c Release -o $trayOut --self-contained false
+    if ($LASTEXITCODE -ne 0) { throw "tray publish failed (exit $LASTEXITCODE)" }
+}
+
+function Build-Admin {
+    Step "Publishing admin console to $adminOut"
+    if (Test-Path $adminOut) { Remove-Item $adminOut -Recurse -Force }
+    & dotnet publish $adminCsproj -c Release -o $adminOut --self-contained false
+    if ($LASTEXITCODE -ne 0) { throw "admin console publish failed (exit $LASTEXITCODE)" }
 }
 
 function Build-Web {
@@ -181,6 +199,8 @@ function Compile-Installer {
 # -- main --
 Stop-RunningApi
 Build-Api
+Build-Tray
+Build-Admin
 Build-Web
 Ensure-HostingBundle
 Compile-Installer
