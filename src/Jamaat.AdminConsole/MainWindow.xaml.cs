@@ -36,6 +36,7 @@ public partial class MainWindow : Window, IDisposable
     public ObservableCollection<ErrorRow> Errors { get; } = new();
     public ObservableCollection<LoginRow> Logins { get; } = new();
     public ObservableCollection<AuditRow> Audit { get; } = new();
+    public ObservableCollection<TenantRow> Tenants { get; } = new();
 
     public MainWindow()
     {
@@ -44,6 +45,7 @@ public partial class MainWindow : Window, IDisposable
         dgErrors.ItemsSource = Errors;
         dgLogins.ItemsSource = Logins;
         dgAudit.ItemsSource = Audit;
+        dgTenants.ItemsSource = Tenants;
         _refreshTimer.Tick += async (_, _) => await RefreshAllAsync();
 
         // Pre-populate API URL from any locally installed Jamaat we can find. Cheap and a
@@ -165,14 +167,110 @@ public partial class MainWindow : Window, IDisposable
             try { db = await _http.GetFromJsonAsync<DatabaseStatsDto>($"{_baseUrl}/api/v1/system/database", JsonOpts); } catch { }
             List<AuditRow>? audit = null;
             try { audit = await _http.GetFromJsonAsync<List<AuditRow>>($"{_baseUrl}/api/v1/system/audit?take=50", JsonOpts); } catch { }
+            List<TenantRow>? tenants = null;
+            try { tenants = await _http.GetFromJsonAsync<List<TenantRow>>($"{_baseUrl}/api/v1/system/tenants", JsonOpts); } catch { }
 
             ApplyLive(live, server, db, audit);
+
+            if (tenants != null)
+            {
+                Tenants.Clear();
+                foreach (var t in tenants) Tenants.Add(t);
+            }
+
+            // Logs tab refreshes only when its checkbox is on (auto-refresh) - heavy payload.
+            if (cbLogAutoRefresh.IsChecked == true)
+            {
+                await RefreshLogsAsync();
+            }
         }
         catch (Exception ex)
         {
             lblConnection.Text = $"Connected to {_baseUrl} - refresh failed: {ex.Message}";
         }
     }
+
+    // ---- Operator actions -----------------------------------------------
+
+    private async void OnForceGcClick(object sender, RoutedEventArgs e)
+    {
+        btnForceGc.IsEnabled = false; lblActionResult.Text = "Forcing GC...";
+        try
+        {
+            var r = await _http.PostAsync($"{_baseUrl}/api/v1/system/runtime/gc", null);
+            r.EnsureSuccessStatusCode();
+            var result = await r.Content.ReadFromJsonAsync<GcResultDto>(JsonOpts);
+            lblActionResult.Text = $"GC freed {(result?.FreedBytes ?? 0) / 1024 / 1024:N0} MB in {result?.DurationMs ?? 0} ms";
+        }
+        catch (Exception ex)
+        {
+            lblActionResult.Text = $"GC failed: {ex.Message}";
+        }
+        finally
+        {
+            btnForceGc.IsEnabled = true;
+        }
+    }
+
+    /// <summary>Restart-the-service from a non-elevated WPF process: shell out to net.exe
+    /// with Verb=runas so the user gets one UAC prompt. We don't host service control
+    /// inside this process because that would mean running the whole console elevated.</summary>
+    private void OnRestartServiceClick(object sender, RoutedEventArgs e)
+    {
+        var confirm = MessageBox.Show(
+            "Restart the JamaatApi Windows Service now? The web UI will be unreachable for a few seconds.",
+            "Restart service?", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.OK) return;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = "/c net.exe stop JamaatApi & net.exe start JamaatApi",
+                Verb = "runas",
+                UseShellExecute = true,
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
+            });
+            lblActionResult.Text = "Service restart requested (check status in a few seconds).";
+        }
+        catch (System.ComponentModel.Win32Exception w) when (w.NativeErrorCode == 1223)
+        {
+            lblActionResult.Text = "Restart cancelled (UAC dismissed).";
+        }
+        catch (Exception ex)
+        {
+            lblActionResult.Text = $"Restart failed: {ex.Message}";
+        }
+    }
+
+    // ---- Logs tab --------------------------------------------------------
+
+    private async Task RefreshLogsAsync()
+    {
+        try
+        {
+            var take = int.TryParse((cbLogTake.SelectedItem as ComboBoxItem)?.Content?.ToString(), out var t) ? t : 500;
+            var logs = await _http.GetFromJsonAsync<LogTailDto>($"{_baseUrl}/api/v1/system/logs?take={take}", JsonOpts);
+            if (logs == null) return;
+            tbLogTail.Text = string.Join("\n", logs.Lines ?? new List<string>());
+            lblLogPath.Text = $"{logs.FilePath}  ·  {logs.LineCount} lines  ·  {logs.LastWriteAt:yyyy-MM-dd HH:mm}";
+            // Auto-scroll to the newest line.
+            tbLogTail.CaretIndex = tbLogTail.Text.Length;
+            tbLogTail.ScrollToEnd();
+        }
+        catch (HttpRequestException ex) when ((int?)ex.StatusCode == 404)
+        {
+            tbLogTail.Text = "(no log files yet — the service may not have written to logs/ yet)";
+            lblLogPath.Text = "";
+        }
+        catch (Exception ex)
+        {
+            tbLogTail.Text = "Log fetch failed: " + ex.Message;
+            lblLogPath.Text = "";
+        }
+    }
+
+    private async void OnRefreshLogsClick(object sender, RoutedEventArgs e) => await RefreshLogsAsync();
 
     private void ApplyLive(LiveOpsDto? live, ServerStatsDto? server, DatabaseStatsDto? db, List<AuditRow>? audit)
     {
@@ -347,4 +445,31 @@ public sealed class AuditRow
     public string ActionKey { get; set; } = "";
     public string UserName { get; set; } = "";
     public string Summary { get; set; } = "";
+}
+
+public sealed class TenantRow
+{
+    public Guid Id { get; set; }
+    public string Code { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string BaseCurrency { get; set; } = "";
+    public int MemberCount { get; set; }
+    public int FamilyCount { get; set; }
+    public int UserCount { get; set; }
+    public int ReceiptCount { get; set; }
+    public DateTime? LastActivityAt { get; set; }
+}
+
+internal sealed class LogTailDto
+{
+    public string? FilePath { get; set; }
+    public DateTime LastWriteAt { get; set; }
+    public int LineCount { get; set; }
+    public List<string>? Lines { get; set; }
+}
+
+internal sealed class GcResultDto
+{
+    public long FreedBytes { get; set; }
+    public int DurationMs { get; set; }
 }

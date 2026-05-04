@@ -106,8 +106,78 @@
                                     </Grid>
                                 </StackPanel>
                             </Border>
+
+                            <!-- Operator actions: surfaced on the Status tab so the operator
+                                 doesn't have to hunt for them. Both write to SystemAuditLog
+                                 via the existing API endpoints. -->
+                            <Border Style="{StaticResource KpiBorderStyle}" Margin="0,12,0,0">
+                                <StackPanel Margin="14">
+                                    <TextBlock Text="Operator actions" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button x:Name="btnForceGc" Content="Force GC" Click="OnForceGcClick"
+                                                Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                                        <Button x:Name="btnRestartSvc" Content="Restart service"
+                                                Click="OnRestartServiceClick"
+                                                Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                                        <TextBlock x:Name="lblActionResult" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource BrandMuted}" FontSize="12"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
+                </TabItem>
+
+                <!-- Tenants tab -->
+                <TabItem Header="Tenants">
+                    <DataGrid x:Name="dgTenants" Margin="16" AutoGenerateColumns="False" IsReadOnly="True"
+                              GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                              Background="White" BorderBrush="{StaticResource BrandBorder}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="100"/>
+                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*"/>
+                            <DataGridTextColumn Header="Currency" Binding="{Binding BaseCurrency}" Width="80"/>
+                            <DataGridTextColumn Header="Members" Binding="{Binding MemberCount}" Width="90"/>
+                            <DataGridTextColumn Header="Families" Binding="{Binding FamilyCount}" Width="90"/>
+                            <DataGridTextColumn Header="Users" Binding="{Binding UserCount}" Width="80"/>
+                            <DataGridTextColumn Header="Receipts" Binding="{Binding ReceiptCount}" Width="90"/>
+                            <DataGridTextColumn Header="Last activity" Binding="{Binding LastActivityAt, StringFormat='yyyy-MM-dd HH:mm'}" Width="140"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <!-- Logs tab - live tail of the most recent jamaat-*.log file. -->
+                <TabItem Header="Logs">
+                    <Grid Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,8">
+                            <TextBlock Text="Tail size:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ComboBox x:Name="cbLogTake" Width="100" SelectedIndex="1">
+                                <ComboBoxItem Content="100"/>
+                                <ComboBoxItem Content="500"/>
+                                <ComboBoxItem Content="1000"/>
+                                <ComboBoxItem Content="5000"/>
+                            </ComboBox>
+                            <CheckBox x:Name="cbLogAutoRefresh" Content="Auto-refresh (8s)" IsChecked="True"
+                                      VerticalAlignment="Center" Margin="16,0,0,0"/>
+                            <Button Content="Refresh now" Click="OnRefreshLogsClick"
+                                    Style="{StaticResource SecondaryButton}" Margin="16,0,0,0"/>
+                        </StackPanel>
+                        <Border Grid.Row="1" Background="#0F172A" CornerRadius="4">
+                            <ScrollViewer x:Name="logScroll" VerticalScrollBarVisibility="Auto"
+                                          Padding="12">
+                                <TextBox x:Name="tbLogTail" Background="Transparent" Foreground="#9FCDBF"
+                                         BorderThickness="0" IsReadOnly="True" FontFamily="Consolas"
+                                         FontSize="11" TextWrapping="NoWrap" AcceptsReturn="True"/>
+                            </ScrollViewer>
+                        </Border>
+                        <TextBlock Grid.Row="2" x:Name="lblLogPath" Foreground="{StaticResource BrandMuted}"
+                                   FontSize="11" Margin="0,8,0,0"/>
+                    </Grid>
                 </TabItem>
 
                 <!-- Alerts tab -->
