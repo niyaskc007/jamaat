@@ -13,6 +13,13 @@ using Serilog.Exceptions;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ---- Windows Service host -------------------------------------------------
+// Required when the API is registered as a Windows Service (the production install via
+// Inno Setup does this). Without this call SCM's start-handshake never completes and
+// `Start-Service JamaatApi` fails with "Cannot start service ... on computer '.'". When
+// running interactively (dotnet run / Visual Studio), UseWindowsService() is a no-op.
+builder.Host.UseWindowsService(o => o.ServiceName = "JamaatApi");
+
 // ---- Serilog --------------------------------------------------------------
 builder.Host.UseSerilog((ctx, sp, lc) => lc
     .ReadFrom.Configuration(ctx.Configuration)

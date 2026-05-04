@@ -70,8 +70,10 @@ Source: "..\build\api\*";        DestDir: "{app}\Api";     Flags: recursesubdirs
 ; not during the wizard, so we tag it `dontcopy` and extract it on demand from Pascal via
 ; ExtractTemporaryFile('test-db.ps1').
 Source: "scripts\test-db.ps1";   DestDir: "{tmp}";         Flags: dontcopy
-; post-install.ps1 runs DURING the install via [Run], so the normal extraction path is fine.
+; post-install.ps1 + sql-prep.ps1 run DURING the install via [Run]. They sit alongside each
+; other so post-install.ps1 can dot-source / Start-Process its sibling sql-prep.ps1.
 Source: "scripts\post-install.ps1"; DestDir: "{tmp}";      Flags: deleteafterinstall
+Source: "scripts\sql-prep.ps1";     DestDir: "{tmp}";      Flags: deleteafterinstall
 ; Optional - the .NET 10 Hosting Bundle. build.ps1 downloads into installer\redist\ and
 ; renames to "dotnet-hosting.exe" (fixed name so Inno [Files] doesn't need wildcards).
 ; If absent the installer skips the runtime install step and assumes the operator already
@@ -90,23 +92,23 @@ Filename: "{tmp}\dotnet-hosting.exe"; Parameters: "/install /quiet /norestart"; 
     StatusMsg: "Installing .NET 10 Hosting Bundle (this may take a minute)..."; \
     Flags: waituntilterminated; Check: NeedsHostingBundle and FileExists(ExpandConstant('{tmp}\dotnet-hosting.exe'))
 
-; 2) Open the firewall for the chosen port (TCP) so the LAN can reach the app.
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Jamaat API"""; \
-    Flags: runhidden; StatusMsg: "Removing previous firewall rule..."
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Jamaat API"" dir=in action=allow protocol=TCP localport={code:GetPort}"; \
-    Flags: runhidden; StatusMsg: "Opening firewall port {code:GetPort}..."
-
-; 3) Hand off to PowerShell to write appsettings, register service, init admin.
-;    Quoting is fiddly: each value goes through PowerShell's argument parser, so we wrap in
-;    single quotes to disable expansion. CMD also gets a chance at it, so we use ^ escaping
-;    on inner double-quotes by relying on PS to accept single-quoted strings.
+; 2) Run the post-install state machine. Parameters come from a JSON file that Pascal
+;    writes during ssInstall (see WriteParamsFile in [Code]). Why JSON-via-file instead of
+;    command-line args:
+;      - 15+ params with quotes/spaces is unworkable through cmd.exe + PS arg-parsing
+;      - JSON survives the cmd/PS double-parse round-trip cleanly (we already had a bug
+;        from this in 1.0.0-1.0.3)
+;      - The state file (install-state.json under {app}) lets us read what step failed
+;        from CurStepChanged so the wizard can tell the operator the truth
+;    The post-install script handles: appsettings.json patch, sql-prep, firewall rule,
+;    service register (with chosen identity), service start, init admin, shortcut.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\post-install.ps1"" -AppDir ""{app}"" -DbServer ""{code:GetDbServer}"" -DbDatabase ""{code:GetDbName}"" -DbAuthMode ""{code:GetDbAuthMode}"" -DbUser ""{code:GetDbUser}"" -DbPassword ""{code:GetDbPassword}"" -Port {code:GetPort} -PublicHost ""{code:GetPublicHost}"" -CorsOrigins ""{code:GetCorsOrigins}"" -AdminFullName ""{code:GetAdminName}"" -AdminEmail ""{code:GetAdminEmail}"" -AdminPassword ""{code:GetAdminPassword}"" -TenantName ""{code:GetTenantName}"" -BaseCurrency ""{code:GetBaseCurrency}"""; \
-    StatusMsg: "Configuring Jamaat API and creating admin account..."; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\post-install.ps1"" -Step all -ParamsFile ""{tmp}\params.json"" -StateFile ""{app}\install-state.json"" -Progress"; \
+    StatusMsg: "Configuring Jamaat (this may take 30-60 seconds)..."; \
     Flags: waituntilterminated; \
     WorkingDir: "{tmp}"
 
-; 4) Open the app in the default browser as a post-install option (user can untick).
+; 3) Open the app in the default browser as a post-install option (user can untick).
 Filename: "{cmd}"; Parameters: "/c start http://{code:GetPublicHost}:{code:GetPort}/login"; \
     Description: "Open {#MyAppName} in your browser"; Flags: postinstall nowait runhidden skipifsilent
 
@@ -157,11 +159,29 @@ var
   cbCurrency:     TNewComboBox;
   lbAdminError:   TNewStaticText;
 
+  // ---- Service identity page (NEW in 2.0) ----
+  // Wizard asks the operator which Windows account the JamaatApi service should run under.
+  // Default = Virtual service account (NT SERVICE\JamaatApi) - least privilege, no password
+  // to manage, auto-rotated. Custom domain account requires creds the operator types in.
+  pgSvcId:           TWizardPage;
+  rbSvcVirtual:      TNewRadioButton;
+  rbSvcLocalSystem:  TNewRadioButton;
+  rbSvcNetworkSvc:   TNewRadioButton;
+  rbSvcCustom:       TNewRadioButton;
+  rbSvcSqlLogin:     TNewRadioButton;
+  edSvcAccount:      TNewEdit;
+  edSvcPassword:     TPasswordEdit;
+  lbSvcAccount:      TNewStaticText;
+  lbSvcPassword:     TNewStaticText;
+  lbSvcHelp:         TNewStaticText;
+
   // ---- Captured state ----
   gDbServer, gDbName, gDbUser, gDbPassword, gDbAuthMode: String;
   gPort: String; gPublicHost, gCorsOrigins: String;
   gAdminName, gAdminEmail, gAdminPassword: String;
   gTenantName, gBaseCurrency: String;
+  // Service identity (one of: Virtual / LocalSystem / NetworkService / Custom / SqlLogin)
+  gSvcIdType, gSvcAccount, gSvcPassword: String;
 
   gHostingBundleNeeded: Boolean;
   gHostingBundleChecked: Boolean;
@@ -172,6 +192,12 @@ var
 procedure ApplyAuthVisibility(); forward;
 procedure AuthRadioClick(Sender: TObject); forward;
 procedure TestDbClick(Sender: TObject); forward;
+procedure ApplySvcIdVisibility(); forward;
+procedure SvcIdRadioClick(Sender: TObject); forward;
+function  IsValidPasswordRules(const S: String): Boolean; forward;
+function  IsPortFree(const Port: String): Boolean; forward;
+procedure WriteParamsFile(); forward;
+function  Esc(const S: String): String; forward;
 
 // -- Helper: trim a string -----------------------------------------------------
 function StrTrim(const S: String): String;
@@ -394,6 +420,221 @@ begin
 end;
 
 // =============================================================================
+// PAGE 1.5: Service Identity (NEW in 2.0)
+// =============================================================================
+// The JamaatApi Windows Service has to run as SOMEONE - that account is the SQL principal
+// that authenticates to the database (when using Windows auth) and the file-system identity
+// that owns log files etc. Wrong choice = service starts but immediately crashes on its
+// first SQL query. We make the operator pick explicitly with sensible defaults + help text.
+procedure CreateServiceIdentityPage();
+var
+  pg: TWizardPage;
+  y: Integer;
+begin
+  pg := CreateCustomPage(pgDb.ID, 'Service identity',
+    'Choose which Windows account the JamaatApi service will run as.');
+  pgSvcId := pg;
+
+  y := 0;
+
+  lbSvcHelp := TNewStaticText.Create(pg);
+  lbSvcHelp.Parent := pg.Surface;
+  lbSvcHelp.AutoSize := False; lbSvcHelp.WordWrap := True;
+  lbSvcHelp.Caption := 'The service identity is the SQL Server principal Jamaat will authenticate as. The installer will grant this principal access to the database during install.';
+  lbSvcHelp.Left := 0; lbSvcHelp.Top := y; lbSvcHelp.Width := pg.SurfaceWidth; lbSvcHelp.Height := 36;
+  y := y + 44;
+
+  // Virtual service account (recommended)
+  rbSvcVirtual := TNewRadioButton.Create(pg);
+  rbSvcVirtual.Parent := pg.Surface;
+  rbSvcVirtual.Caption := 'Virtual service account "NT SERVICE\JamaatApi"  (recommended)';
+  rbSvcVirtual.Left := 0; rbSvcVirtual.Top := y; rbSvcVirtual.Width := pg.SurfaceWidth;
+  rbSvcVirtual.Checked := True;
+  y := y + 22;
+  with TNewStaticText.Create(pg) do begin
+    Parent := pg.Surface;
+    Caption := '   Auto-managed, no password to maintain, least privilege.';
+    Left := 0; Top := y; Width := pg.SurfaceWidth; Font.Color := clGray;
+  end;
+  y := y + 22;
+
+  rbSvcLocalSystem := TNewRadioButton.Create(pg);
+  rbSvcLocalSystem.Parent := pg.Surface;
+  rbSvcLocalSystem.Caption := 'Local System  (NT AUTHORITY\SYSTEM)';
+  rbSvcLocalSystem.Left := 0; rbSvcLocalSystem.Top := y; rbSvcLocalSystem.Width := pg.SurfaceWidth;
+  y := y + 22;
+  with TNewStaticText.Create(pg) do begin
+    Parent := pg.Surface;
+    Caption := '   Highest privilege; common on developer machines and small servers.';
+    Left := 0; Top := y; Width := pg.SurfaceWidth; Font.Color := clGray;
+  end;
+  y := y + 22;
+
+  rbSvcNetworkSvc := TNewRadioButton.Create(pg);
+  rbSvcNetworkSvc.Parent := pg.Surface;
+  rbSvcNetworkSvc.Caption := 'Network Service  (NT AUTHORITY\NETWORK SERVICE)';
+  rbSvcNetworkSvc.Left := 0; rbSvcNetworkSvc.Top := y; rbSvcNetworkSvc.Width := pg.SurfaceWidth;
+  y := y + 22;
+  with TNewStaticText.Create(pg) do begin
+    Parent := pg.Surface;
+    Caption := '   Lower privilege than LocalSystem; useful on shared SQL servers.';
+    Left := 0; Top := y; Width := pg.SurfaceWidth; Font.Color := clGray;
+  end;
+  y := y + 22;
+
+  rbSvcCustom := TNewRadioButton.Create(pg);
+  rbSvcCustom.Parent := pg.Surface;
+  rbSvcCustom.Caption := 'Custom Windows account (DOMAIN\user)';
+  rbSvcCustom.Left := 0; rbSvcCustom.Top := y; rbSvcCustom.Width := pg.SurfaceWidth;
+  y := y + 22;
+
+  rbSvcSqlLogin := TNewRadioButton.Create(pg);
+  rbSvcSqlLogin.Parent := pg.Surface;
+  rbSvcSqlLogin.Caption := 'SQL Server login  (service runs as LocalSystem; API uses this SQL login)';
+  rbSvcSqlLogin.Left := 0; rbSvcSqlLogin.Top := y; rbSvcSqlLogin.Width := pg.SurfaceWidth;
+  y := y + 28;
+
+  // Account + password fields (visible only for Custom or SqlLogin).
+  lbSvcAccount := TNewStaticText.Create(pg);
+  lbSvcAccount.Parent := pg.Surface;
+  lbSvcAccount.Caption := 'Account / Login';
+  lbSvcAccount.Left := 0; lbSvcAccount.Top := y + 4; lbSvcAccount.Width := 100;
+
+  edSvcAccount := TNewEdit.Create(pg);
+  edSvcAccount.Parent := pg.Surface;
+  edSvcAccount.Left := 110; edSvcAccount.Top := y; edSvcAccount.Width := pg.SurfaceWidth - 110;
+  y := y + 28;
+
+  lbSvcPassword := TNewStaticText.Create(pg);
+  lbSvcPassword.Parent := pg.Surface;
+  lbSvcPassword.Caption := 'Password';
+  lbSvcPassword.Left := 0; lbSvcPassword.Top := y + 4; lbSvcPassword.Width := 100;
+
+  edSvcPassword := TPasswordEdit.Create(pg);
+  edSvcPassword.Parent := pg.Surface;
+  edSvcPassword.Left := 110; edSvcPassword.Top := y; edSvcPassword.Width := pg.SurfaceWidth - 110;
+
+  rbSvcVirtual.OnClick     := @SvcIdRadioClick;
+  rbSvcLocalSystem.OnClick := @SvcIdRadioClick;
+  rbSvcNetworkSvc.OnClick  := @SvcIdRadioClick;
+  rbSvcCustom.OnClick      := @SvcIdRadioClick;
+  rbSvcSqlLogin.OnClick    := @SvcIdRadioClick;
+  ApplySvcIdVisibility();
+end;
+
+procedure ApplySvcIdVisibility();
+var needsCreds: Boolean;
+begin
+  needsCreds := rbSvcCustom.Checked or rbSvcSqlLogin.Checked;
+  lbSvcAccount.Visible := needsCreds;
+  edSvcAccount.Visible := needsCreds;
+  lbSvcPassword.Visible := needsCreds;
+  edSvcPassword.Visible := needsCreds;
+  if rbSvcCustom.Checked then begin
+    lbSvcAccount.Caption := 'Account';
+  end else if rbSvcSqlLogin.Checked then begin
+    lbSvcAccount.Caption := 'SQL Login';
+  end;
+end;
+
+procedure SvcIdRadioClick(Sender: TObject);
+begin
+  ApplySvcIdVisibility();
+end;
+
+// -- Password validation: enforce ASP.NET Identity defaults ------------------
+// builder.Services.AddIdentityCore: RequiredLength=8, RequireNonAlphanumeric=false,
+// RequireDigit=true, RequireLowercase=true, RequireUppercase=true (defaults).
+function IsValidPasswordRules(const S: String): Boolean;
+var i: Integer; hasLower, hasUpper, hasDigit: Boolean;
+begin
+  Result := False;
+  if Length(S) < 8 then exit;
+  hasLower := False; hasUpper := False; hasDigit := False;
+  for i := 1 to Length(S) do begin
+    if (S[i] >= 'a') and (S[i] <= 'z') then hasLower := True
+    else if (S[i] >= 'A') and (S[i] <= 'Z') then hasUpper := True
+    else if (S[i] >= '0') and (S[i] <= '9') then hasDigit := True;
+  end;
+  Result := hasLower and hasUpper and hasDigit;
+end;
+
+// -- Port-free check via netstat. Cheap and works on every Windows version ---
+function IsPortFree(const Port: String): Boolean;
+var
+  ResultCode: Integer;
+  OutputFile: String;
+  Output: AnsiString;
+begin
+  OutputFile := ExpandConstant('{tmp}\netstat.txt');
+  // 'netstat -ano' shows local-port + state. We look for ":<port> " followed by LISTENING.
+  if not Exec(ExpandConstant('{cmd}'), '/c netstat -ano > "' + OutputFile + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then begin
+    Result := True;  // can't check, don't block
+    exit;
+  end;
+  if not LoadStringFromFile(OutputFile, Output) then begin
+    Result := True;
+    exit;
+  end;
+  Result := Pos(':' + Port + ' ', String(Output)) = 0;
+end;
+
+// -- Write params.json from the captured wizard state ------------------------
+// Called from CurStepChanged(ssInstall). post-install.ps1 reads this file.
+procedure WriteParamsFile();
+var
+  jsonPath, json, corsEsc: String;
+begin
+  jsonPath := ExpandConstant('{tmp}\params.json');
+  // Build JSON manually - small, no external deps. We escape backslash + double-quote +
+  // newlines in CORS origins via StringChange (Pascal).
+  corsEsc := gCorsOrigins;
+  StringChangeEx(corsEsc, '\', '\\', True);
+  StringChangeEx(corsEsc, '"', '\"', True);
+  StringChangeEx(corsEsc, #13#10, '\n', True);
+  StringChangeEx(corsEsc, #13, '\n', True);
+  StringChangeEx(corsEsc, #10, '\n', True);
+
+  json :=
+    '{' + #13#10 +
+    '  "AppDir": "' + Esc(ExpandConstant('{app}')) + '",' + #13#10 +
+    '  "DbServer": "' + Esc(gDbServer) + '",' + #13#10 +
+    '  "DbDatabase": "' + Esc(gDbName) + '",' + #13#10 +
+    '  "OperatorAuth": "' + gDbAuthMode + '",' + #13#10 +
+    '  "OperatorUser": "' + Esc(gDbUser) + '",' + #13#10 +
+    '  "OperatorPassword": "' + Esc(gDbPassword) + '",' + #13#10 +
+    '  "ServiceIdentityType": "' + gSvcIdType + '",' + #13#10 +
+    '  "ServiceAccount": "' + Esc(gSvcAccount) + '",' + #13#10 +
+    '  "ServicePassword": "' + Esc(gSvcPassword) + '",' + #13#10 +
+    '  "Port": ' + gPort + ',' + #13#10 +
+    '  "PublicHost": "' + Esc(gPublicHost) + '",' + #13#10 +
+    '  "CorsOrigins": "' + corsEsc + '",' + #13#10 +
+    '  "AdminFullName": "' + Esc(gAdminName) + '",' + #13#10 +
+    '  "AdminEmail": "' + Esc(gAdminEmail) + '",' + #13#10 +
+    '  "AdminPassword": "' + Esc(gAdminPassword) + '",' + #13#10 +
+    '  "TenantName": "' + Esc(gTenantName) + '",' + #13#10 +
+    '  "BaseCurrency": "' + gBaseCurrency + '"' + #13#10 +
+    '}';
+
+  SaveStringToFile(jsonPath, json, False);
+end;
+
+// JSON-escape a Pascal string (backslash, double-quote, control chars).
+function Esc(const S: String): String;
+var s2: String;
+begin
+  s2 := S;
+  StringChangeEx(s2, '\', '\\', True);
+  StringChangeEx(s2, '"', '\"', True);
+  StringChangeEx(s2, #13#10, '\n', True);
+  StringChangeEx(s2, #13, '\n', True);
+  StringChangeEx(s2, #10, '\n', True);
+  StringChangeEx(s2, #9, '\t', True);
+  Result := s2;
+end;
+
+// =============================================================================
 // PAGE 2: Ports & hosting
 // =============================================================================
 procedure CreatePortsPage();
@@ -528,9 +769,47 @@ begin
     gDbUser := edDbUser.Text;
     gDbPassword := edDbPassword.Text;
   end
+  else if CurPageID = pgSvcId.ID then begin
+    if rbSvcVirtual.Checked then begin
+      gSvcIdType := 'Virtual'; gSvcAccount := ''; gSvcPassword := '';
+    end else if rbSvcLocalSystem.Checked then begin
+      gSvcIdType := 'LocalSystem'; gSvcAccount := ''; gSvcPassword := '';
+    end else if rbSvcNetworkSvc.Checked then begin
+      gSvcIdType := 'NetworkService'; gSvcAccount := ''; gSvcPassword := '';
+    end else if rbSvcCustom.Checked then begin
+      if StrTrim(edSvcAccount.Text) = '' then begin
+        MsgBox('Custom Windows account requires an account name (DOMAIN\user).', mbError, MB_OK); Result := False; exit;
+      end;
+      if StrTrim(edSvcPassword.Text) = '' then begin
+        MsgBox('Custom Windows account requires a password.', mbError, MB_OK); Result := False; exit;
+      end;
+      if Pos('\', edSvcAccount.Text) = 0 then begin
+        MsgBox('Account must be in DOMAIN\user form (use ".\user" for a local account).', mbError, MB_OK);
+        Result := False; exit;
+      end;
+      gSvcIdType := 'Custom';
+      gSvcAccount := StrTrim(edSvcAccount.Text);
+      gSvcPassword := edSvcPassword.Text;
+    end else if rbSvcSqlLogin.Checked then begin
+      if StrTrim(edSvcAccount.Text) = '' then begin
+        MsgBox('SQL login name is required.', mbError, MB_OK); Result := False; exit;
+      end;
+      if StrTrim(edSvcPassword.Text) = '' then begin
+        MsgBox('SQL login password is required.', mbError, MB_OK); Result := False; exit;
+      end;
+      gSvcIdType := 'SqlLogin';
+      gSvcAccount := StrTrim(edSvcAccount.Text);
+      gSvcPassword := edSvcPassword.Text;
+    end;
+  end
   else if CurPageID = pgPorts.ID then begin
     if not IsValidPort(StrTrim(edPort.Text)) then begin
       MsgBox('Port must be a number between 1 and 65535.', mbError, MB_OK); Result := False; exit;
+    end;
+    if not IsPortFree(StrTrim(edPort.Text)) then begin
+      if MsgBox('Port ' + StrTrim(edPort.Text) + ' appears to be in use already. The service install will fail when it tries to bind. Continue anyway?', mbConfirmation, MB_YESNO) = IDNO then begin
+        Result := False; exit;
+      end;
     end;
     if StrTrim(edPublicHost.Text) = '' then begin
       MsgBox('Public hostname is required (use "localhost" for local-only installs).', mbError, MB_OK);
@@ -544,7 +823,12 @@ begin
     lbAdminError.Caption := '';
     if StrTrim(edAdminName.Text) = '' then begin lbAdminError.Caption := 'Full name is required.'; Result := False; exit; end;
     if not LooksLikeEmail(StrTrim(edAdminEmail.Text)) then begin lbAdminError.Caption := 'A valid email is required.'; Result := False; exit; end;
-    if Length(edAdminPwd.Text) < 8 then begin lbAdminError.Caption := 'Password must be at least 8 characters.'; Result := False; exit; end;
+    // ASP.NET Identity defaults: 8+ chars, at least one upper + lower + digit. Reject early
+    // so the install doesn't silently fail to seed the admin user later.
+    if not IsValidPasswordRules(edAdminPwd.Text) then begin
+      lbAdminError.Caption := 'Password must be 8+ chars with at least one uppercase, lowercase, and digit.';
+      Result := False; exit;
+    end;
     if edAdminPwd.Text <> edAdminPwd2.Text then begin lbAdminError.Caption := 'Passwords do not match.'; Result := False; exit; end;
     if StrTrim(edTenantName.Text) = '' then begin lbAdminError.Caption := 'Jamaat name is required.'; Result := False; exit; end;
     gAdminName := StrTrim(edAdminName.Text);
@@ -561,8 +845,43 @@ end;
 procedure InitializeWizard();
 begin
   CreateDatabasePage();
+  CreateServiceIdentityPage();  // NEW in 2.0
   CreatePortsPage();
   CreateAdminPage();
+end;
+
+// CurStepChanged hook - the install-phase orchestration. We use this to:
+//   - ssInstall: write params.json before [Run] kicks off post-install.ps1
+//   - ssPostInstall: read install-state.json and show the operator a clear message about
+//     what step (if any) failed + where the log lives
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  stateFile, stateContent: String;
+  msg: String;
+  stateAnsi: AnsiString;
+begin
+  if CurStep = ssInstall then begin
+    // Make sure {app}\Logs exists for post-install transcript output
+    ForceDirectories(ExpandConstant('{app}\Logs'));
+    WriteParamsFile();
+  end
+  else if CurStep = ssPostInstall then begin
+    stateFile := ExpandConstant('{app}\install-state.json');
+    if FileExists(stateFile) then begin
+      LoadStringFromFile(stateFile, stateAnsi);
+      stateContent := String(stateAnsi);
+      // Extremely cheap "did any step fail" check - look for "error" status string in the file.
+      // The state file has per-step status like "patch-config":"ok" or "service-start":"error".
+      if Pos('"error"', stateContent) > 0 then begin
+        msg := 'Configuration completed with errors. Look at install-state.json under ' +
+               ExpandConstant('{app}') + ' for details.' + #13#10 + #13#10 +
+               'You can re-run the configuration without reinstalling by running, in elevated PowerShell:' + #13#10 +
+               'powershell -NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\Api\..\install-recover.ps1" ' +
+               '(or rerun the installer in repair mode).';
+        MsgBox(msg, mbError, MB_OK);
+      end;
+    end;
+  end;
 end;
 
 // =============================================================================

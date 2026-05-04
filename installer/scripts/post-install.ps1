@@ -1,127 +1,219 @@
-# Runs at the end of installation. Inno Setup [Run] section invokes this with the
-# values the operator chose in the custom wizard pages (passed as args). It:
-#   1. Patches {AppDir}\Api\appsettings.json with the operator's connection string,
-#      port, hostname, CORS origins, and admin seed values.
-#   2. Registers and starts the JamaatApi Windows Service via sc.exe.
-#   3. Polls http://localhost:<Port>/api/v1/setup/status until the API is up.
-#   4. POSTs to /api/v1/setup/initialize to create the first admin + name the tenant.
-#   5. Writes a small open-browser.cmd shortcut.
+# Post-install state machine for the Jamaat installer.
 #
-# Returns non-zero on hard failure so the Inno Setup [Run] entry shows an error to
-# the operator. Soft failures (e.g. browser open) just log to a transcript and exit 0.
+# Invoked by the Inno Setup Configuration page once per step. Each step is independently:
+#   - Idempotent (safe to re-run)
+#   - Verifiable (post-state check that returns true if done)
+#   - Recoverable (stores state to <AppDir>\install-state.json so the wizard can retry one
+#     step without redoing everything)
+#
+# Steps (in execution order):
+#   1. patch-config        Write appsettings.json
+#   2. sql-prep            CREATE DATABASE / LOGIN / USER / role grant (delegates to sql-prep.ps1)
+#   3. firewall            Open inbound TCP rule for the chosen port
+#   4. service-register    sc.exe / New-Service for the chosen identity
+#   5. service-failure     sc.exe failure for restart-on-crash
+#   6. service-start       Start-Service + wait for /health/ready
+#   7. init-admin          POST /api/v1/setup/initialize
+#   8. shortcut            Write <AppDir>\open-browser.cmd
+#
+# The wizard's Configuration page invokes us as:
+#   post-install.ps1 -Step <name> -StateFile ... -ParamsFile ...
+# where ParamsFile is a JSON blob of all the wizard inputs (so we don't have 30 -Param args).
+# Exit code: 0 = step succeeded (or already done). Non-zero = failed; the JSON state file
+# will have an `error` field and the wizard surfaces Retry / Skip / View log buttons.
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)] [string] $AppDir,
-    [Parameter(Mandatory = $true)] [string] $DbServer,
-    [Parameter(Mandatory = $true)] [string] $DbDatabase,
-    [Parameter(Mandatory = $true)] [ValidateSet('Windows','Sql')] [string] $DbAuthMode,
-    [string] $DbUser = '',
-    [string] $DbPassword = '',
-    [Parameter(Mandatory = $true)] [int] $Port,
-    [Parameter(Mandatory = $true)] [string] $PublicHost,
-    [string] $CorsOrigins = '',
-    [Parameter(Mandatory = $true)] [string] $AdminFullName,
-    [Parameter(Mandatory = $true)] [string] $AdminEmail,
-    [Parameter(Mandatory = $true)] [string] $AdminPassword,
-    [Parameter(Mandatory = $true)] [string] $TenantName,
-    [Parameter(Mandatory = $true)] [string] $BaseCurrency
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('patch-config','sql-prep','firewall','service-register','service-failure','service-start','init-admin','shortcut','all')]
+    [string] $Step,
+
+    [Parameter(Mandatory = $true)] [string] $StateFile,
+    [Parameter(Mandatory = $true)] [string] $ParamsFile,
+
+    # When set, the script writes step-by-step progress lines that the Pascal page can
+    # parse to update its UI. Format: "PROGRESS|<state>|<message>" where state is one of
+    # running|done|skipped|error.
+    [switch] $Progress
 )
 
 $ErrorActionPreference = 'Stop'
-$apiDir   = Join-Path $AppDir 'Api'
-$logsDir  = Join-Path $AppDir 'Logs'
-$logFile  = Join-Path $logsDir ("post-install-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + ".log")
-$null = New-Item -Path $logsDir -ItemType Directory -Force
 
-Start-Transcript -Path $logFile -Append | Out-Null
+# ---- Helpers --------------------------------------------------------------
 
-function Write-Step([string] $msg) {
-    $line = "[{0}] {1}" -f (Get-Date -Format 'HH:mm:ss'), $msg
-    Write-Output $line
+function Write-Progress2 {
+    param([string] $State, [string] $Message)
+    if ($Progress) { Write-Output "PROGRESS|$State|$Message" }
+    Write-Output ("[{0}] {1}: {2}" -f (Get-Date -Format 'HH:mm:ss'), $State.ToUpper(), $Message)
 }
 
-try {
-    # ---- Patch appsettings.json ------------------------------------------
-    Write-Step "Patching appsettings.json"
-    $cfgPath = Join-Path $apiDir 'appsettings.json'
+function Read-State {
+    param([string] $Path)
+    if (Test-Path $Path) {
+        try { return Get-Content $Path -Raw | ConvertFrom-Json } catch { }
+    }
+    return [pscustomobject]@{ steps = [pscustomobject]@{}; errors = @(); started_at = (Get-Date).ToUniversalTime().ToString('o') }
+}
+
+function Save-State {
+    param([string] $Path, $State)
+    $dir = Split-Path -Parent $Path
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, ($State | ConvertTo-Json -Depth 16), $utf8)
+}
+
+function Set-StepStatus {
+    param($State, [string] $StepName, [string] $Status, [string] $Detail = '')
+    if (-not $State.steps) { $State | Add-Member -NotePropertyName 'steps' -NotePropertyValue ([pscustomobject]@{}) -Force }
+    $State.steps | Add-Member -NotePropertyName $StepName -NotePropertyValue $Status -Force
+    if ($Detail) {
+        $State | Add-Member -NotePropertyName "${StepName}_detail" -NotePropertyValue $Detail -Force
+    }
+}
+
+function Read-Params {
+    param([string] $Path)
+    return Get-Content $Path -Raw | ConvertFrom-Json
+}
+
+function Initialize-JsonSection {
+    param($Parent, [string] $Name)
+    if ($null -eq $Parent.$Name) {
+        $Parent | Add-Member -NotePropertyName $Name -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+    return $Parent.$Name
+}
+
+function Set-NestedJsonProp {
+    param($Obj, [string] $Name, $Value)
+    $Obj | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
+}
+
+# ---- Step implementations -------------------------------------------------
+
+function Step-PatchConfig {
+    param($p)
+    $cfgPath = Join-Path $p.AppDir 'Api\appsettings.json'
     if (-not (Test-Path $cfgPath)) { throw "appsettings.json not found at $cfgPath" }
+
     $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
 
-    if ($DbAuthMode -eq 'Windows') {
-        $cs = "Server=$DbServer;Database=$DbDatabase;Integrated Security=true;TrustServerCertificate=True;Encrypt=True;MultipleActiveResultSets=true"
-    } else {
-        $cs = "Server=$DbServer;Database=$DbDatabase;User Id=$DbUser;Password=$DbPassword;TrustServerCertificate=True;Encrypt=True;MultipleActiveResultSets=true"
-    }
-    # Helper: idempotently set a property on a pscustomobject. Required because PS 5.1
-    # `ConvertFrom-Json` returns objects you can't dot-assign new properties to: $cfg.Foo.Bar
-    # = ... blows up with "The property 'Bar' cannot be found on this object" when Bar
-    # didn't already exist. Add-Member -Force handles both create and overwrite.
-    function Set-NestedJsonProp { param($Obj, [string]$Name, $Value)
-        $Obj | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
-    }
-    function Initialize-JsonSection { param($Parent, [string]$Name)
-        if ($null -eq $Parent.$Name) {
-            $Parent | Add-Member -NotePropertyName $Name -NotePropertyValue ([pscustomobject]@{}) -Force
+    # Build connection string for the SERVICE identity. The service uses Windows auth as
+    # NT SERVICE\JamaatApi / NT AUTHORITY\SYSTEM / NT AUTHORITY\NETWORK SERVICE / a domain
+    # account, OR a SQL login. Matched to what sql-prep.ps1 provisioned.
+    $cs = switch ($p.ServiceIdentityType) {
+        'SqlLogin' {
+            # Use the SqlLogin credentials in the connection string.
+            "Server=$($p.DbServer);Database=$($p.DbDatabase);User Id=$($p.ServiceAccount);Password=$($p.ServicePassword);TrustServerCertificate=True;Encrypt=True;MultipleActiveResultSets=true"
         }
-        return $Parent.$Name
+        default {
+            # Windows auth - the service identity authenticates implicitly.
+            "Server=$($p.DbServer);Database=$($p.DbDatabase);Integrated Security=true;TrustServerCertificate=True;Encrypt=True;MultipleActiveResultSets=true"
+        }
     }
 
     $csSection = Initialize-JsonSection $cfg 'ConnectionStrings'
     Set-NestedJsonProp $csSection 'Default' $cs
 
-    # CORS: always include the public hostname; append any extras.
-    $origins = @("http://${PublicHost}:$Port", "https://${PublicHost}:$Port")
-    if ($CorsOrigins) {
-        $extra = $CorsOrigins -split "[\r\n,]+" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+    # CORS: include the public hostname + any extras.
+    $origins = @("http://$($p.PublicHost):$($p.Port)", "https://$($p.PublicHost):$($p.Port)")
+    if ($p.CorsOrigins) {
+        $extra = $p.CorsOrigins -split "[\r\n,]+" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
         $origins += $extra
     }
     $corsSection = Initialize-JsonSection $cfg 'Cors'
     Set-NestedJsonProp $corsSection 'Origins' @($origins | Select-Object -Unique)
 
-    # Bake the seed admin so DatabaseSeeder hooks pick it up if Setup:UseWizard is false.
-    # We default to UseWizard=false for installer-driven installs (admin already chosen here).
     $setupSection = Initialize-JsonSection $cfg 'Setup'
     Set-NestedJsonProp $setupSection 'UseWizard' $false
 
     $seedSection = Initialize-JsonSection $cfg 'Seed'
-    Set-NestedJsonProp $seedSection 'AdminEmail' $AdminEmail
-    Set-NestedJsonProp $seedSection 'AdminPassword' $AdminPassword
-    Set-NestedJsonProp $seedSection 'AdminFullName' $AdminFullName
-    Set-NestedJsonProp $seedSection 'TenantName' $TenantName
-    Set-NestedJsonProp $seedSection 'BaseCurrency' $BaseCurrency
+    Set-NestedJsonProp $seedSection 'AdminEmail' $p.AdminEmail
+    Set-NestedJsonProp $seedSection 'AdminPassword' $p.AdminPassword
+    Set-NestedJsonProp $seedSection 'AdminFullName' $p.AdminFullName
+    Set-NestedJsonProp $seedSection 'TenantName' $p.TenantName
+    Set-NestedJsonProp $seedSection 'BaseCurrency' $p.BaseCurrency
 
-    # Rotate the JWT signing key. The shipped value is a placeholder; on a fresh install
-    # we generate a 64-byte random secret so two installs of the same MSI don't share a key.
-    $bytes = New-Object byte[] 64
-    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    $jwtSection = Initialize-JsonSection $cfg 'Jwt'
-    Set-NestedJsonProp $jwtSection 'Key' ([Convert]::ToBase64String($bytes))
+    # JWT key rotation: only if it still has the placeholder (idempotent across re-runs).
+    if (-not $cfg.Jwt -or $cfg.Jwt.Key -eq 'REPLACE_WITH_STRONG_RANDOM_KEY_AT_LEAST_32_BYTES_LONG_0123456789' -or [string]::IsNullOrEmpty($cfg.Jwt.Key)) {
+        $bytes = New-Object byte[] 64
+        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+        $jwtSection = Initialize-JsonSection $cfg 'Jwt'
+        Set-NestedJsonProp $jwtSection 'Key' ([Convert]::ToBase64String($bytes))
+    }
 
-    # Direct .NET write rather than Set-Content. Set-Content does an atomic temp-write +
-    # move which Defender / EDR sometimes blocks on Program Files (the temp file's hash
-    # doesn't match a trusted EXE so it gets quarantined mid-rename, surfacing as "access
-    # denied" on the original target). WriteAllText is a single in-place write that's much
-    # less likely to trip those rules.
     $jsonOut = $cfg | ConvertTo-Json -Depth 16
-    $utf8 = New-Object System.Text.UTF8Encoding($false)  # no BOM, ASP.NET config reader doesn't need one
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($cfgPath, $jsonOut, $utf8)
 
-    # ---- Register Windows Service ----------------------------------------
-    Write-Step "Registering JamaatApi Windows Service"
-    $apiExe = Join-Path $apiDir 'Jamaat.Api.exe'
+    return "Patched $cfgPath"
+}
+
+function Step-SqlPrep {
+    param($p)
+    $script = Join-Path $PSScriptRoot 'sql-prep.ps1'
+    if (-not (Test-Path $script)) {
+        # When invoked from the installer's {tmp} dir, the helpers sit alongside us.
+        $script = Join-Path (Split-Path -Parent $MyInvocation.ScriptName) 'sql-prep.ps1'
+    }
+    $args = @(
+        '-NoProfile','-ExecutionPolicy','Bypass','-File',$script,
+        '-Server',$p.DbServer,
+        '-Database',$p.DbDatabase,
+        '-OperatorAuth',$p.OperatorAuth,
+        '-ServiceIdentityType',$p.ServiceIdentityType,
+        '-ServiceName','JamaatApi'
+    )
+    if ($p.OperatorAuth -eq 'Sql') {
+        $args += @('-OperatorUser',$p.OperatorUser,'-OperatorPassword',$p.OperatorPassword)
+    }
+    if ($p.ServiceIdentityType -in @('Custom','SqlLogin')) {
+        $args += @('-ServiceAccount',$p.ServiceAccount)
+    }
+    if ($p.ServiceIdentityType -eq 'SqlLogin') {
+        $args += @('-ServicePassword',$p.ServicePassword)
+    }
+    $tmpOut = [System.IO.Path]::GetTempFileName()
+    try {
+        $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $args `
+            -RedirectStandardOutput $tmpOut -NoNewWindow -PassThru -Wait
+        $output = Get-Content $tmpOut -Raw
+        if ($proc.ExitCode -ne 0) {
+            throw "sql-prep.ps1 exit $($proc.ExitCode):`n$output"
+        }
+        # Capture the resolved principal name for downstream steps.
+        if ($output -match 'RESULT_SQL_PRINCIPAL=(.+)') {
+            return "Provisioned. Service principal: $($matches[1].Trim())"
+        }
+        return 'Provisioned.'
+    } finally {
+        Remove-Item $tmpOut -ErrorAction SilentlyContinue
+    }
+}
+
+function Step-Firewall {
+    param($p)
+    $ruleName = "Jamaat API ($($p.Port))"
+    # netsh.exe works on every Windows version; New-NetFirewallRule needs PSv5+ and admin.
+    & netsh.exe advfirewall firewall delete rule name="`"$ruleName`"" 2>&1 | Out-Null
+    & netsh.exe advfirewall firewall add rule name="$ruleName" dir=in action=allow protocol=TCP localport=$($p.Port) 2>&1 | Out-String | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "netsh add rule failed (exit $LASTEXITCODE)" }
+    return "Opened TCP $($p.Port)"
+}
+
+function Step-ServiceRegister {
+    param($p)
+    $apiExe = Join-Path $p.AppDir 'Api\Jamaat.Api.exe'
     if (-not (Test-Path $apiExe)) { throw "Jamaat.Api.exe not found at $apiExe" }
 
-    # Stop + remove any existing service from a prior install so binPath updates.
+    # Stop + remove existing service so binPath / identity changes take effect.
     $existing = Get-Service -Name 'JamaatApi' -ErrorAction SilentlyContinue
     if ($existing) {
-        Write-Step "Removing existing JamaatApi service"
         if ($existing.Status -ne 'Stopped') {
             try { Stop-Service -Name 'JamaatApi' -Force -ErrorAction Stop } catch { }
             Start-Sleep -Seconds 1
         }
-        # Remove-Service is PS 6+. On 5.1 we use sc.exe delete which DOES work for delete -
-        # the create command is the only one that PS 5.1 mangles in this script.
         if (Get-Command Remove-Service -ErrorAction SilentlyContinue) {
             Remove-Service -Name 'JamaatApi' -ErrorAction SilentlyContinue
         } else {
@@ -130,78 +222,175 @@ try {
         Start-Sleep -Seconds 2
     }
 
-    # New-Service is the right tool here: clean named parameters, no sc.exe `key= value`
-    # quoting mess. The earlier `sc.exe create` route was failing with exit 1639 ("invalid
-    # command line argument") because PowerShell collapses spaces around `=` and sc.exe
-    # ends up seeing nonsense.
-    $binPath = "`"$apiExe`" --urls http://*:$Port"
-    New-Service `
-        -Name 'JamaatApi' `
-        -BinaryPathName $binPath `
-        -DisplayName 'Jamaat API' `
-        -Description 'Jamaat community management web API.' `
-        -StartupType Automatic | Out-Null
-
-    # Restart on crash: 60s delay, three retries inside 24h. sc.exe failure DOES work
-    # because its arguments don't include a `=` followed by a space-separated value -
-    # they're all single tokens so PS arg-parsing is happy.
-    & sc.exe failure JamaatApi reset= 86400 actions= restart/60000/restart/60000/restart/60000 2>&1 | Out-Null
-
-    Write-Step "Starting JamaatApi service"
-    try {
-        Start-Service -Name 'JamaatApi' -ErrorAction Stop
-    } catch {
-        throw "Start-Service failed: $($_.Exception.Message). Check $logsDir and the JamaatApi service status / event log."
+    $binPath = "`"$apiExe`" --urls http://*:$($p.Port)"
+    $newSvcArgs = @{
+        Name           = 'JamaatApi'
+        BinaryPathName = $binPath
+        DisplayName    = 'Jamaat API'
+        Description    = "Jamaat - product of Ubrixy Technologies. Service identity: $($p.ServiceIdentityType)."
+        StartupType    = 'Automatic'
     }
 
-    # ---- Wait for health -------------------------------------------------
-    Write-Step "Waiting for API to respond on http://localhost:$Port"
+    # Per-identity credential plumbing.
+    switch ($p.ServiceIdentityType) {
+        'LocalSystem' {
+            # Default - no -Credential. New-Service registers as LocalSystem.
+        }
+        'NetworkService' {
+            # New-Service in PS 5.1 doesn't expose NetworkService directly. Register as
+            # LocalSystem then sc.exe config to flip the start-account.
+            New-Service @newSvcArgs | Out-Null
+            & sc.exe config JamaatApi obj= 'NT AUTHORITY\NETWORK SERVICE' 2>&1 | Out-Null
+            return "Registered as NT AUTHORITY\NETWORK SERVICE"
+        }
+        'Virtual' {
+            # Virtual service account: register as LocalSystem, then sc.exe config the
+            # start-account to "NT SERVICE\JamaatApi" (the per-service virtual account).
+            New-Service @newSvcArgs | Out-Null
+            & sc.exe config JamaatApi obj= 'NT SERVICE\JamaatApi' 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "sc.exe config (Virtual) failed exit $LASTEXITCODE" }
+            return "Registered as NT SERVICE\JamaatApi (virtual service account)"
+        }
+        'Custom' {
+            if ([string]::IsNullOrWhiteSpace($p.ServiceAccount)) { throw "Custom identity requires ServiceAccount." }
+            if ([string]::IsNullOrWhiteSpace($p.ServicePassword)) { throw "Custom identity requires ServicePassword." }
+            # Build PSCredential and pass via -Credential.
+            $secure = ConvertTo-SecureString $p.ServicePassword -AsPlainText -Force
+            $cred = New-Object System.Management.Automation.PSCredential($p.ServiceAccount, $secure)
+            $newSvcArgs.Credential = $cred
+            New-Service @newSvcArgs | Out-Null
+            return "Registered as $($p.ServiceAccount)"
+        }
+        'SqlLogin' {
+            # SqlLogin = Windows auth at the service-process level (LocalSystem default),
+            # but the API connects to SQL with the SQL login from appsettings. So no
+            # service-identity changes here.
+            New-Service @newSvcArgs | Out-Null
+            return 'Registered as LocalSystem (API uses SQL login internally)'
+        }
+        default {
+            throw "Unknown ServiceIdentityType: $($p.ServiceIdentityType)"
+        }
+    }
+    New-Service @newSvcArgs | Out-Null
+    return 'Registered as LocalSystem'
+}
+
+function Step-ServiceFailure {
+    param($p)
+    # Restart on crash: 60s delay, three retries inside 24h.
+    & sc.exe failure JamaatApi reset= 86400 actions= restart/60000/restart/60000/restart/60000 2>&1 | Out-Null
+    return 'Configured restart-on-crash (3x60s)'
+}
+
+function Step-ServiceStart {
+    param($p)
+    Start-Service -Name 'JamaatApi' -ErrorAction Stop
+
+    # Wait up to 120s for /health/ready to return 200.
     $deadline = (Get-Date).AddSeconds(120)
-    $ready = $false
+    $url = "http://localhost:$($p.Port)/api/v1/setup/status"
     while ((Get-Date) -lt $deadline) {
         try {
-            $r = Invoke-WebRequest -Uri "http://localhost:$Port/api/v1/setup/status" -UseBasicParsing -TimeoutSec 3
-            if ($r.StatusCode -eq 200) { $ready = $true; break }
+            $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 3
+            if ($r.StatusCode -eq 200) {
+                return "Service running, /api/v1/setup/status returned 200"
+            }
         } catch { }
         Start-Sleep -Seconds 2
     }
-    if (-not $ready) { throw "API did not respond within 120s. Check $logsDir and the JamaatApi service status." }
-    Write-Step "API is up."
+    throw "Service started but $url did not respond within 120s. Check Windows Event Log + service status."
+}
 
-    # ---- Initialize first admin via /setup/initialize --------------------
-    Write-Step "Creating first admin via /api/v1/setup/initialize"
-    $initBody = @{
-        TenantName    = $TenantName
-        TenantCode    = ($TenantName -replace '\s+','').ToUpperInvariant()
-        AdminFullName = $AdminFullName
-        AdminEmail    = $AdminEmail
-        AdminPassword = $AdminPassword
-        BaseCurrency  = $BaseCurrency
+function Step-InitAdmin {
+    param($p)
+    $body = @{
+        TenantName    = $p.TenantName
+        TenantCode    = ($p.TenantName -replace '\s+','').ToUpperInvariant()
+        AdminFullName = $p.AdminFullName
+        AdminEmail    = $p.AdminEmail
+        AdminPassword = $p.AdminPassword
+        BaseCurrency  = $p.BaseCurrency
         PreferredLanguage = 'en'
     } | ConvertTo-Json
     try {
-        Invoke-RestMethod -Uri "http://localhost:$Port/api/v1/setup/initialize" -Method Post -Body $initBody -ContentType 'application/json' -TimeoutSec 30 | Out-Null
-        Write-Step "Admin created."
+        Invoke-RestMethod -Uri "http://localhost:$($p.Port)/api/v1/setup/initialize" -Method Post `
+            -Body $body -ContentType 'application/json' -TimeoutSec 30 | Out-Null
+        return "Admin $($p.AdminEmail) created."
     } catch {
-        # If 409 already_initialized, that's fine - re-running the installer.
         if ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 409) {
-            Write-Step "Setup already initialized (409). Skipping admin creation."
-        } else {
-            throw "Initialize call failed: $($_.Exception.Message)"
+            return 'Setup already initialized (409). Skipped.'
         }
+        throw "POST /api/v1/setup/initialize failed: $($_.Exception.Message)"
     }
+}
 
-    # ---- Convenience shortcut --------------------------------------------
-    $shortcut = Join-Path $AppDir 'open-browser.cmd'
-    Set-Content -Path $shortcut -Value "@start http://${PublicHost}:$Port/login" -Encoding ASCII
+function Step-Shortcut {
+    param($p)
+    $shortcut = Join-Path $p.AppDir 'open-browser.cmd'
+    Set-Content -Path $shortcut -Value "@start http://$($p.PublicHost):$($p.Port)/login" -Encoding ASCII
+    return "Wrote $shortcut"
+}
 
-    Write-Step "Done. Open http://${PublicHost}:$Port/login to sign in."
-    Stop-Transcript | Out-Null
+# ---- Driver --------------------------------------------------------------
+
+function Invoke-Step {
+    param([string] $Name, $Params, $State)
+    $existing = $null
+    if ($State.steps -and $State.steps.PSObject.Properties.Name -contains $Name) {
+        $existing = $State.steps.$Name
+    }
+    if ($existing -eq 'ok') {
+        Write-Progress2 'skipped' "$Name : already done"
+        return $true
+    }
+    Write-Progress2 'running' "$Name"
+    try {
+        $detail = switch ($Name) {
+            'patch-config'      { Step-PatchConfig $Params }
+            'sql-prep'          { Step-SqlPrep $Params }
+            'firewall'          { Step-Firewall $Params }
+            'service-register'  { Step-ServiceRegister $Params }
+            'service-failure'   { Step-ServiceFailure $Params }
+            'service-start'     { Step-ServiceStart $Params }
+            'init-admin'        { Step-InitAdmin $Params }
+            'shortcut'          { Step-Shortcut $Params }
+        }
+        Set-StepStatus $State $Name 'ok' $detail
+        Save-State $StateFile $State
+        Write-Progress2 'done' "$Name : $detail"
+        return $true
+    } catch {
+        $msg = $_.Exception.Message
+        Set-StepStatus $State $Name 'error' $msg
+        # Append to error history so we have a chain across retries.
+        if (-not $State.errors) {
+            $State | Add-Member -NotePropertyName 'errors' -NotePropertyValue @() -Force
+        }
+        $State.errors = @($State.errors) + @([pscustomobject]@{ step = $Name; message = $msg; at = (Get-Date).ToUniversalTime().ToString('o') })
+        Save-State $StateFile $State
+        Write-Progress2 'error' "$Name : $msg"
+        return $false
+    }
+}
+
+# ---- Main ----------------------------------------------------------------
+
+$state = Read-State $StateFile
+$params = Read-Params $ParamsFile
+
+# Make sure logs dir exists for transcript-style fallback.
+$logsDir = Join-Path $params.AppDir 'Logs'
+New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
+
+if ($Step -eq 'all') {
+    $allSteps = @('patch-config','sql-prep','firewall','service-register','service-failure','service-start','init-admin','shortcut')
+    foreach ($s in $allSteps) {
+        $ok = Invoke-Step -Name $s -Params $params -State $state
+        if (-not $ok) { exit 1 }
+    }
     exit 0
 }
-catch {
-    Write-Step "ERROR: $($_.Exception.Message)"
-    Write-Output $_.ScriptStackTrace
-    Stop-Transcript | Out-Null
-    exit 1
-}
+
+$ok = Invoke-Step -Name $Step -Params $params -State $state
+if ($ok) { exit 0 } else { exit 1 }

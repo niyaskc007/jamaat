@@ -10,6 +10,10 @@
     <PackageReference Include="Mapster.DependencyInjection" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- Required so the API can run as a Windows Service via builder.Host.UseWindowsService().
+         Without this the API runs fine when launched directly but can't start under SCM
+         (SCM times out waiting for the "started" handshake). -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
