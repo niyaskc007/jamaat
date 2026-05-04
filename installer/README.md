@@ -79,10 +79,62 @@ service name. Use a clean Windows VM (Hyper-V, VirtualBox, parallels, etc).
 .\JamaatInstaller-1.0.0.exe
 ```
 
-To run silently with all defaults plus your DB connection (e.g. for CI smoke tests),
-Inno Setup supports `/SILENT` + `/SUPPRESSMSGBOXES`. The custom pages don't currently
-bind to command-line params; if you need fully unattended installs, extend the `[Code]`
-section's `InitializeSetup` to read values from `/<switch>=value` flags.
+## Silent / unattended install (GPO, Intune, SCCM)
+
+Every wizard field maps to a `/<NAME>=value` command-line argument. Combine with Inno's
+`/VERYSILENT` and `/SUPPRESSMSGBOXES` flags for a no-UI deploy:
+
+```powershell
+JamaatInstaller-2.3.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART `
+  /DBSERVER=sql01.corp.local `
+  /DBNAME=JAMAAT `
+  /OPERATORAUTH=Windows `
+  /SVCIDTYPE=Virtual `
+  /PORT=5174 `
+  /HOSTNAME=jamaat.corp.local `
+  /ADMINNAME="System Administrator" `
+  /ADMINEMAIL=ops@corp.com `
+  /ADMINPASSWORD=Sup3rS3cret! `
+  /JAMAATNAME="Corporate HQ" `
+  /CURRENCY=USD `
+  /LOG="%TEMP%\jamaat-install.log"
+```
+
+Recognised flags:
+
+| Flag | Description |
+|---|---|
+| `/DBSERVER=` | SQL Server hostname (e.g. `localhost`, `sql01\SQLEXPRESS`) |
+| `/DBNAME=` | Database name (e.g. `JAMAAT`) — created if missing |
+| `/OPERATORAUTH=` | `Windows` or `Sql` — auth used by the installer to provision the DB |
+| `/OPERATORUSER=` | SQL login (only when `OPERATORAUTH=Sql`) |
+| `/OPERATORPASSWORD=` | SQL password (only when `OPERATORAUTH=Sql`) |
+| `/SVCIDTYPE=` | `Virtual` (recommended), `LocalSystem`, `NetworkService`, `Custom`, `SqlLogin` |
+| `/SVCACCOUNT=` | DOMAIN\user (Custom) or SQL login name (SqlLogin) |
+| `/SVCPASSWORD=` | Password for the above |
+| `/PORT=` | TCP port the API listens on (default 5174) |
+| `/HOSTNAME=` | Public hostname used for CORS + browser links |
+| `/CORSORIGINS=` | Extra CORS origins, comma-separated |
+| `/ADMINNAME=` | First admin's full name |
+| `/ADMINEMAIL=` | First admin's email (becomes the login) |
+| `/ADMINPASSWORD=` | First admin's password (must meet ASP.NET Identity rules: 8+ chars, upper+lower+digit) |
+| `/JAMAATNAME=` | Tenant display name |
+| `/CURRENCY=` | One of `AED`, `INR`, `USD`, `GBP`, `PKR`, `KWD`, `SAR` |
+
+Standard Inno Setup flags also apply: `/SILENT` (very-silent + a final progress dialog),
+`/VERYSILENT` (no UI), `/SUPPRESSMSGBOXES` (auto-default any prompt), `/LOG=path` (write
+the install log somewhere SCCM can collect). Exit codes follow Inno conventions:
+
+| Code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | Setup failed to initialise (missing prereqs etc) |
+| `2` | User cancelled before install |
+| `3` | Fatal error during prepare-to-install |
+| `5` | User cancelled during install |
+| `1602` | User cancelled (silent path) |
+| `1603` | Fatal error during the install — check the log + `{app}\install-state.json` |
+| `1641` | Restart needed |
 
 ## Code-signing
 

@@ -171,6 +171,8 @@ Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\Logs"
+Type: files;          Name: "{app}\install-state.json"
+Type: files;          Name: "{app}\open-browser.cmd"
 
 ; ============================================================================
 ; Pascal scripting - custom pages and helper functions
@@ -251,6 +253,8 @@ function  IsPortFree(const Port: String): Boolean; forward;
 procedure WriteParamsFile(); forward;
 function  Esc(const S: String): String; forward;
 function  IsExistingInstall(): Boolean; forward;
+function  GetParamValue(const Name, Default: String): String; forward;
+procedure ApplyCommandLineDefaults(); forward;
 
 // -- Helper: trim a string -----------------------------------------------------
 function StrTrim(const S: String): String;
@@ -673,6 +677,80 @@ begin
   SaveStringToFile(jsonPath, json, False);
 end;
 
+// Scan the installer command line for a /name=value pair and return the value (or Default).
+// Used by ApplyCommandLineDefaults to pre-fill the wizard from a silent / unattended invocation:
+//   JamaatInstaller-X.exe /VERYSILENT /DBSERVER=sql01 /PORT=5174 /ADMINEMAIL=...
+// The match is case-insensitive on the parameter name. Values may contain spaces if they were
+// quoted on the command line (Inno collapses them into a single ParamStr already).
+function GetParamValue(const Name, Default: String): String;
+var
+  i: Integer;
+  prefix, p: String;
+begin
+  Result := Default;
+  prefix := '/' + UpperCase(Name) + '=';
+  for i := 1 to ParamCount do begin
+    p := ParamStr(i);
+    if (Length(p) > Length(prefix)) and (UpperCase(Copy(p, 1, Length(prefix))) = prefix) then begin
+      Result := Copy(p, Length(prefix) + 1, MaxInt);
+      exit;
+    end;
+  end;
+end;
+
+// Pre-fill wizard fields + the gXxx state vars from command-line arguments. Called from
+// InitializeWizard. Anything not provided keeps its existing default. With /VERYSILENT the
+// wizard renders nothing; NextButtonClick still validates so a missing required field will
+// still fail loudly (though in silent mode the operator won't see the error - check the
+// Inno log file for diagnostics).
+procedure ApplyCommandLineDefaults();
+var v: String;
+begin
+  // Database
+  v := GetParamValue('DBSERVER', '');             if v <> '' then edDbServer.Text := v;
+  v := GetParamValue('DBNAME', '');               if v <> '' then edDbName.Text := v;
+  v := GetParamValue('OPERATORAUTH', '');
+  if SameText(v, 'Sql') then begin rbAuthSql.Checked := True; ApplyAuthVisibility(); end
+  else if SameText(v, 'Windows') then begin rbAuthWindows.Checked := True; ApplyAuthVisibility(); end;
+  v := GetParamValue('OPERATORUSER', '');         if v <> '' then edDbUser.Text := v;
+  v := GetParamValue('OPERATORPASSWORD', '');     if v <> '' then edDbPassword.Text := v;
+
+  // Service identity
+  v := GetParamValue('SVCIDTYPE', '');
+  if SameText(v, 'Virtual')        then begin rbSvcVirtual.Checked := True; end
+  else if SameText(v, 'LocalSystem')    then begin rbSvcLocalSystem.Checked := True; end
+  else if SameText(v, 'NetworkService') then begin rbSvcNetworkSvc.Checked := True; end
+  else if SameText(v, 'Custom')         then begin rbSvcCustom.Checked := True; end
+  else if SameText(v, 'SqlLogin')       then begin rbSvcSqlLogin.Checked := True; end;
+  ApplySvcIdVisibility();
+  v := GetParamValue('SVCACCOUNT', '');           if v <> '' then edSvcAccount.Text := v;
+  v := GetParamValue('SVCPASSWORD', '');          if v <> '' then edSvcPassword.Text := v;
+
+  // Ports / hosting
+  v := GetParamValue('PORT', '');                 if v <> '' then edPort.Text := v;
+  v := GetParamValue('HOSTNAME', '');             if v <> '' then edPublicHost.Text := v;
+  v := GetParamValue('CORSORIGINS', '');          if v <> '' then edCorsOrigins.Text := v;
+
+  // Admin
+  v := GetParamValue('ADMINNAME', '');            if v <> '' then edAdminName.Text := v;
+  v := GetParamValue('ADMINEMAIL', '');           if v <> '' then edAdminEmail.Text := v;
+  v := GetParamValue('ADMINPASSWORD', '');
+  if v <> '' then begin edAdminPwd.Text := v; edAdminPwd2.Text := v; end;
+  v := GetParamValue('JAMAATNAME', '');           if v <> '' then edTenantName.Text := v;
+  v := GetParamValue('CURRENCY', '');
+  if v <> '' then begin
+    case Pos(UpperCase(v), 'AED|INR|USD|GBP|PKR|KWD|SAR') of
+      1: cbCurrency.ItemIndex := 0;   // AED
+      5: cbCurrency.ItemIndex := 1;   // INR
+      9: cbCurrency.ItemIndex := 2;   // USD
+      13: cbCurrency.ItemIndex := 3;  // GBP
+      17: cbCurrency.ItemIndex := 4;  // PKR
+      21: cbCurrency.ItemIndex := 5;  // KWD
+      25: cbCurrency.ItemIndex := 6;  // SAR
+    end;
+  end;
+end;
+
 // Detect an existing Jamaat install. The Inno setup-uninstaller registry path uses our
 // AppId; if the entry exists, we're upgrading or repairing rather than fresh-installing.
 function IsExistingInstall(): Boolean;
@@ -912,6 +990,12 @@ begin
   CreateServiceIdentityPage();  // NEW in 2.0
   CreatePortsPage();
   CreateAdminPage();
+
+  // After all pages exist + their controls have defaults, override anything the operator
+  // supplied on the command line (silent / unattended install path). Has to run AFTER
+  // CreateXxxPage so the controls exist; runs BEFORE the user sees them so the wizard
+  // shows their values, not ours.
+  ApplyCommandLineDefaults();
 end;
 
 // CurStepChanged hook - the install-phase orchestration. We use this to:
@@ -927,6 +1011,12 @@ begin
   if CurStep = ssInstall then begin
     // Make sure {app}\Logs exists for post-install transcript output
     ForceDirectories(ExpandConstant('{app}\Logs'));
+    // Wipe any stale install-state.json from a prior install. Without this, the
+    // post-install state machine sees "all steps ok" from the previous run and
+    // idempotently skips everything - even when the current run is configuring a
+    // different DB / port / service identity. New install = fresh state.
+    if FileExists(ExpandConstant('{app}\install-state.json')) then
+      DeleteFile(ExpandConstant('{app}\install-state.json'));
     WriteParamsFile();
   end
   else if CurStep = ssPostInstall then begin
