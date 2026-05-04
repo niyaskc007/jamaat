@@ -258,6 +258,34 @@ public static class DatabaseSeeder
                 admin.IsLoginAllowed = true;
                 await userMgr.UpdateAsync(admin);
             }
+
+            // Reset the password on every boot to match Seed:AdminPassword. Reason: the
+            // installer's reconfigure flow updates appsettings.json with whatever the operator
+            // typed in the wizard, but the user record's password hash dates from the FIRST
+            // install. Without this reconcile, an operator who reinstalls with a new password
+            // gets locked out - the appsettings shows the new value, but the user record has
+            // the old hash. (Real bug we just hit.) Only runs when Seed:AdminPassword is
+            // configured AND honour-password is on (default true) - dev environments that
+            // tweak the seed user's password via the admin UI can opt out via
+            // `Seed:HonourPasswordReset = false` in appsettings.
+            var honourReset = config.GetValue<bool>("Seed:HonourPasswordReset", true);
+            if (honourReset && !string.IsNullOrEmpty(adminPassword))
+            {
+                var checkPwd = await userMgr.CheckPasswordAsync(admin, adminPassword);
+                if (!checkPwd)
+                {
+                    logger.LogInformation(
+                        "Seed:AdminPassword does not match the stored hash - resetting password for {Email} from configuration.",
+                        adminEmail);
+                    var token = await userMgr.GeneratePasswordResetTokenAsync(admin);
+                    var resetResult = await userMgr.ResetPasswordAsync(admin, token, adminPassword);
+                    if (!resetResult.Succeeded)
+                    {
+                        logger.LogError("Failed to reset admin password: {Errors}",
+                            string.Join("; ", resetResult.Errors.Select(e => e.Description)));
+                    }
+                }
+            }
         }
 
         await SeedCurrenciesAndRatesAsync(db, defaultTenantId, logger, ct);
