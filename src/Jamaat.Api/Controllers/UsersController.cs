@@ -340,24 +340,51 @@ public sealed class UsersController(
         return NoContent();
     }
 
-    /// Provision-or-resend welcome email. Issues a fresh temporary password (rotates the
-    /// previous one if it was still active), flips MustChangePassword=true, and sends the
-    /// UserWelcome notification. Equivalent to the bulk-allow-login flow but for a single
-    /// user, and importantly, does NOT toggle IsLoginAllowed - admin keeps explicit control
-    /// over whether the account can actually sign in. Returns the freshly-issued plaintext
-    /// (admin-only convenience for reading it back if email delivery is in log-only mode).
+    /// One-click member onboarding. Atomic: enables login, issues a fresh temp password,
+    /// flips MustChangePassword=true, and emails the user with sign-in instructions. Used
+    /// by the admin Users page Portal access tab. Calling it on an already-enabled user
+    /// is a benign refresh - new temp pw + new email.
+    ///
+    /// Previous design left IsLoginAllowed off and required a second click on the bulk
+    /// grid to enable login. That was pointless friction: emailing a member "your account
+    /// is ready" while they can't actually sign in is just confusing.
     [HttpPost("{id:guid}/send-welcome")]
     public async Task<IActionResult> SendWelcome(Guid id, CancellationToken ct)
     {
         var u = await userMgr.FindByIdAsync(id.ToString());
         if (u is null) return NotFound();
         var plaintext = await tempPw.IssueAsync(u, ct);
+        // Re-fetch after IssueAsync so we read the post-rotate state.
         var fresh = await userMgr.FindByIdAsync(id.ToString());
         if (fresh is not null)
         {
+            // Flip login on if it wasn't already - this is THE single onboarding action
+            // and it should leave the account in a sign-in-ready state.
+            if (!fresh.IsLoginAllowed)
+            {
+                fresh.IsLoginAllowed = true;
+                await userMgr.UpdateAsync(fresh);
+            }
             try { await notify.SendAsync(BuildWelcome(fresh, Origin(config)), ct); }
             catch { /* fire-and-forget; NotificationLog row records the attempt */ }
         }
         return Ok(new TempPasswordDto(plaintext, fresh?.TemporaryPasswordExpiresAtUtc, MustChangePassword: true));
     }
+
+    /// Toggle a single user's login-allowed flag. Companion to bulk-allow-login (which is
+    /// driven by the grid's multi-select); this one is for the Portal access panel's
+    /// inline switch. No notification side-effects - if you want the welcome email AND
+    /// to enable login, use POST /send-welcome instead.
+    [HttpPut("{id:guid}/login-allowed")]
+    public async Task<IActionResult> SetLoginAllowed(Guid id, [FromBody] SetLoginAllowedDto dto)
+    {
+        var u = await userMgr.FindByIdAsync(id.ToString());
+        if (u is null) return NotFound();
+        if (u.IsLoginAllowed == dto.Allowed) return NoContent();
+        u.IsLoginAllowed = dto.Allowed;
+        await userMgr.UpdateAsync(u);
+        return NoContent();
+    }
 }
+
+public sealed record SetLoginAllowedDto(bool Allowed);

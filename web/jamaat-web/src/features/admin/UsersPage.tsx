@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Card, Table, Tag, Button, Input, App as AntdApp, Drawer, Form, Select, Space, Switch, Tabs,
+  Card, Table, Tag, Button, Input, App as AntdApp, Drawer, Dropdown, Form, Select, Space, Switch, Tabs,
   Modal, Alert, Typography, Popconfirm, Tooltip,
 } from 'antd';
 import { useSearchParams } from 'react-router-dom';
@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined, UserSwitchOutlined, SafetyCertificateOutlined,
   KeyOutlined, TeamOutlined, HistoryOutlined, CheckCircleOutlined, CloseCircleOutlined, CopyOutlined,
+  MoreOutlined, MailOutlined, StopOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -134,14 +135,15 @@ function UsersTab() {
               <Space size={4} wrap>{roles.map((r) => <Tag key={r} color={r === 'Administrator' ? 'gold' : r === 'Member' ? 'cyan' : 'blue'} style={{ margin: 0 }}>{r}</Tag>)}</Space>
             ) },
             {
-              title: 'Login allowed', dataIndex: 'isLoginAllowed', key: 'allow', width: 130,
+              title: 'Login allowed', dataIndex: 'isLoginAllowed', key: 'allow', width: 160,
               render: (v?: boolean, row?: User) => (
-                <Tooltip title={v ? 'User can sign in.' : 'User cannot sign in until enabled.'}>
-                  <Tag color={v ? 'green' : 'default'} icon={v ? <CheckCircleOutlined /> : <CloseCircleOutlined />} className="jm-status-tag-flush">
-                    {v ? 'Allowed' : 'Disabled'}
-                  </Tag>
+                <Space size={4}>
+                  <ToggleLoginAllowedTag
+                    user={row!}
+                    onChanged={() => { void qc.invalidateQueries({ queryKey: ['users'] }); }}
+                  />
                   {row?.mustChangePassword && <Tag color="orange" className="jm-tag-after">Temp pw</Tag>}
-                </Tooltip>
+                </Space>
               ),
             },
             { title: 'Status', dataIndex: 'isActive', key: 's', width: 100,
@@ -150,7 +152,18 @@ function UsersTab() {
                 : <Tag style={{ margin: 0, background: '#E5E9EF', color: '#64748B', border: 'none', fontWeight: 500 }}>Inactive</Tag> },
             { title: 'Last login', dataIndex: 'lastLoginAtUtc', key: 'l', width: 180,
               render: (v?: string | null) => v ? formatDateTime(v) : <span style={{ color: 'var(--jm-gray-400)' }}>Never</span> },
-            { title: '', key: 'a', width: 80, render: (_, row) => <Button type="link" onClick={() => { setEditing(row); setDrawerOpen(true); }}>Manage</Button> },
+            {
+              title: '', key: 'a', width: 160,
+              render: (_, row) => (
+                <Space size={4}>
+                  <Button type="link" onClick={() => { setEditing(row); setDrawerOpen(true); }}>Manage</Button>
+                  <UserRowQuickActions
+                    user={row}
+                    onChanged={() => { void qc.invalidateQueries({ queryKey: ['users'] }); }}
+                  />
+                </Space>
+              ),
+            },
           ]}
           locale={{ emptyText: <div style={{ padding: 40, textAlign: 'center', color: 'var(--jm-gray-500)' }}><UserSwitchOutlined style={{ fontSize: 32, color: 'var(--jm-gray-300)', display: 'block', margin: '0 auto 8px' }} />No users yet</div> }}
         />
@@ -158,6 +171,103 @@ function UsersTab() {
       <UserDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} user={editing} roles={rolesQuery.data ?? []}
         onSaved={() => { void qc.invalidateQueries({ queryKey: ['users'] }); }} />
     </div>
+  );
+}
+
+/// Inline status chip for the Login allowed column. Click toggles the flag through the
+/// /users/{id}/login-allowed endpoint - the most-asked-for shortcut from the grid so
+/// admins don't need to drill into Manage > Portal access for the common case.
+function ToggleLoginAllowedTag({ user, onChanged }: { user: User; onChanged: () => void }) {
+  const { message } = AntdApp.useApp();
+  const allowed = !!user.isLoginAllowed;
+  const mut = useMutation({
+    mutationFn: async (next: boolean) =>
+      (await api.put(`/api/v1/users/${user.id}/login-allowed`, { allowed: next })).data,
+    onSuccess: (_data, next) => {
+      message.success(next ? 'Login enabled.' : 'Login disabled.');
+      onChanged();
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to toggle login'),
+  });
+  return (
+    <Popconfirm
+      title={allowed ? 'Disable login for this user?' : 'Enable login for this user?'}
+      description={allowed ? 'They will be unable to sign in until you re-enable.' : 'They will be able to sign in with their existing password.'}
+      okText={allowed ? 'Disable' : 'Enable'}
+      okType={allowed ? 'danger' : 'primary'}
+      onConfirm={() => mut.mutate(!allowed)}
+    >
+      <Tooltip title="Click to toggle">
+        <Tag
+          color={allowed ? 'green' : 'default'}
+          icon={allowed ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+          className="jm-status-tag-flush"
+          style={{ cursor: 'pointer' }}
+        >
+          {allowed ? 'Allowed' : 'Disabled'}
+        </Tag>
+      </Tooltip>
+    </Popconfirm>
+  );
+}
+
+/// Per-row dropdown of common admin actions. Lets a single click do "Send welcome email"
+/// (which now also enables login + rotates the temp pw) or "Disable login" without
+/// having to open Manage > Portal access. The Manage drawer keeps the long-form options.
+function UserRowQuickActions({ user, onChanged }: { user: User; onChanged: () => void }) {
+  const { message } = AntdApp.useApp();
+  const sendWelcomeMut = useMutation({
+    mutationFn: async () =>
+      (await api.post<{ plaintext: string; expiresAtUtc: string | null }>(`/api/v1/users/${user.id}/send-welcome`)).data,
+    onSuccess: (data) => {
+      message.success('Welcome email queued. Login enabled, temp password rotated.');
+      onChanged();
+      Modal.info({
+        title: 'Welcome email sent',
+        content: (
+          <div>
+            <Typography.Paragraph>Temporary password (also emailed to the user):</Typography.Paragraph>
+            <code style={{ display: 'block', padding: 12, background: '#F5F5F5', borderRadius: 6, fontSize: 14, wordBreak: 'break-all' }}>
+              {data.plaintext}
+            </code>
+            <Typography.Paragraph type="secondary" style={{ marginBlockStart: 12, fontSize: 12 }}>
+              Expires {data.expiresAtUtc ? new Date(data.expiresAtUtc).toLocaleString() : 'soon'}.
+            </Typography.Paragraph>
+          </div>
+        ),
+      });
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to send welcome email'),
+  });
+
+  const setLoginAllowedMut = useMutation({
+    mutationFn: async (allowed: boolean) =>
+      (await api.put(`/api/v1/users/${user.id}/login-allowed`, { allowed })).data,
+    onSuccess: (_data, allowed) => {
+      message.success(allowed ? 'Login enabled.' : 'Login disabled.');
+      onChanged();
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to toggle login'),
+  });
+
+  // Build the menu dynamically so the "send welcome" copy reflects whether this is
+  // a first-time onboarding or a re-send.
+  const items = [
+    {
+      key: 'welcome',
+      icon: <MailOutlined />,
+      label: user.isLoginAllowed ? 'Re-send welcome email' : 'Enable login + send welcome',
+      onClick: () => sendWelcomeMut.mutate(),
+    },
+    user.isLoginAllowed
+      ? { key: 'disable', icon: <StopOutlined />, danger: true, label: 'Disable login', onClick: () => setLoginAllowedMut.mutate(false) }
+      : { key: 'enable', icon: <CheckCircleOutlined />, label: 'Enable login (no email)', onClick: () => setLoginAllowedMut.mutate(true) },
+  ];
+
+  return (
+    <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight">
+      <Button type="text" icon={<MoreOutlined />} size="small" />
+    </Dropdown>
   );
 }
 
@@ -234,6 +344,7 @@ function PortalAccessPanel({ user, onChanged }: { user: User; onChanged: () => v
   const qc = useQueryClient();
   const userType = (user.userType ?? 'Operator') as 'Operator' | 'Member' | 'Hybrid';
   const canPortal = userType === 'Member' || userType === 'Hybrid';
+  const isReady = !!user.isLoginAllowed && !!user.isActive;
 
   const setTypeMut = useMutation({
     mutationFn: async (t: 'Operator' | 'Member' | 'Hybrid') =>
@@ -246,15 +357,25 @@ function PortalAccessPanel({ user, onChanged }: { user: User; onChanged: () => v
     onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to update user type'),
   });
 
+  const setLoginAllowedMut = useMutation({
+    mutationFn: async (allowed: boolean) =>
+      (await api.put(`/api/v1/users/${user.id}/login-allowed`, { allowed })).data,
+    onSuccess: (_data, allowed) => {
+      message.success(allowed ? 'Login enabled.' : 'Login disabled.');
+      onChanged();
+      void qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to toggle login'),
+  });
+
   const sendWelcomeMut = useMutation({
     mutationFn: async () =>
       (await api.post<{ plaintext: string; expiresAtUtc: string | null }>(`/api/v1/users/${user.id}/send-welcome`)).data,
     onSuccess: (data) => {
-      message.success('Welcome email queued. Temp password rotated.');
+      message.success('Welcome email queued. Login enabled, temp password rotated.');
       onChanged();
       void qc.invalidateQueries({ queryKey: ['users'] });
       void qc.invalidateQueries({ queryKey: ['user-temp-pw', user.id] });
-      // Show the plaintext briefly in case email delivery is in log-only mode.
       Modal.info({
         title: 'Welcome email sent',
         content: (
@@ -277,73 +398,101 @@ function PortalAccessPanel({ user, onChanged }: { user: User; onChanged: () => v
 
   return (
     <div>
+      {/* Top status banner: at-a-glance "is this user actually able to sign in?" The
+          banner colour + headline match how an admin reads the page in 2 seconds. */}
       <Alert
-        type="info" showIcon
-        message="Portal access controls"
+        type={isReady ? 'success' : 'warning'}
+        showIcon
+        message={isReady ? `Sign-in ready · ${userType}` : 'Cannot sign in yet'}
         description={
-          <ul className="jm-bullets-flush">
-            <li><b>Operator</b>: staff/admin. Lands on /dashboard after login.</li>
-            <li><b>Member</b>: member-portal user. Lands on /portal/me. Should also have the "Member" role for granular permissions.</li>
-            <li><b>Hybrid</b>: both. Defaults to /dashboard with a "Switch to member portal" link in the avatar menu.</li>
-            <li>The seeder reconciles this from role membership on each boot — manual overrides set here may be reverted unless role membership matches.</li>
-          </ul>
+          isReady
+            ? user.mustChangePassword
+              ? 'User has a temp password and will be forced to set a permanent one on first login.'
+              : 'User has set their own password. Last login: ' + (user.lastLoginAtUtc ? new Date(user.lastLoginAtUtc).toLocaleString() : 'never') + '.'
+            : !user.isActive
+              ? 'Account is marked Inactive. Re-activate it on the Details tab first.'
+              : 'Login is disabled. Use "Send welcome email" below for first-time onboarding, or just toggle Login allowed if you already shared credentials another way.'
         }
+        style={{ marginBlockEnd: 16 }}
       />
 
-      <Card size="small" className="jm-card" style={{ marginBlockStart: 16 }}>
-        <Typography.Text type="secondary" className="jm-overline">Audience type</Typography.Text>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBlockStart: 8 }}>
-          <Select
-            value={userType}
-            onChange={(t) => setTypeMut.mutate(t)}
-            style={{ inlineSize: 200 }}
-            options={[
-              { value: 'Operator', label: 'Operator' },
-              { value: 'Member', label: 'Member' },
-              { value: 'Hybrid', label: 'Hybrid' },
-            ]}
-          />
-          {setTypeMut.isPending && <Typography.Text type="secondary">Saving…</Typography.Text>}
-        </div>
-      </Card>
-
-      <Card size="small" className="jm-card" style={{ marginBlockStart: 16 }}>
-        <Typography.Text type="secondary" className="jm-overline">Login readiness</Typography.Text>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBlockStart: 8 }}>
-          <div>
-            <Tag color={user.isLoginAllowed ? 'green' : 'default'}>
-              {user.isLoginAllowed ? 'Login allowed' : 'Login disabled'}
-            </Tag>
-            <Tag color={user.mustChangePassword ? 'gold' : 'blue'}>
-              {user.mustChangePassword ? 'Must change password' : 'Has set their own password'}
-            </Tag>
-            <Tag color={user.isActive ? 'green' : 'red'}>
-              {user.isActive ? 'Active' : 'Inactive'}
-            </Tag>
-          </div>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            Last login: {user.lastLoginAtUtc ? new Date(user.lastLoginAtUtc).toLocaleString() : 'never'}
-          </Typography.Text>
-        </div>
-      </Card>
-
-      <Card size="small" className="jm-card" style={{ marginBlockStart: 16 }}>
-        <Typography.Text type="secondary" className="jm-overline">Welcome email</Typography.Text>
+      {/* Single, prominent onboarding action - one click does everything. */}
+      <Card size="small" className="jm-card" style={{ marginBlockEnd: 16 }}>
+        <Typography.Text type="secondary" className="jm-overline">First-time onboarding</Typography.Text>
         <Typography.Paragraph style={{ marginBlockStart: 8, marginBlockEnd: 12 }}>
-          Issues a fresh temporary password, flips MustChangePassword=true, and emails
-          the user with sign-in instructions. Use this for <b>first-time onboarding</b> or
-          when a member has lost their welcome email. {!canPortal && <em>(This user is currently {userType} — they will receive the email but should be flipped to Member or Hybrid first if they need portal access.)</em>}
+          One click: enables login, issues a fresh temporary password, flips
+          MustChangePassword=true, and emails the user with sign-in instructions.
+          Re-use this if a member loses their welcome email - the new temp pw
+          replaces the old one. {!canPortal && <em>This user is currently {userType}; flip Audience type below to Member or Hybrid first if portal access is the goal.</em>}
         </Typography.Paragraph>
         <Popconfirm
-          title="Send welcome email?"
+          title="Send welcome email and enable login?"
           description="A fresh temp password will replace any existing one."
           onConfirm={() => sendWelcomeMut.mutate()}
           okText="Send"
           okType="primary"
         >
-          <Button type="primary" loading={sendWelcomeMut.isPending}>Send welcome email</Button>
+          <Button type="primary" loading={sendWelcomeMut.isPending} size="large">
+            {user.isLoginAllowed ? 'Re-send welcome email' : 'Enable login + send welcome email'}
+          </Button>
         </Popconfirm>
       </Card>
+
+      {/* Granular controls. Most admins won't need these once the one-click button above
+          works for them; kept for the case where credentials are shared out-of-band. */}
+      <Card size="small" className="jm-card" style={{ marginBlockEnd: 16 }}>
+        <Typography.Text type="secondary" className="jm-overline">Granular controls</Typography.Text>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBlockStart: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <div>
+              <div style={{ fontWeight: 500 }}>Login allowed</div>
+              <div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
+                When off, sign-in is rejected even with a valid password.
+              </div>
+            </div>
+            <Switch
+              checked={!!user.isLoginAllowed}
+              loading={setLoginAllowedMut.isPending}
+              onChange={(v) => setLoginAllowedMut.mutate(v)}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <div>
+              <div style={{ fontWeight: 500 }}>Audience type</div>
+              <div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
+                Operator → /dashboard · Member → /portal/me · Hybrid → /dashboard with switcher.
+              </div>
+            </div>
+            <Select
+              value={userType}
+              onChange={(t) => setTypeMut.mutate(t)}
+              style={{ inlineSize: 160 }}
+              loading={setTypeMut.isPending}
+              options={[
+                { value: 'Operator', label: 'Operator' },
+                { value: 'Member', label: 'Member' },
+                { value: 'Hybrid', label: 'Hybrid' },
+              ]}
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* Read-only info. The seeder reconciler caveat lives down here because it's a
+          long-form note that's only relevant when the audience-type setting is being
+          fought over by role-membership reconciliation - rare enough to demote. */}
+      <Alert
+        type="info"
+        showIcon
+        message="Notes"
+        description={
+          <ul className="jm-bullets-flush" style={{ marginBlockEnd: 0 }}>
+            <li>Members should also have the <b>Member</b> role assigned (Details tab) for granular permissions.</li>
+            <li>The seeder reconciles audience type from role membership on every API boot. To pin a manual override, also adjust role membership to match.</li>
+            <li>For ad-hoc password resets or to view the current temp pw, use the <b>Temp password</b> tab.</li>
+          </ul>
+        }
+      />
     </div>
   );
 }
