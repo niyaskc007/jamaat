@@ -11,6 +11,7 @@ import { Logo } from '../../../shared/ui/Logo';
 import { LanguageSwitcher } from '../../../shared/i18n/LanguageSwitcher';
 import { InstallPrompt } from '../../../shared/pwa/InstallPrompt';
 import { OfflineBanner } from '../../../shared/pwa/OfflineBanner';
+import { UpdateToast } from '../../../shared/pwa/UpdateToast';
 
 /// Self-service portal shell for members. Distinct from the operator AppLayout.
 /// Visual chrome (sider brand, header bar, avatar pill, content padding) is fully styled
@@ -93,6 +94,7 @@ export function MemberPortalLayout() {
           <OfflineBanner />
           <Outlet />
           <InstallPrompt />
+          <UpdateToast />
         </Layout.Content>
       </Layout>
     </Layout>

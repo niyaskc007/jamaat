@@ -63,6 +63,7 @@ public sealed class MemberNotifier(
     JamaatDbContextFacade db,
     ICmsService cms,
     INotificationSender sender,
+    IWebPushSender webPush,
     ILogger<MemberNotifier> logger) : IMemberNotifier
 {
     public async Task NotifyAsync(Guid memberId, MemberNotificationKind kind, IDictionary<string, string> vars, CancellationToken ct = default)
@@ -109,6 +110,56 @@ public sealed class MemberNotifier(
 
         try { await sender.SendAsync(msg, ct); }
         catch (Exception ex) { logger.LogWarning(ex, "MemberNotifier: send failed for member {Id} kind {Kind}", memberId, kind); }
+
+        // Phase N - parallel Web Push fan-out. Distinct from the email/SMS/WhatsApp channel
+        // routing in INotificationSender: those pick exactly one channel, push is additive.
+        // Members who want it on all of email + push get both; members who want push only
+        // can disable email at the channel-preference level (handled by the IsEnabled check
+        // earlier in this method, which gates the entire kind, not per-channel).
+        await SendPushAsync(member.Id, subject, body, kind, ct);
+    }
+
+    private async Task SendPushAsync(Guid memberId, string title, string body, MemberNotificationKind kind, CancellationToken ct)
+    {
+        // PushSubscription.MemberId is set at subscribe time so we don't need to resolve
+        // through the user/ITS chain on every notification. Anonymous (no member link)
+        // subscriptions exist too but those won't receive member-scoped notifications.
+        var subscriptions = await db.PushSubscriptions
+            .Where(p => p.MemberId == memberId)
+            .ToListAsync(ct);
+        if (subscriptions.Count == 0) return;
+
+        var clickUrl = kind switch
+        {
+            MemberNotificationKind.CommitmentInstallmentDue => "/portal/me/commitments",
+            MemberNotificationKind.QhStateChanged           => "/portal/me/qarzan-hasana",
+            MemberNotificationKind.EventReminderT24h        => "/portal/me/events",
+            _ => "/portal/me",
+        };
+
+        // Track stale subs by id to delete after the loop.
+        var toDelete = new List<Guid>();
+        foreach (var sub in subscriptions)
+        {
+            var result = await webPush.SendAsync(
+                new WebPushTarget(sub.Endpoint, sub.P256dh, sub.Auth),
+                title, body, clickUrl, ct);
+            if (!result.Success && result.HttpStatus is 404 or 410)
+            {
+                toDelete.Add(sub.Id);
+            }
+            else if (result.Success)
+            {
+                sub.TouchLastUsed(DateTimeOffset.UtcNow);
+            }
+        }
+        if (toDelete.Count > 0)
+        {
+            var stale = await db.PushSubscriptions.Where(p => toDelete.Contains(p.Id)).ToListAsync(ct);
+            db.PushSubscriptions.RemoveRange(stale);
+            try { await db.SaveChangesAsync(ct); }
+            catch (Exception ex) { logger.LogDebug(ex, "Failed to clean up stale push subscriptions"); }
+        }
     }
 
     private static string KeyFor(MemberNotificationKind kind) => kind switch

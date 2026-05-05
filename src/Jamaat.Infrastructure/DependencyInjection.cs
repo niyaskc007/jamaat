@@ -35,6 +35,8 @@ using Jamaat.Infrastructure.Persistence.Repositories;
 using Jamaat.Infrastructure.Storage;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -68,6 +70,31 @@ public static class DependencyInjection
                 // used by the posting engine. Wrap in CreateExecutionStrategy() if retries needed.
             });
             opt.AddInterceptors(sp.GetRequiredService<AuditInterceptor>());
+        });
+
+        // Hangfire (Phase M). Backed by the SAME SQL Server as the rest of the app, in a
+        // dedicated `hangfire` schema so its tables don't collide with the domain ones.
+        // PrepareSchemaIfNecessary creates the schema + tables on first run.
+        services.AddHangfire((sp, cfg) => cfg
+            .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+            {
+                CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                QueuePollInterval = TimeSpan.Zero,
+                UseRecommendedIsolationLevel = true,
+                DisableGlobalLocks = true,
+                SchemaName = "hangfire",
+                PrepareSchemaIfNecessary = true,
+            }));
+        // The server processes jobs. Worker count is conservative (no heavy throughput here);
+        // bump if the daily scan or future jobs back up.
+        services.AddHangfireServer(opt =>
+        {
+            opt.ServerName = $"jamaat-{Environment.MachineName}";
+            opt.WorkerCount = 2;
         });
 
         services.AddIdentityCore<ApplicationUser>(opt =>
@@ -155,8 +182,15 @@ public static class DependencyInjection
         services.AddScoped<ITenantService, TenantService>();
         services.AddScoped<Application.Cms.ICmsService, Application.Cms.CmsService>();
         services.AddScoped<Application.Notifications.IMemberNotifier, Application.Notifications.MemberNotifier>();
-        services.AddSingleton<Notifications.MemberNotificationsScanService>();
-        services.AddHostedService(sp => sp.GetRequiredService<Notifications.MemberNotificationsScanService>());
+        // Phase N - Web Push. VAPID keys read from appsettings:WebPush. SendAsync is a
+        // no-op when keys aren't configured, so dev environments without VAPID pinned
+        // don't hard-fail.
+        services.Configure<Notifications.WebPushOptions>(config.GetSection(Notifications.WebPushOptions.SectionName));
+        services.AddScoped<Application.Notifications.IWebPushSender, Notifications.WebPushSender>();
+        // Phase M - scan service runs under Hangfire's recurring job. Scoped so each
+        // scan gets its own DbContext + IMemberNotifier scope (matching the per-job
+        // lifetime Hangfire uses internally).
+        services.AddScoped<Notifications.MemberNotificationsScanService>();
         services.AddScoped<ISystemService, SystemMonitor.SystemService>();
         // Singleton: in-memory user-activity + request-rate tracker. State must persist across
         // requests; the impl is internally thread-safe (ConcurrentDictionary + Interlocked).

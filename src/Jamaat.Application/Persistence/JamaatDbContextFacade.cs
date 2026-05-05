@@ -56,6 +56,7 @@ public abstract class JamaatDbContextFacade
     public abstract DbSet<CmsPage> CmsPages { get; }
     public abstract DbSet<CmsBlock> CmsBlocks { get; }
     public abstract DbSet<MemberApplication> MemberApplications { get; }
+    public abstract DbSet<PushSubscription> PushSubscriptions { get; }
     public abstract DatabaseFacade Database { get; }
 
     // Aliases used by some helpers

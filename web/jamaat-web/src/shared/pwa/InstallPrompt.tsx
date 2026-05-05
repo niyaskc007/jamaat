@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Card, Button, Space, Typography } from 'antd';
-import { DownloadOutlined, CloseOutlined } from '@ant-design/icons';
+import { DownloadOutlined, CloseOutlined, ShareAltOutlined } from '@ant-design/icons';
 
-/// First-visit install prompt for the member portal. Listens for the browser's
-/// `beforeinstallprompt` event, captures it, and surfaces a small dismissible card so
-/// members on Android Chrome / Edge can add the portal to their home screen with one tap.
-/// Persisted dismissal in localStorage prevents the prompt from re-appearing on every
-/// portal visit. iOS Safari does not fire `beforeinstallprompt`; the manifest still works
-/// for "Add to Home Screen" via the Share menu, just no UI hint from us. Operator pages
-/// never mount this component.
+/// Install-to-home-screen prompt for the member portal. Two flows:
+///
+///  1. Android Chrome / Edge / Samsung Internet: the browser fires
+///     `beforeinstallprompt`; we capture it and show a one-tap Install card.
+///  2. iOS Safari: no event fires, the user must tap Share -> Add to Home Screen
+///     manually. We detect iOS Safari (running outside standalone mode) and
+///     surface a small instructions card pointing at the Share button.
+///
+/// Both flows are dismissible and persist the dismissal in localStorage so the
+/// prompt doesn't re-appear on every portal visit. Operator pages never mount
+/// this component.
 export function InstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showIosTip, setShowIosTip] = useState(false);
   const [dismissed, setDismissed] = useState<boolean>(() =>
     localStorage.getItem('jamaat.pwa.dismissed') === '1'
   );
@@ -18,23 +23,34 @@ export function InstallPrompt() {
   useEffect(() => {
     if (dismissed) return;
     const handler = (e: Event) => {
-      // The browser fires this once it deems the page installable. Calling preventDefault
-      // captures the prompt so we can replay it from our own button.
       e.preventDefault();
       setDeferred(e as BeforeInstallPromptEvent);
     };
     window.addEventListener('beforeinstallprompt', handler as EventListener);
+
+    // iOS Safari fallback: detect iOS, NOT-running-as-standalone, NOT-already-installed.
+    // The standalone media query catches the case where the user already added to home screen.
+    const ua = navigator.userAgent || '';
+    const isIos = /iPad|iPhone|iPod/.test(ua) && !(/Android/.test(ua));
+    const inStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      // iOS-specific legacy property:
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window.navigator as any).standalone === true;
+    if (isIos && !inStandalone) setShowIosTip(true);
+
     return () => window.removeEventListener('beforeinstallprompt', handler as EventListener);
   }, [dismissed]);
 
-  if (dismissed || !deferred) return null;
+  if (dismissed) return null;
+  if (!deferred && !showIosTip) return null;
 
   const onInstall = async () => {
+    if (!deferred) return;
     await deferred.prompt();
     const choice = await deferred.userChoice;
     setDeferred(null);
     if (choice.outcome === 'dismissed') {
-      // User said "no thanks" - remember it so we don't pester next visit.
       localStorage.setItem('jamaat.pwa.dismissed', '1');
       setDismissed(true);
     }
@@ -44,6 +60,7 @@ export function InstallPrompt() {
     localStorage.setItem('jamaat.pwa.dismissed', '1');
     setDismissed(true);
     setDeferred(null);
+    setShowIosTip(false);
   };
 
   return (
@@ -59,11 +76,20 @@ export function InstallPrompt() {
         <div style={{ flex: 1 }}>
           <Typography.Text strong>Install Jamaat as an app</Typography.Text>
           <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
-            Adds an icon to your home screen and lets the portal open like a native app.
+            {deferred
+              ? 'Adds an icon to your home screen and lets the portal open like a native app.'
+              : (
+                <>
+                  In Safari, tap <ShareAltOutlined style={{ marginInline: 2 }} /> Share, then
+                  &quot;Add to Home Screen&quot; to install Jamaat as an app.
+                </>
+              )}
           </div>
           <Space style={{ marginBlockStart: 8 }}>
-            <Button type="primary" size="small" onClick={onInstall}>Install</Button>
-            <Button type="text" size="small" icon={<CloseOutlined />} onClick={onDismiss}>Not now</Button>
+            {deferred && <Button type="primary" size="small" onClick={onInstall}>Install</Button>}
+            <Button type="text" size="small" icon={<CloseOutlined />} onClick={onDismiss}>
+              {deferred ? 'Not now' : 'Got it'}
+            </Button>
           </Space>
         </div>
       </Space>

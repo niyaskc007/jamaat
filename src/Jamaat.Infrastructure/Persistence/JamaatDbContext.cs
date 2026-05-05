@@ -73,6 +73,7 @@ public class JamaatDbContext : IdentityDbContext<ApplicationUser, ApplicationRol
     public DbSet<CmsPage> CmsPages => Set<CmsPage>();
     public DbSet<CmsBlock> CmsBlocks => Set<CmsBlock>();
     public DbSet<MemberApplication> MemberApplications => Set<MemberApplication>();
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

@@ -1,9 +1,11 @@
 using System.Text;
 using Asp.Versioning;
+using Hangfire;
 using Jamaat.Api.Auth;
 using Jamaat.Api.Middleware;
 using Jamaat.Domain.Abstractions;
 using Jamaat.Infrastructure;
+using Jamaat.Infrastructure.Notifications;
 using Jamaat.Infrastructure.Persistence.Seed;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -173,6 +175,26 @@ app.UseMiddleware<ActivityTrackerMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Phase M - Hangfire dashboard. Mounted at /hangfire behind the system.admin policy so
+// only SuperAdmins can see job status / trigger now / view failures. The dashboard auth
+// filter sees the same JWT principal because UseAuthentication ran above.
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new HangfireAdminFilter() },
+    DashboardTitle = "Jamaat Background Jobs",
+    DisplayStorageConnectionString = false,
+});
+
+// Recurring jobs registered once at startup. RecurringJob.AddOrUpdate is idempotent and
+// safe to call on every deploy; the cron + method ref are persisted in the hangfire schema
+// so a restart doesn't trigger a flood of "missed" runs.
+//
+// Daily at 06:00 UTC: scan commitments due in 3 days + events starting in 24h.
+RecurringJob.AddOrUpdate<MemberNotificationsScanService>(
+    recurringJobId: "member-notifications-daily-scan",
+    methodCall: x => x.ScanOnceAsync(),
+    cronExpression: Cron.Daily(6, 0));
 
 app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions

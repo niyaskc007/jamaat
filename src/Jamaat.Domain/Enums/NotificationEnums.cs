@@ -45,6 +45,10 @@ public enum NotificationChannel
     Sms = 3,
     /// <summary>Sent through the active WhatsApp provider (Twilio Business API).</summary>
     WhatsApp = 4,
+    /// <summary>Sent as a Web Push notification to the user's browser. Requires a stored
+    /// PushSubscription with VAPID-authenticated endpoint + key material. Goes silent
+    /// when the user has no active subscriptions or has revoked permission.</summary>
+    Push = 5,
 }
 
 /// <summary>Outcome of an attempt. Logged so admins can see the failure rate at a glance.</summary>

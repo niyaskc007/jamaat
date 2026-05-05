@@ -5,6 +5,8 @@
   </PropertyGroup>
   <ItemGroup Label="EF Core / Data">
     <PackageVersion Include="MaxMind.GeoIP2" Version="5.3.0" />
+    <!-- Web Push (Phase N). VAPID-authenticated browser push notifications. -->
+    <PackageVersion Include="WebPush" Version="1.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />

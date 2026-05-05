@@ -9,6 +9,7 @@ import {
   portalMeApi, type PortalProfile, type UpdateContactDto, type UpdateAddressDto, type NotificationPrefs,
 } from './portalMeApi';
 import { extractProblem } from '../../../shared/api/client';
+import { getPushState, enablePush, disablePush, type PushState } from '../../../shared/pwa/push';
 
 /// Self-edit profile form for /portal/me/profile. Two tabs (Contact + Address) — the most
 /// common things a member changes about themselves. Submits create a MemberChangeRequest
@@ -265,6 +266,8 @@ function NotificationsTab() {
   const qc = useQueryClient();
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [pushState, setPushState] = useState<PushState>('not-subscribed');
+  const [pushBusy, setPushBusy] = useState(false);
 
   const prefsQ = useQuery({ queryKey: ['portal-notification-prefs'], queryFn: portalMeApi.getNotificationPrefs });
 
@@ -277,6 +280,28 @@ function NotificationsTab() {
       setDirty(false);
     }
   }, [prefsQ.data]);
+
+  // Probe browser push permission state on mount.
+  useEffect(() => {
+    let cancelled = false;
+    getPushState().then((s) => { if (!cancelled) setPushState(s); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const togglePush = async (on: boolean) => {
+    setPushBusy(true);
+    try {
+      const next = on ? await enablePush() : await disablePush();
+      setPushState(next);
+      if (on && next === 'subscribed') message.success('Browser notifications enabled.');
+      else if (on && next === 'denied') message.error('Permission denied. Re-enable in your browser settings.');
+      else if (!on) message.success('Browser notifications disabled.');
+    } catch (e) {
+      message.error(extractProblem(e).detail ?? 'Could not change browser notification setting.');
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const saveMut = useMutation({
     mutationFn: (p: NotificationPrefs) => portalMeApi.setNotificationPrefs(p),
@@ -306,6 +331,32 @@ function NotificationsTab() {
         message="How notifications work"
         description="The system picks the best channel available (WhatsApp > SMS > email) by default. Set a preferred channel below to override. Each notification type can be muted independently. Updates are written to a server-side audit log even when delivery is in log-only mode."
       />
+
+      <Card size="small" className="jm-card" style={{ marginBlockEnd: 16 }}>
+        <Typography.Text type="secondary" className="jm-overline">Browser push notifications</Typography.Text>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBlockStart: 12 }}>
+          <div>
+            <div style={{ fontWeight: 500 }}>
+              {pushState === 'subscribed'   && 'Push notifications are enabled on this device'}
+              {pushState === 'not-subscribed' && 'Get push notifications on this device'}
+              {pushState === 'denied'       && 'Push notifications blocked'}
+              {pushState === 'unsupported'  && 'Your browser does not support push notifications'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
+              {pushState === 'denied'
+                ? 'To re-enable, allow notifications for this site in your browser settings.'
+                : 'Receive instant alerts even when the portal is closed. Independent of your channel preference below.'}
+            </div>
+          </div>
+          {pushState !== 'unsupported' && pushState !== 'denied' && (
+            <Switch
+              checked={pushState === 'subscribed'}
+              loading={pushBusy}
+              onChange={togglePush}
+            />
+          )}
+        </div>
+      </Card>
 
       <Card size="small" className="jm-card" style={{ marginBlockEnd: 16 }}>
         <Typography.Text type="secondary" className="jm-overline">Preferred channel</Typography.Text>

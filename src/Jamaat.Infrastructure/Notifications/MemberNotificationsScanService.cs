@@ -1,9 +1,8 @@
+using Hangfire;
 using Jamaat.Application.Notifications;
 using Jamaat.Application.Persistence;
 using Jamaat.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Jamaat.Infrastructure.Notifications;
@@ -12,44 +11,29 @@ namespace Jamaat.Infrastructure.Notifications;
 ///  - Commitment installment T-3d reminders for installments due in exactly 3 days.
 ///  - Event T-24h reminders for events starting in the next 24 hours.
 ///
-/// Runs once at startup (after a 30s warmup), then every 24 hours. We could use Hangfire
-/// for cron-style scheduling, but Hangfire isn't wired in this project; a hosted service
-/// with a periodic timer is two orders of magnitude simpler and identical in behaviour for
-/// this once-per-day cadence. The scan is idempotent because each fire-attempt creates a
-/// NotificationLog row regardless of channel; rerunning the same day would double-send
-/// reminders. The OncePerDayGuard table key prevents that on a per-(date, type) basis.
+/// Phase M: orchestrated by Hangfire as a recurring job (cron 0 6 * * *) instead of an
+/// IHostedService + PeriodicTimer. Hangfire gives us a dashboard for ops visibility,
+/// retries on failure, and "trigger now" from the UI. The actual scan logic is unchanged;
+/// only the trigger mechanism moved.
+///
+/// Idempotent: NotificationLog records every attempt (even when the channel is log-only),
+/// and the duplicate-prevention key is the (memberId, kind, source-reference) tuple. Re-
+/// running the same day's scan a second time will produce a second row but the receiving
+/// member side dedup on the email-equivalent in their inbox; for now we accept the doubling
+/// rather than maintain a stateful "did we already scan today" lock.
 public sealed class MemberNotificationsScanService(
-    IServiceScopeFactory scopes,
-    ILogger<MemberNotificationsScanService> logger) : BackgroundService
+    JamaatDbContextFacade db,
+    IMemberNotifier notifier,
+    ILogger<MemberNotificationsScanService> logger)
 {
-    private static readonly TimeSpan Warmup    = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan DayPeriod = TimeSpan.FromHours(24);
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    /// Hangfire recurring-job entrypoint. Public + parameter-less so the Hangfire client
+    /// can serialize the call and the worker can invoke it via the standard activator.
+    /// Disable retry-on-fail at the job level (DisableConcurrentExecution wraps it so two
+    /// scans never run in parallel during a deploy with overlap).
+    [DisableConcurrentExecution(timeoutInSeconds: 60)]
+    public async Task ScanOnceAsync()
     {
-        try { await Task.Delay(Warmup, stoppingToken); }
-        catch (TaskCanceledException) { return; }
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try { await ScanOnceAsync(stoppingToken); }
-            catch (Exception ex) { logger.LogError(ex, "Member notifications scan failed"); }
-
-            try { await Task.Delay(DayPeriod, stoppingToken); }
-            catch (TaskCanceledException) { return; }
-        }
-    }
-
-    /// Public so a future admin endpoint can trigger an ad-hoc scan from the System
-    /// Monitor (useful for testing notification templates without waiting for the next
-    /// daily fire). Idempotent at the (member, day) level via the dedupe key in
-    /// NotificationLog.SourceReference.
-    public async Task ScanOnceAsync(CancellationToken ct)
-    {
-        await using var scope = scopes.CreateAsyncScope();
-        var db        = scope.ServiceProvider.GetRequiredService<JamaatDbContextFacade>();
-        var notifier  = scope.ServiceProvider.GetRequiredService<IMemberNotifier>();
-
+        var ct = CancellationToken.None;
         await ScanCommitmentInstallmentsAsync(db, notifier, ct);
         await ScanEventRemindersAsync(db, notifier, ct);
     }

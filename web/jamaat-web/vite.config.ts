@@ -18,58 +18,63 @@ export default defineConfig(({ mode }) => {
       // their last-fetched data instead of a network error. registerType=autoUpdate installs
       // a fresh SW on every deploy without prompting; clients refresh on next navigation.
       VitePWA({
-        registerType: 'autoUpdate',
-        // Generated SW lives in dist/sw.js; client registration is wired via registerSW.ts
-        // (default behaviour). devOptions enables the SW in dev so we can smoke-test offline.
-        devOptions: { enabled: true },
-        includeAssets: ['favicon.svg', 'icons.svg', 'locales/**/*.json'],
+        // Phase L: prompt-on-update instead of autoUpdate so the user sees a "new
+        // version available" toast and can accept or defer. registerSW.ts wires the
+        // toast UI; if registerSW returns a needRefresh callback the SPA renders it.
+        registerType: 'prompt',
+        // Phase N: injectManifest strategy lets us own the SW source code so we can add
+        // a `push` event listener (workbox's generateSW mode bakes the SW for us and
+        // doesn't expose hooks). The custom SW is at src/sw.ts; vite-plugin-pwa injects
+        // the precache manifest into self.__WB_MANIFEST at build time.
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.ts',
+        // Generated SW lives in dist/sw.js; devOptions enables it under `vite dev`
+        // for smoke testing. In prod the SW is rebuilt on every deploy.
+        devOptions: { enabled: true, type: 'module' },
+        injectManifest: {
+          // The main bundle is large after operator-app code-split; lift the precache
+          // limit so the SW manifest covers it.
+          maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        },
+        includeAssets: [
+          'favicon.svg', 'jamaat-icon.svg', 'icons.svg',
+          'icons/*.png',
+          'locales/**/*.json',
+        ],
         manifest: {
           name: 'Jamaat Member Portal',
           short_name: 'Jamaat',
-          description: 'Self-service portal for Jamaat members.',
+          description: 'Self-service portal for Jamaat members - contributions, commitments, Qarzan Hasana, events.',
           theme_color: '#0B6E63',
           background_color: '#FAFAFA',
           display: 'standalone',
-          // Members landing on the portal should see /portal/me, not the operator dashboard.
-          // Operators who add to home screen also land here; they can navigate to /dashboard
-          // from inside the app if they want.
+          orientation: 'portrait',
+          // Members landing on the portal see /portal/me, not the operator dashboard.
+          // Operators who add to home screen also land here; they can navigate to
+          // /dashboard from inside the app if they want.
           start_url: '/portal/me',
           scope: '/',
+          lang: 'en',
+          // Multiple icon entries so browsers pick the right size and purpose. The
+          // maskable variants have a 10% safe-zone padding so circle-cropping by
+          // launchers (Android, iOS standalone) keeps the brand readable.
           icons: [
-            { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+            { src: '/icons/icon-192.png',          sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: '/icons/icon-512.png',          sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: '/icons/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+            { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+            { src: '/jamaat-icon.svg',             sizes: 'any',     type: 'image/svg+xml', purpose: 'any' },
+          ],
+          // Shortcuts that show in the long-press menu on installed apps (Android).
+          shortcuts: [
+            { name: 'My profile',     url: '/portal/me/profile',     description: 'Edit my profile' },
+            { name: 'Contributions',  url: '/portal/me/contributions', description: 'My contribution history' },
+            { name: 'Events',         url: '/portal/me/events',      description: 'My event registrations' },
           ],
         },
-        workbox: {
-          // The main bundle is ~3 MB today (lazy-loading the portal helps members but the
-          // operator bundle dominates). Lift the precache limit so workbox bundles the SPA
-          // shell into the SW cache; without it, offline shell rendering fails because the
-          // JS chunk isn't cached. Future: code-split further so this limit can drop.
-          maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
-          // Cache the most recent /api/v1/portal/me/* responses with NetworkFirst (5s timeout)
-          // so the offline shell shows real data when reachable, falls back to cache when not.
-          // Operator endpoints are intentionally NOT cached - operators need fresh data.
-          runtimeCaching: [
-            {
-              urlPattern: /\/api\/v1\/portal\/me(\/|$).*/,
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'portal-me-v1',
-                networkTimeoutSeconds: 5,
-                expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 },
-                cacheableResponse: { statuses: [0, 200] },
-              },
-            },
-            {
-              urlPattern: /\/api\/v1\/cms\/blocks(\/|\?|$).*/,
-              handler: 'StaleWhileRevalidate',
-              options: {
-                cacheName: 'cms-blocks-v1',
-                expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 7 },
-                cacheableResponse: { statuses: [0, 200] },
-              },
-            },
-          ],
-        },
+        // Workbox config moved into src/sw.ts because injectManifest strategy gives us
+        // hand-written control of the SW (needed for the `push` event handler in Phase N).
       }),
     ],
     server: {
