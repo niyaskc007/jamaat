@@ -4,6 +4,7 @@ import { LockOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { authApi } from './authApi';
 import { authStore } from '../../shared/auth/authStore';
+import { defaultLandingFor } from '../../shared/auth/routing';
 import { extractProblem } from '../../shared/api/client';
 import dayjs from 'dayjs';
 
@@ -64,14 +65,23 @@ export function ChangePasswordPage() {
     try {
       if (isForcedFlow) {
         const res = await authApi.completeFirstLogin(navState!.identifier!, currentPassword, newPassword);
-        authStore.setSession(res.accessToken, res.refreshToken, {
+        const stored = {
           id: res.user.id, userName: res.user.userName, fullName: res.user.fullName,
           tenantId: res.user.tenantId, permissions: res.user.permissions,
           preferredLanguage: res.user.preferredLanguage,
-        });
-        const portalOnly = res.user.permissions.length > 0
-          && res.user.permissions.every((p) => p.startsWith('portal.') || p === 'member.self.update' || p === 'member.wealth.view');
-        const dest = navState?.returnTo ?? (portalOnly ? '/portal/me' : '/dashboard');
+          // Carry userType through so the SPA routes correctly. Without this the stored
+          // session looks like userType=undefined, the next page that calls
+          // resolveUserType() falls back to permission-shape inference, and any operator
+          // user (Hybrid types in particular) gets misrouted.
+          userType: res.user.userType ?? null,
+        };
+        authStore.setSession(res.accessToken, res.refreshToken, stored);
+        // Use the same helper as LoginPage. Importantly, defaultLandingFor() ignores
+        // the `from` argument when the user is type=Member - first-login flow had
+        // navState.returnTo='/dashboard' baked in by LoginPage's default, which would
+        // otherwise misroute Members to the operator dashboard right after they set
+        // their first permanent password.
+        const dest = defaultLandingFor(stored, navState?.returnTo ?? '/dashboard');
         navigate(dest, { replace: true });
       } else {
         await authApi.changePassword(currentPassword, newPassword);
