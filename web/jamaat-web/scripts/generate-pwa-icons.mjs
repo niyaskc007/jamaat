@@ -1,6 +1,6 @@
-// Build-time icon generation. Reads public/jamaat-icon.svg and writes the PNG sizes
-// that PWAs + iOS need into public/icons/. Run via `npm run icons` after editing the
-// brand SVG; the resulting PNGs are committed (so dev/CI doesn't need sharp at runtime).
+// Build-time icon generation. Reads public/favicon.svg and writes the PNG sizes that
+// PWAs + iOS need into public/icons/. Run via `npm run icons` after editing the brand
+// SVG; the resulting PNGs are committed (so dev/CI doesn't need sharp at runtime).
 //
 // Outputs:
 //   icons/icon-192.png            - manifest icon (purpose: any)
@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
-const src = join(root, 'public', 'jamaat-icon.svg');
+const src = join(root, 'public', 'favicon.svg');
 const outDir = join(root, 'public', 'icons');
 
 const sizes = [

@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
           maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         },
         includeAssets: [
-          'favicon.svg', 'jamaat-icon.svg', 'icons.svg',
+          'favicon.svg', 'icons.svg',
           'icons/*.png',
           'locales/**/*.json',
         ],
@@ -64,7 +64,7 @@ export default defineConfig(({ mode }) => {
             { src: '/icons/icon-512.png',          sizes: '512x512', type: 'image/png', purpose: 'any' },
             { src: '/icons/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
             { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-            { src: '/jamaat-icon.svg',             sizes: 'any',     type: 'image/svg+xml', purpose: 'any' },
+            { src: '/favicon.svg',                 sizes: 'any',     type: 'image/svg+xml', purpose: 'any' },
           ],
           // Shortcuts that show in the long-press menu on installed apps (Android).
           shortcuts: [
