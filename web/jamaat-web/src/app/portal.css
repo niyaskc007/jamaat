@@ -254,3 +254,45 @@
   border: 1px dashed var(--jm-border);
 }
 .jm-temppw-expiry { font-size: 12px; display: block; margin-block-start: var(--jm-space-2); }
+
+/* Welcome email modal (admin Users > Portal access > Send welcome email + the
+   per-row quick-action dropdown). The modal must identify which user the temp pw
+   is for so the admin doesn't paste it into the wrong username field. */
+.jm-welcome-modal-target { margin-block-end: var(--jm-space-2); }
+.jm-welcome-modal-meta {
+  margin-block-start: var(--jm-space-3);
+  font-size: 12px;
+}
+.jm-temppw-block {
+  display: block;
+  padding: var(--jm-space-3);
+  background: var(--jm-surface-muted, #F5F5F5);
+  border-radius: var(--jm-radius);
+  border: 1px dashed var(--jm-border, #E5E7EB);
+  font-size: 16px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+  -webkit-user-select: all;
+  user-select: all;
+}
+
+/* Portal Access panel layout primitives. Replaces a wave of inline styles that
+   the linter was rightly complaining about per RULES rule 55. */
+.jm-portal-access-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.jm-portal-access-row--start { align-items: flex-start; }
+.jm-portal-access-stack { display: flex; flex-direction: column; gap: 16px; margin-block-start: 12px; }
+.jm-portal-access-label-strong { font-weight: 500; }
+.jm-portal-access-label-helper { font-size: 12px; color: var(--jm-gray-500); }
+.jm-portal-access-card-spaced { margin-block-end: 16px; }
+.jm-portal-access-banner-spaced { margin-block-end: 16px; }
+.jm-portal-access-select-160 { inline-size: 160px; }
+.jm-portal-access-onboarding-copy {
+  margin-block-start: var(--jm-space-2);
+  margin-block-end: var(--jm-space-3);
+}
+/* Used inside Alert descriptions where the default <ul> margin-bottom adds an extra
+   gap below the Alert. The "Notes" alert at the bottom of Portal access uses this. */
+.jm-bullets-tight { margin-block-end: 0; }

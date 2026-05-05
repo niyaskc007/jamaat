@@ -224,14 +224,16 @@ function UserRowQuickActions({ user, onChanged }: { user: User; onChanged: () =>
       onChanged();
       Modal.info({
         title: 'Welcome email sent',
+        width: 520,
         content: (
           <div>
-            <Typography.Paragraph>Temporary password (also emailed to the user):</Typography.Paragraph>
-            <code style={{ display: 'block', padding: 12, background: '#F5F5F5', borderRadius: 6, fontSize: 14, wordBreak: 'break-all' }}>
-              {data.plaintext}
-            </code>
-            <Typography.Paragraph type="secondary" style={{ marginBlockStart: 12, fontSize: 12 }}>
+            <Typography.Paragraph className="jm-welcome-modal-target">
+              Temporary password for <b>{user.fullName}</b> (sign in as <code className="jm-tnum">{user.userName}</code>{user.email ? <> or <code>{user.email}</code></> : null}):
+            </Typography.Paragraph>
+            <code className="jm-temppw-block">{data.plaintext}</code>
+            <Typography.Paragraph type="secondary" className="jm-welcome-modal-meta">
               Expires {data.expiresAtUtc ? new Date(data.expiresAtUtc).toLocaleString() : 'soon'}.
+              {user.email ? <> Also emailed to <b>{user.email}</b>.</> : ' No email on file - share it manually.'}
             </Typography.Paragraph>
           </div>
         ),
@@ -339,21 +341,43 @@ function UserDrawer({ open, onClose, user, roles, onSaved }: {
 /// last login, with a one-click "Send welcome email" action that issues a fresh temp
 /// password + emails the user the credentials. Replaces having to hunt across the
 /// existing tabs to figure out whether a member can actually sign in.
-function PortalAccessPanel({ user, onChanged }: { user: User; onChanged: () => void }) {
+function PortalAccessPanel({ user: initialUser, onChanged }: { user: User; onChanged: () => void }) {
   const { message } = AntdApp.useApp();
   const qc = useQueryClient();
+
+  // The drawer passes a snapshot taken at row-click time. Without our own query, mutations
+  // inside the panel succeed server-side but the UI keeps rendering the stale prop until
+  // the drawer re-mounts. This dedicated query makes the panel always show real state and
+  // refetches after every mutation.
+  //
+  // placeholderData (not initialData) is intentional: initialData would mark the cache as
+  // FRESH forever, so refetchOnMount + invalidateQueries no-op. placeholderData renders
+  // immediately but keeps the query in stale state so the network call actually fires.
+  // staleTime:0 belt-and-braces - any invalidate kicks off a refetch.
+  const userQ = useQuery({
+    queryKey: ['user', initialUser.id],
+    queryFn: async () => (await api.get<User>(`/api/v1/users/${initialUser.id}`)).data,
+    placeholderData: initialUser,
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+  const user = userQ.data ?? initialUser;
   const userType = (user.userType ?? 'Operator') as 'Operator' | 'Member' | 'Hybrid';
   const canPortal = userType === 'Member' || userType === 'Hybrid';
   const isReady = !!user.isLoginAllowed && !!user.isActive;
 
+  // After any mutation, invalidate BOTH the panel's user query (so the UI flips immediately)
+  // AND the list query (so the grid badge updates without manual refresh).
+  const refreshAll = () => {
+    void qc.invalidateQueries({ queryKey: ['user', user.id] });
+    void qc.invalidateQueries({ queryKey: ['users'] });
+    onChanged();
+  };
+
   const setTypeMut = useMutation({
     mutationFn: async (t: 'Operator' | 'Member' | 'Hybrid') =>
       (await api.put(`/api/v1/users/${user.id}/user-type`, { userType: t })).data,
-    onSuccess: () => {
-      message.success('Audience type updated.');
-      onChanged();
-      void qc.invalidateQueries({ queryKey: ['users'] });
-    },
+    onSuccess: () => { message.success('Audience type updated.'); refreshAll(); },
     onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to update user type'),
   });
 
@@ -362,8 +386,7 @@ function PortalAccessPanel({ user, onChanged }: { user: User; onChanged: () => v
       (await api.put(`/api/v1/users/${user.id}/login-allowed`, { allowed })).data,
     onSuccess: (_data, allowed) => {
       message.success(allowed ? 'Login enabled.' : 'Login disabled.');
-      onChanged();
-      void qc.invalidateQueries({ queryKey: ['users'] });
+      refreshAll();
     },
     onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to toggle login'),
   });
@@ -373,21 +396,23 @@ function PortalAccessPanel({ user, onChanged }: { user: User; onChanged: () => v
       (await api.post<{ plaintext: string; expiresAtUtc: string | null }>(`/api/v1/users/${user.id}/send-welcome`)).data,
     onSuccess: (data) => {
       message.success('Welcome email queued. Login enabled, temp password rotated.');
-      onChanged();
-      void qc.invalidateQueries({ queryKey: ['users'] });
       void qc.invalidateQueries({ queryKey: ['user-temp-pw', user.id] });
+      refreshAll();
+      // The modal MUST identify which user the temp password belongs to. Past iteration
+      // showed only the password and the admin pasted it into the wrong username field
+      // on /login because they had multiple users open in adjacent tabs.
       Modal.info({
         title: 'Welcome email sent',
+        width: 520,
         content: (
           <div>
-            <Typography.Paragraph>
-              Temporary password (also emailed to the user):
+            <Typography.Paragraph className="jm-welcome-modal-target">
+              Temporary password for <b>{user.fullName}</b> (sign in as <code className="jm-tnum">{user.userName}</code>{user.email ? <> or <code>{user.email}</code></> : null}):
             </Typography.Paragraph>
-            <code style={{ display: 'block', padding: 12, background: '#F5F5F5', borderRadius: 6, fontSize: 14, wordBreak: 'break-all' }}>
-              {data.plaintext}
-            </code>
-            <Typography.Paragraph type="secondary" style={{ marginBlockStart: 12, fontSize: 12 }}>
+            <code className="jm-temppw-block">{data.plaintext}</code>
+            <Typography.Paragraph type="secondary" className="jm-welcome-modal-meta">
               The user must change this on first login. Expires {data.expiresAtUtc ? new Date(data.expiresAtUtc).toLocaleString() : 'soon'}.
+              The password has also been emailed to <b>{user.email ?? '(no email on file - share it manually)'}</b>.
             </Typography.Paragraph>
           </div>
         ),
@@ -413,13 +438,13 @@ function PortalAccessPanel({ user, onChanged }: { user: User; onChanged: () => v
               ? 'Account is marked Inactive. Re-activate it on the Details tab first.'
               : 'Login is disabled. Use "Send welcome email" below for first-time onboarding, or just toggle Login allowed if you already shared credentials another way.'
         }
-        style={{ marginBlockEnd: 16 }}
+        className="jm-portal-access-banner-spaced"
       />
 
       {/* Single, prominent onboarding action - one click does everything. */}
-      <Card size="small" className="jm-card" style={{ marginBlockEnd: 16 }}>
+      <Card size="small" className="jm-card jm-portal-access-card-spaced">
         <Typography.Text type="secondary" className="jm-overline">First-time onboarding</Typography.Text>
-        <Typography.Paragraph style={{ marginBlockStart: 8, marginBlockEnd: 12 }}>
+        <Typography.Paragraph className="jm-portal-access-onboarding-copy">
           One click: enables login, issues a fresh temporary password, flips
           MustChangePassword=true, and emails the user with sign-in instructions.
           Re-use this if a member loses their welcome email - the new temp pw
@@ -440,13 +465,13 @@ function PortalAccessPanel({ user, onChanged }: { user: User; onChanged: () => v
 
       {/* Granular controls. Most admins won't need these once the one-click button above
           works for them; kept for the case where credentials are shared out-of-band. */}
-      <Card size="small" className="jm-card" style={{ marginBlockEnd: 16 }}>
+      <Card size="small" className="jm-card jm-portal-access-card-spaced">
         <Typography.Text type="secondary" className="jm-overline">Granular controls</Typography.Text>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBlockStart: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div className="jm-portal-access-stack">
+          <div className="jm-portal-access-row">
             <div>
-              <div style={{ fontWeight: 500 }}>Login allowed</div>
-              <div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
+              <div className="jm-portal-access-label-strong">Login allowed</div>
+              <div className="jm-portal-access-label-helper">
                 When off, sign-in is rejected even with a valid password.
               </div>
             </div>
@@ -456,17 +481,17 @@ function PortalAccessPanel({ user, onChanged }: { user: User; onChanged: () => v
               onChange={(v) => setLoginAllowedMut.mutate(v)}
             />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div className="jm-portal-access-row">
             <div>
-              <div style={{ fontWeight: 500 }}>Audience type</div>
-              <div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
+              <div className="jm-portal-access-label-strong">Audience type</div>
+              <div className="jm-portal-access-label-helper">
                 Operator → /dashboard · Member → /portal/me · Hybrid → /dashboard with switcher.
               </div>
             </div>
             <Select
               value={userType}
               onChange={(t) => setTypeMut.mutate(t)}
-              style={{ inlineSize: 160 }}
+              className="jm-portal-access-select-160"
               loading={setTypeMut.isPending}
               options={[
                 { value: 'Operator', label: 'Operator' },
@@ -486,7 +511,7 @@ function PortalAccessPanel({ user, onChanged }: { user: User; onChanged: () => v
         showIcon
         message="Notes"
         description={
-          <ul className="jm-bullets-flush" style={{ marginBlockEnd: 0 }}>
+          <ul className="jm-bullets-flush jm-bullets-tight">
             <li>Members should also have the <b>Member</b> role assigned (Details tab) for granular permissions.</li>
             <li>The seeder reconciles audience type from role membership on every API boot. To pin a manual override, also adjust role membership to match.</li>
             <li>For ad-hoc password resets or to view the current temp pw, use the <b>Temp password</b> tab.</li>
