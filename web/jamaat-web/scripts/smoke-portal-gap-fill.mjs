@@ -135,7 +135,9 @@ try {
   if (!page.url().includes('/portal/me')) {
     await page.goto(`${SPA}/portal/me`);
   }
-  await page.waitForSelector('text=Salaam', { timeout: 10_000 });
+  // Hero greeting uses a time-of-day phrase (Sabah / Marhaban / Masa el-khair) so don't
+  // anchor the assertion on a single string. Wait for the avatar block to render instead.
+  await page.waitForSelector('.jm-portal-hero-avatar', { timeout: 10_000 });
 
   // ---- 2. Home dashboard renders + KPI labels --------------------------
   console.log('▶ /portal/me - KPI dashboard');

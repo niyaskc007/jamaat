@@ -15,6 +15,7 @@ import {
   type FundEnrollmentRow, type CreateQhPayload,
   type CreateCommitmentPayload, type CreatePatronagePayload,
 } from './portalMeApi';
+import { WorkflowStepper, qhWorkflow, commitmentWorkflow, patronageWorkflow } from './WorkflowStepper';
 
 // --- Shared header --------------------------------------------------------
 
@@ -157,15 +158,15 @@ export function MemberCommitmentDetailPage() {
     <div>
       <DetailHeader icon={<HeartOutlined />} title={`Commitment ${c.code}`} backTo="/portal/me/commitments" />
 
-      {/* Workflow-status banner: tells the member exactly what state the commitment is in
-          and what action (if any) is on them vs admin. Members can accept the agreement
-          themselves — the commitment moves Draft → Active. */}
+      {/* Workflow stepper - one component shows the whole journey + the current stage.
+          The Accept-agreement CTA below appears only when the member can act. */}
+      <WorkflowStepper title="Commitment workflow" {...commitmentWorkflow(c.status, c.hasAcceptedAgreement)} />
       {c.status === 1 /* Draft */ && (
         <Alert type="warning" showIcon className="jm-portal-dashboard-alert"
-          message="This commitment is in Draft and not yet active."
+          message="Action required: accept the agreement to activate."
           description={
             <div>
-              <div>Review the schedule below. Once you accept the agreement, the commitment becomes active and the first installment falls due on {dayjs(c.startDate).format('DD MMM YYYY')}.</div>
+              <div>Review the schedule below. Once you accept, the first instalment falls due on {dayjs(c.startDate).format('DD MMM YYYY')}.</div>
               <div className="jm-portal-upnext-cta">
                 <Button type="primary" loading={accept.isPending} onClick={() => accept.mutate()}>
                   Accept agreement and activate
@@ -173,20 +174,6 @@ export function MemberCommitmentDetailPage() {
               </div>
             </div>
           } />
-      )}
-      {c.status === 2 /* Active */ && c.hasAcceptedAgreement && (
-        <Alert type="success" showIcon className="jm-portal-dashboard-alert"
-          message="Active. Schedule is running."
-          description={`Agreement accepted${c.agreementAcceptedAtUtc ? ` on ${dayjs(c.agreementAcceptedAtUtc).format('DD MMM YYYY')}` : ''}. Pay each installment via the counter or with your usual payment channel.`} />
-      )}
-      {c.status === 4 /* Cancelled */ && (
-        <Alert type="error" showIcon className="jm-portal-dashboard-alert"
-          message="Commitment cancelled." description="No further installments are scheduled." />
-      )}
-      {c.status === 6 /* Paused */ && (
-        <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-          message="Paused by an administrator."
-          description="Pending installments are on hold. Contact your committee if you need this resumed." />
       )}
 
       <Card className="jm-card">
@@ -272,54 +259,10 @@ export function MemberQhDetailPage() {
     <div>
       <DetailHeader icon={<BankOutlined />} title={`Qarzan Hasana ${l.code}`} backTo="/portal/me/qarzan-hasana" />
 
-      {/* Workflow-status banner. QH goes Draft → PendingLevel1 → PendingLevel2 → Approved
-          → Disbursed → Active → Completed. Members see exactly which approver is up next. */}
-      {l.status === 2 /* PendingLevel1 */ && (
-        <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-          message="Awaiting Level-1 approval."
-          description="A first-line approver (held by users with the qh.approve_l1 permission) is reviewing your application. You will be notified when the decision is made." />
-      )}
-      {l.status === 3 /* PendingLevel2 */ && (
-        <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-          message="Awaiting Level-2 approval."
-          description={`Approved at L1${l.level1ApprovedAtUtc ? ` on ${dayjs(l.level1ApprovedAtUtc).format('DD MMM YYYY')}` : ''}. A second-line approver (qh.approve_l2 permission) is reviewing.`} />
-      )}
-      {l.status === 4 /* Approved */ && (
-        <Alert type="success" showIcon className="jm-portal-dashboard-alert"
-          message="Approved. Awaiting disbursement."
-          description={`The committee has approved ${l.amountApproved.toLocaleString()} ${l.currency} over ${l.instalmentsApproved} instalments. Disbursement will be scheduled by the cashier.`} />
-      )}
-      {l.status === 5 /* Disbursed */ && (
-        <Alert type="success" showIcon className="jm-portal-dashboard-alert"
-          message={`Disbursed${l.disbursedOn ? ` on ${dayjs(l.disbursedOn).format('DD MMM YYYY')}` : ''}.`}
-          description={`Repay each instalment via the counter. Remaining outstanding: ${l.amountOutstanding.toLocaleString()} ${l.currency}.`} />
-      )}
-      {l.status === 6 /* Active */ && (
-        <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-          message="Active." description={`Outstanding: ${l.amountOutstanding.toLocaleString()} ${l.currency}.`} />
-      )}
-      {l.status === 7 /* Completed */ && (
-        <Alert type="success" showIcon className="jm-portal-dashboard-alert"
-          message="Repaid in full. Jazakallah khairan." description="No further action required." />
-      )}
-      {l.status === 9 /* Cancelled */ && (
-        <Alert type="warning" showIcon className="jm-portal-dashboard-alert"
-          message="Cancelled." description="No further action will be taken on this application." />
-      )}
-      {l.status === 10 /* Rejected */ && (
-        <Alert type="error" showIcon className="jm-portal-dashboard-alert"
-          message="Application rejected."
-          description={l.rejectionReason ?? 'Please contact your committee for clarification.'} />
-      )}
-      {l.status === 1 /* Draft */ && (
-        <Alert type="warning" showIcon className="jm-portal-dashboard-alert"
-          message="Draft."
-          description="This application has not yet been submitted for review. Contact your committee if you need to make changes." />
-      )}
-      {l.status === 8 /* Defaulted */ && (
-        <Alert type="error" showIcon className="jm-portal-dashboard-alert"
-          message="Defaulted." description="Repayments are overdue. Contact your committee immediately to make arrangements." />
-      )}
+      {/* Workflow stepper: one component shows the journey, the current stage, and a
+          member-friendly note. Terminal states (rejected/cancelled/defaulted) replace the
+          stepper with a status Alert. */}
+      <WorkflowStepper title="Loan workflow" {...qhWorkflow(l.status, l.rejectionReason)} />
 
       <Card className="jm-card">
         <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small">
@@ -443,28 +386,7 @@ export function MemberPatronageDetailPage() {
   return (
     <div>
       <DetailHeader icon={<GiftOutlined />} title={`Patronage ${e.code}`} backTo="/portal/me/fund-enrollments" />
-      {/* Workflow-status banner so the member always knows where the request is. */}
-      {e.status === 1 /* Draft */ && (
-        <Alert type="warning" showIcon className="jm-portal-dashboard-alert"
-          message="Pending administrator approval."
-          description="An administrator will review and approve your enrollment request. Once approved, every receipt issued to you against this fund is automatically tracked here." />
-      )}
-      {e.status === 2 /* Active */ && (
-        <Alert type="success" showIcon className="jm-portal-dashboard-alert"
-          message="Active." description="Receipts that mention this fund accrue against your patronage automatically." />
-      )}
-      {e.status === 3 /* Paused */ && (
-        <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-          message="Paused by an administrator." description="No receipts will accrue until it is resumed." />
-      )}
-      {e.status === 4 /* Cancelled */ && (
-        <Alert type="error" showIcon className="jm-portal-dashboard-alert"
-          message="Cancelled." description="This enrollment is no longer active." />
-      )}
-      {e.status === 5 /* Expired */ && (
-        <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-          message="Expired." description="The end date has passed." />
-      )}
+      <WorkflowStepper title="Patronage workflow" {...patronageWorkflow(e.status)} />
       <Card className="jm-card">
         <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small">
           <Descriptions.Item label="Fund">{e.fundTypeName}</Descriptions.Item>

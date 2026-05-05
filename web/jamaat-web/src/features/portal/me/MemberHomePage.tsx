@@ -1,4 +1,4 @@
-import { Card, Row, Col, Typography, Space, Statistic, Tag, Empty, Skeleton, Alert, Button } from 'antd';
+import { Card, Row, Col, Typography, Space, Statistic, Tag, Empty, Skeleton, Alert, Button, Avatar } from 'antd';
 import {
   GiftOutlined, HeartOutlined, BankOutlined, TeamOutlined, CalendarOutlined,
   HistoryOutlined, UserOutlined, DollarOutlined, ClockCircleOutlined,
@@ -9,6 +9,26 @@ import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { authStore } from '../../../shared/auth/authStore';
 import { portalMeApi } from './portalMeApi';
+
+/// Time-of-day-aware greeting line + the same in Arabic. Keeps tone respectful for the
+/// community context.
+function greetingFor(now: Date): string {
+  const h = now.getHours();
+  if (h < 5) return 'As-salamu alaykum';
+  if (h < 12) return 'Sabah el-khair';
+  if (h < 17) return 'Marhaban';
+  return 'Masa el-khair';
+}
+
+/// Hijri (Umm al-Qura) calendar via the platform Intl API - no extra plugin required, all
+/// modern browsers support the calendar key. Falls back to '' if the runtime can't render it.
+function formatHijri(d: Date): string {
+  try {
+    return new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    }).format(d);
+  } catch { return ''; }
+}
 
 /// Member portal home. Real KPI dashboard sourced from /api/v1/portal/me/dashboard +
 /// quick-link tiles below for navigation discoverability. All numbers come from the API; nothing
@@ -21,12 +41,34 @@ export function MemberHomePage() {
   const data = dq.data;
   const cur = data?.currency ?? 'INR';
 
+  const now = new Date();
+  const hijri = formatHijri(now);
+  const firstName = user?.fullName?.split(' ')[0] ?? 'Member';
+  const initial = (user?.fullName ?? '?').slice(0, 1).toUpperCase();
+
   return (
     <div>
-      <Typography.Title level={3} className="jm-page-title">Salaam, {user?.fullName?.split(' ')[0] ?? 'Member'}</Typography.Title>
-      <Typography.Paragraph type="secondary" className="jm-page-intro">
-        Here's a snapshot of your contributions, commitments, loans, and pending tasks. Click through any tile for the full picture.
-      </Typography.Paragraph>
+      {/* Hero greeting card: gradient background + avatar + dual date stack + primary CTA
+          when there's something actionable. Replaces the bare H3 + intro paragraph. */}
+      <div className="jm-portal-hero">
+        <Avatar size={72} className="jm-portal-hero-avatar">{initial}</Avatar>
+        <div>
+          <div className="jm-portal-hero-greeting">
+            {greetingFor(now)}, <span className="jm-portal-hero-name">{firstName}</span>
+          </div>
+          <div className="jm-portal-hero-meta">
+            <span>{dayjs(now).format('dddd, DD MMM YYYY')}</span>
+            {hijri && <span className="jm-portal-hero-meta-hijri">{hijri}</span>}
+          </div>
+        </div>
+        {data?.pendingGuarantorRequests ? (
+          <div className="jm-portal-hero-cta">
+            <Link to="/portal/me/guarantor-inbox">
+              <Button type="primary">{data.pendingGuarantorRequests} action{data.pendingGuarantorRequests === 1 ? '' : 's'} pending</Button>
+            </Link>
+          </div>
+        ) : null}
+      </div>
 
       {dq.isError && (
         <Alert type="error" showIcon className="jm-portal-dashboard-alert"
@@ -212,7 +254,7 @@ function KpiCard({ loading, icon, tone, label, value, suffix, hint, to }: {
 }) {
   return (
     <Link to={to} className="jm-tile-link">
-      <Card hoverable className="jm-card jm-tile">
+      <Card hoverable className="jm-card jm-tile jm-portal-kpi">
         <Space align="start" size={12}>
           <span className={`jm-tile-icon jm-tile-icon-${tone}`}>{icon}</span>
           <div>

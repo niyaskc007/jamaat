@@ -1,9 +1,15 @@
+using System.Security.Claims;
 using Jamaat.Application.Common;
+using Jamaat.Application.Persistence;
 using Jamaat.Application.QarzanHasana;
 using Jamaat.Contracts.QarzanHasana;
 using Jamaat.Domain.Common;
+using Jamaat.Domain.ValueObjects;
+using Jamaat.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace Jamaat.Api.Controllers;
@@ -16,8 +22,24 @@ public sealed class QarzanHasanaController(
     IExcelExporter excel,
     IQarzanHasanaDocumentStorage docStorage,
     IOptions<QarzanHasanaDocumentStorageOptions> docOptions,
-    IQhAgreementPdfRenderer agreementPdf) : ControllerBase
+    IQhAgreementPdfRenderer agreementPdf,
+    UserManager<ApplicationUser> users,
+    JamaatDbContextFacade db) : ControllerBase
 {
+    /// Returns true if the signed-in operator is the same person as the loan's borrower.
+    /// Resolved via the canonical ApplicationUser.ItsNumber → Member.ItsNumber link. Used to
+    /// enforce SOD: a borrower must never approve / disburse / cancel their own QH application
+    /// even if they happen to hold the matching operator permission.
+    private async Task<bool> IsBorrowerAsync(Guid memberId, CancellationToken ct)
+    {
+        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(sub, out var userId)) return false;
+        var user = await users.FindByIdAsync(userId.ToString());
+        if (user is null || string.IsNullOrWhiteSpace(user.ItsNumber)) return false;
+        if (!ItsNumber.TryCreate(user.ItsNumber!, out var its)) return false;
+        return await db.Members.AsNoTracking()
+            .AnyAsync(m => m.Id == memberId && m.ItsNumber == its && !m.IsDeleted, ct);
+    }
     [HttpGet]
     [Authorize(Policy = "qh.view")]
     public async Task<IActionResult> List([FromQuery] QarzanHasanaListQuery q, CancellationToken ct) => Ok(await svc.ListAsync(q, ct));
@@ -97,17 +119,32 @@ public sealed class QarzanHasanaController(
     [HttpPost("{id:guid}/approve-l1")]
     [Authorize(Policy = "qh.approve_l1")]
     public async Task<IActionResult> ApproveL1(Guid id, [FromBody] ApproveL1Dto dto, CancellationToken ct)
-    { var r = await svc.ApproveLevel1Async(id, dto, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+    {
+        var sodFail = await SodGuard(id, ct);
+        if (sodFail is not null) return sodFail;
+        var r = await svc.ApproveLevel1Async(id, dto, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
 
     [HttpPost("{id:guid}/approve-l2")]
     [Authorize(Policy = "qh.approve_l2")]
     public async Task<IActionResult> ApproveL2(Guid id, [FromBody] ApproveL2Dto dto, CancellationToken ct)
-    { var r = await svc.ApproveLevel2Async(id, dto, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+    {
+        var sodFail = await SodGuard(id, ct);
+        if (sodFail is not null) return sodFail;
+        var r = await svc.ApproveLevel2Async(id, dto, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
 
     [HttpPost("{id:guid}/reject")]
     [Authorize(Policy = "qh.approve_l1")]
     public async Task<IActionResult> Reject(Guid id, [FromBody] RejectQhDto dto, CancellationToken ct)
-    { var r = await svc.RejectAsync(id, dto, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+    {
+        var sodFail = await SodGuard(id, ct);
+        if (sodFail is not null) return sodFail;
+        var r = await svc.RejectAsync(id, dto, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
 
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Policy = "qh.cancel")]
@@ -117,7 +154,27 @@ public sealed class QarzanHasanaController(
     [HttpPost("{id:guid}/disburse")]
     [Authorize(Policy = "qh.disburse")]
     public async Task<IActionResult> Disburse(Guid id, [FromBody] DisburseQhDto dto, CancellationToken ct)
-    { var r = await svc.DisburseAsync(id, dto, ct); return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error); }
+    {
+        var sodFail = await SodGuard(id, ct);
+        if (sodFail is not null) return sodFail;
+        var r = await svc.DisburseAsync(id, dto, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
+    /// SOD short-circuit: load the loan's MemberId and refuse if the actor IS the borrower.
+    /// Returns 422 with a stable error code so the SPA can surface a precise message rather
+    /// than a generic 500. Returns null when the action is allowed to proceed.
+    private async Task<IActionResult?> SodGuard(Guid loanId, CancellationToken ct)
+    {
+        var memberId = await db.QarzanHasanaLoans.AsNoTracking()
+            .Where(l => l.Id == loanId).Select(l => (Guid?)l.MemberId).FirstOrDefaultAsync(ct);
+        if (memberId is null) return null; // service will return its own NotFound
+        if (await IsBorrowerAsync(memberId.Value, ct))
+            return ErrorMapper.ToActionResult(this, Error.Business(
+                "qh.sod_borrower_cannot_act",
+                "A borrower cannot approve, reject or disburse their own Qarzan Hasana application."));
+        return null;
+    }
 
     [HttpPost("{id:guid}/waive-installment")]
     [Authorize(Policy = "qh.waive")]

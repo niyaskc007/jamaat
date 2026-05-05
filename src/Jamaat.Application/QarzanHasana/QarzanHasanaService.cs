@@ -79,6 +79,7 @@ public sealed class QarzanHasanaService(
         catch { /* swallowed: NotificationLog row + logger handle visibility */ }
     }
 
+
     public async Task<PagedResult<QarzanHasanaLoanDto>> ListAsync(QarzanHasanaListQuery q, CancellationToken ct = default)
     {
         IQueryable<QarzanHasanaLoan> query = db.QarzanHasanaLoans.AsNoTracking();
@@ -261,7 +262,8 @@ public sealed class QarzanHasanaService(
         await approveL1V.ValidateAndThrowAsync(dto, ct);
         var loan = await db.QarzanHasanaLoans.Include(x => x.Installments).FirstOrDefaultAsync(x => x.Id == id, ct);
         if (loan is null) return Error.NotFound("qh.not_found", "Loan not found.");
-        loan.ApproveLevel1(currentUser.UserId ?? Guid.Empty, currentUser.UserName ?? "system", clock.UtcNow,
+        var actorId = currentUser.UserId ?? Guid.Empty;
+        loan.ApproveLevel1(actorId, currentUser.UserName ?? "system", clock.UtcNow,
             dto.AmountApproved, dto.InstalmentsApproved, dto.Comments);
         db.QarzanHasanaLoans.Update(loan);
         await uow.SaveChangesAsync(ct);
@@ -273,7 +275,14 @@ public sealed class QarzanHasanaService(
     {
         var loan = await db.QarzanHasanaLoans.Include(x => x.Installments).FirstOrDefaultAsync(x => x.Id == id, ct);
         if (loan is null) return Error.NotFound("qh.not_found", "Loan not found.");
-        loan.ApproveLevel2(currentUser.UserId ?? Guid.Empty, currentUser.UserName ?? "system", clock.UtcNow, dto.Comments);
+        // Segregation of duties (SOD): L2 approver must differ from L1. Without this, a single
+        // user holding both permissions could clear both gates - the whole point of two-level
+        // approval is to require two distinct decision-makers.
+        var actorId = currentUser.UserId ?? Guid.Empty;
+        if (loan.Level1ApproverUserId is Guid l1 && l1 != Guid.Empty && l1 == actorId)
+            return Error.Business("qh.sod_same_approver",
+                "The Level-2 approver must be a different person from the Level-1 approver.");
+        loan.ApproveLevel2(actorId, currentUser.UserName ?? "system", clock.UtcNow, dto.Comments);
         // Auto-build uniform installment schedule upon final approval.
         BuildSchedule(loan);
         // EF Core's OwnsMany change tracker sometimes marks new owned-collection items on a tracked parent as Modified
