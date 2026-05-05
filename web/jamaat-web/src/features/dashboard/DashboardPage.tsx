@@ -39,9 +39,13 @@ export function DashboardPage() {
 
   // First-run cue: if there are no members and no MTD collection at all, nudge to seed data.
   // This keeps the banner off a working system but welcomes a fresh deployment.
+  // Guard with Array.isArray: react-query's `data` is the body returned by axios, but
+  // a transient non-200 response (e.g. ProblemDetails JSON) would land here as an object
+  // and the bare `.length`/`.map` calls would crash the dashboard.
+  const recentActivity = Array.isArray(activityQuery.data) ? activityQuery.data : [];
   const isEmptySystem =
     !!stats && (stats.activeMembers ?? 0) === 0 && (stats.mtdCollection ?? 0) === 0
-    && (activityQuery.data?.length ?? 0) === 0;
+    && recentActivity.length === 0;
 
   const canCreateReceipt = hasPermission('receipt.create');
   const canCreateVoucher = hasPermission('voucher.create');
@@ -157,9 +161,9 @@ export function DashboardPage() {
             style={{ border: '1px solid var(--jm-border)', boxShadow: 'var(--jm-shadow-1)', minBlockSize: 320 }}
             styles={{ body: { padding: 0 } }}
           >
-            {activityQuery.data && activityQuery.data.length > 0 ? (
+            {recentActivity.length > 0 ? (
               <div>
-                {activityQuery.data.map((a, idx) => (
+                {recentActivity.map((a, idx) => (
                   <div key={`${a.kind}-${a.reference}-${idx}`}
                     onClick={() => navigate(a.kind === 'Receipt' ? '/receipts' : '/vouchers')}
                     style={{
