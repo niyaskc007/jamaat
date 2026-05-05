@@ -12,15 +12,17 @@ namespace Jamaat.Api.Controllers;
 public sealed class AuthController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _users;
+    private readonly RoleManager<ApplicationRole> _roleMgr;
     private readonly ITokenService _tokens;
     private readonly ILoginAuditService _audit;
     private readonly ITemporaryPasswordService _tempPw;
     private readonly IClock _clock;
 
-    public AuthController(UserManager<ApplicationUser> users, ITokenService tokens,
+    public AuthController(UserManager<ApplicationUser> users, RoleManager<ApplicationRole> roleMgr, ITokenService tokens,
         ILoginAuditService audit, ITemporaryPasswordService tempPw, IClock clock)
     {
         _users = users;
+        _roleMgr = roleMgr;
         _tokens = tokens;
         _audit = audit;
         _tempPw = tempPw;
@@ -174,11 +176,21 @@ public sealed class AuthController : ControllerBase
     {
         var user = await _users.FindByNameAsync(User.Identity?.Name ?? string.Empty);
         if (user is null) return Unauthorized();
-        var permissions = (await _users.GetClaimsAsync(user))
+        // Mirror JwtTokenService: union user-claim permissions with claims attached to every
+        // role the user belongs to, so a permission granted at the role layer flows to /auth/me
+        // immediately - no per-user reconciliation required.
+        var permSet = (await _users.GetClaimsAsync(user))
             .Where(c => c.Type == "permission")
             .Select(c => c.Value)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var roleName in await _users.GetRolesAsync(user))
+        {
+            var role = await _roleMgr.FindByNameAsync(roleName);
+            if (role is null) continue;
+            foreach (var c in (await _roleMgr.GetClaimsAsync(role)).Where(c => c.Type == "permission"))
+                permSet.Add(c.Value);
+        }
+        var permissions = permSet.ToArray();
         return Ok(new
         {
             id = user.Id,

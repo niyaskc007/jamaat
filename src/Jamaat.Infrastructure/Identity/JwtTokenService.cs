@@ -25,13 +25,16 @@ public sealed class JwtTokenService : ITokenService
     private readonly IClock _clock;
     private readonly JamaatDbContext _db;
     private readonly UserManager<ApplicationUser> _users;
+    private readonly RoleManager<ApplicationRole> _roles;
 
-    public JwtTokenService(IOptions<JwtOptions> jwt, IClock clock, JamaatDbContext db, UserManager<ApplicationUser> users)
+    public JwtTokenService(IOptions<JwtOptions> jwt, IClock clock, JamaatDbContext db,
+        UserManager<ApplicationUser> users, RoleManager<ApplicationRole> roles)
     {
         _jwt = jwt.Value;
         _clock = clock;
         _db = db;
         _users = users;
+        _roles = roles;
     }
 
     public async Task<AuthResponse> IssueTokensAsync(ApplicationUser user, string? ipAddress, CancellationToken ct = default)
@@ -42,8 +45,23 @@ public sealed class JwtTokenService : ITokenService
 
         var rolesList = await _users.GetRolesAsync(user);
         var roles = rolesList.ToArray();
-        var claims = await _users.GetClaimsAsync(user);
-        var permissions = claims.Where(c => c.Type == "permission").Select(c => c.Value).ToArray();
+        // Permissions are the UNION of claims attached directly to the user (legacy mirror used
+        // by MemberLoginProvisioningService + admin-grants) and claims attached to every role
+        // the user belongs to. Reading role claims at JWT issuance means a permission added to
+        // a role flows on the next sign-in for every user in that role - no reconciliation pass
+        // required, no stale JWTs after a deployment that adds new perms.
+        var userClaims = await _users.GetClaimsAsync(user);
+        var perms = userClaims.Where(c => c.Type == "permission").Select(c => c.Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var roleName in roles)
+        {
+            var role = await _roles.FindByNameAsync(roleName);
+            if (role is null) continue;
+            var roleClaims = await _roles.GetClaimsAsync(role);
+            foreach (var c in roleClaims.Where(c => c.Type == "permission"))
+                perms.Add(c.Value);
+        }
+        var permissions = perms.ToArray();
 
         var accessToken = BuildJwt(user, roles, permissions, accessExpiresAt);
 

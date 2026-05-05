@@ -114,9 +114,21 @@ async function expectNoAccessDenied(routeName) {
 
 try {
   // ---- 1. Get to /portal/me as Arwa --------------------------------------
+  // IMPORTANT: this smoke is NON-DESTRUCTIVE on second + subsequent runs. We try the smoke
+  // password first; if it works, we run the test. If it doesn't work, the operator must
+  // explicitly opt in to the welcome-flow provisioning (which OVERWRITES the user's password)
+  // by passing --reset. Otherwise we abort with a clear instruction so we never silently
+  // nuke a password the operator has set out-of-band.
   if (!(await tryMemberSignIn())) {
-    console.log('  Member direct sign-in failed - running provisioning flow.');
-    await provisionMember();
+    if (process.argv.includes('--reset')) {
+      console.log(`  Member direct sign-in failed and --reset passed; running welcome flow (will overwrite ${MEMBER_ITS}'s password to ${MEMBER_PW}).`);
+      await provisionMember();
+    } else {
+      fail('Member sign-in',
+        `Direct sign-in for ${MEMBER_ITS} with ${MEMBER_PW} failed. ` +
+        `Pass --reset to allow this smoke to run the welcome-flow provisioning (which will OVERWRITE the current password). ` +
+        `Otherwise reset the password to ${MEMBER_PW} via /admin/users first.`);
+    }
   } else {
     console.log('  ✓ Member sign-in worked with cached smoke password.');
   }
