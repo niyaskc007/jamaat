@@ -1,22 +1,26 @@
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Spin } from 'antd';
 import { AppLayout } from './AppLayout';
 import { LoginPage } from '../features/auth/LoginPage';
 import { ChangePasswordPage } from '../features/auth/ChangePasswordPage';
 import { SetupWizardPage } from '../features/setup/SetupWizardPage';
 import { setupApi } from '../features/setup/setupApi';
-import { MemberPortalLayout } from '../features/portal/me/MemberPortalLayout';
-import { MemberHomePage } from '../features/portal/me/MemberHomePage';
-import { MemberLoginHistoryPage } from '../features/portal/me/MemberLoginHistoryPage';
-import {
-  MemberProfilePage as PortalMemberProfilePage,
-  MemberContributionsPage,
-  MemberCommitmentsPage,
-  MemberQhPage,
-  MemberGuarantorInboxPage,
-  MemberEventsPage,
-} from '../features/portal/me/MemberPortalPages';
+import { env } from '../shared/config/env';
+
+// Member portal is lazy-loaded so members never download operator JS. Each page is its own
+// chunk; the `Suspense` boundary inside the portal route renders a small spinner during the
+// initial chunk fetch. Operators who happen to open /portal/me get the same chunk on demand.
+const MemberPortalLayout = lazy(() => import('../features/portal/me/MemberPortalLayout').then((m) => ({ default: m.MemberPortalLayout })));
+const MemberHomePage = lazy(() => import('../features/portal/me/MemberHomePage').then((m) => ({ default: m.MemberHomePage })));
+const MemberLoginHistoryPage = lazy(() => import('../features/portal/me/MemberLoginHistoryPage').then((m) => ({ default: m.MemberLoginHistoryPage })));
+const PortalMemberProfilePage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberProfilePage })));
+const MemberContributionsPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberContributionsPage })));
+const MemberCommitmentsPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberCommitmentsPage })));
+const MemberQhPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberQhPage })));
+const MemberGuarantorInboxPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberGuarantorInboxPage })));
+const MemberEventsPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberEventsPage })));
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { MembersPage } from '../features/members/MembersPage';
 import { MemberProfilePage } from '../features/members/profile/MemberProfilePage';
@@ -141,6 +145,11 @@ export function App() {
       {/* Forced first-login change-password screen + free-form rotation. Uses its own
           layout (no AppLayout chrome) and is accessible without a JWT for the forced flow. */}
       <Route path="/change-password" element={<ChangePasswordPage />} />
+      {/* Memorable shortcut for members. /m -> ${portalBase}/me. The portalBase env var
+          defaults to '/portal' but can be set to '' for a future subdomain split where
+          members.jamaat.com hosts only the portal. */}
+      <Route path="/m" element={<Navigate to={`${env.portalBase}/me`} replace />} />
+      <Route path="/m/*" element={<Navigate to={`${env.portalBase}/me`} replace />} />
       {/* Public Event Portal - no auth, no app chrome */}
       <Route path="/portal/events" element={<PortalEventsListPage />} />
       <Route path="/portal/events/:slug" element={<PortalEventPage />} />
@@ -155,7 +164,11 @@ export function App() {
         path="/portal/me"
         element={
           <RequireAuth>
-            <RequirePermission anyOf={['portal.access']}><MemberPortalLayout /></RequirePermission>
+            <RequirePermission anyOf={['portal.access']}>
+              <Suspense fallback={<div style={{ display: 'grid', placeItems: 'center', minBlockSize: '100dvh' }}><Spin size="large" /></div>}>
+                <MemberPortalLayout />
+              </Suspense>
+            </RequirePermission>
           </RequireAuth>
         }
       >

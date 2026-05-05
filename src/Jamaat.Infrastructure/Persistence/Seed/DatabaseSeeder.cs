@@ -302,6 +302,7 @@ public static class DatabaseSeeder
         await SeedOrganisationsAsync(db, defaultTenantId, logger, ct);
         await SeedCmsDefaultsAsync(db, logger, ct);
         await ReconcileAdminUserPermissionsAsync(userMgr, logger);
+        await ReconcileUserTypesAsync(userMgr, logger);
         await SeedTestUsersAsync(userMgr, defaultTenantId, logger, config);
 
         // Dev-only bulk data generator - populates members/families/enrollments/commitments/events
@@ -885,6 +886,56 @@ Accepted on {{today}}.
             if (totalAdded > 0)
                 logger.LogInformation("Reconciled {Count} new permission claim(s) across {RoleName} users.", totalAdded, roleName);
         }
+    }
+
+    /// Backfill the new ApplicationUser.UserType column from existing role membership.
+    /// Member-only role -> Member. Any operator role -> Operator. Both -> Hybrid.
+    /// Idempotent: only writes when the resolved type differs from the stored one, so
+    /// subsequent runs are no-ops and admin overrides via the UI survive.
+    private static async Task ReconcileUserTypesAsync(UserManager<ApplicationUser> userMgr, ILogger logger)
+    {
+        var memberUsers = (await userMgr.GetUsersInRoleAsync("Member"))
+            .ToDictionary(u => u.Id, u => u);
+
+        // Find the union of users in any operator role (anyone in Administrator, SuperAdmin,
+        // or one of the seeded operator roles). The `Member` role is the only "not operator" role
+        // in this seed, so we enumerate the rest and union them.
+        var operatorRoleNames = new[]
+        {
+            "Administrator", "SuperAdmin", "DataEditor", "DataValidator",
+            "EventCoordinator", "EventVolunteer",
+        };
+        var operatorUsers = new Dictionary<Guid, ApplicationUser>();
+        foreach (var roleName in operatorRoleNames)
+        {
+            foreach (var u in await userMgr.GetUsersInRoleAsync(roleName))
+                operatorUsers[u.Id] = u;
+        }
+
+        var changed = 0;
+        // Walk the union of both sets so we cover every relevant user exactly once.
+        var allIds = memberUsers.Keys.Union(operatorUsers.Keys).ToList();
+        foreach (var id in allIds)
+        {
+            var user = memberUsers.TryGetValue(id, out var m) ? m : operatorUsers[id];
+            var hasMember = memberUsers.ContainsKey(id);
+            var hasOperator = operatorUsers.ContainsKey(id);
+            var resolved = (hasMember, hasOperator) switch
+            {
+                (true, true)   => UserType.Hybrid,
+                (true, false)  => UserType.Member,
+                (false, true)  => UserType.Operator,
+                _              => UserType.Operator, // No roles - safe default; won't have portal access either
+            };
+            if (user.UserType != resolved)
+            {
+                user.UserType = resolved;
+                await userMgr.UpdateAsync(user);
+                changed++;
+            }
+        }
+        if (changed > 0)
+            logger.LogInformation("Reconciled UserType on {Count} user(s).", changed);
     }
 
     private static async Task SeedCmsDefaultsAsync(JamaatDbContext db, ILogger logger, CancellationToken ct)

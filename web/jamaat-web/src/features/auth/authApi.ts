@@ -1,5 +1,7 @@
 import { api } from '../../shared/api/client';
 
+export type UserType = 'Member' | 'Operator' | 'Hybrid';
+
 export type UserInfo = {
   id: string;
   userName: string;
@@ -9,6 +11,9 @@ export type UserInfo = {
   roles: string[];
   permissions: string[];
   preferredLanguage?: string;
+  // May be null on tokens issued before the 2026-05 migration; SPA falls back to
+  // permission-shape inference in that case.
+  userType?: UserType | null;
 };
 
 export type AuthResponse = {

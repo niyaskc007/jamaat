@@ -113,7 +113,7 @@ public sealed class UsersController(
         u.Id, u.UserName ?? "", u.FullName, u.Email, u.ItsNumber, roles.ToList(),
         u.IsActive, u.PreferredLanguage, u.LastLoginAtUtc,
         u.IsLoginAllowed, u.MustChangePassword, u.TemporaryPasswordExpiresAtUtc,
-        u.LastPasswordChangedAtUtc, u.PhoneE164);
+        u.LastPasswordChangedAtUtc, u.PhoneE164, u.UserType.ToString());
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateUserDto dto)
@@ -319,5 +319,45 @@ public sealed class UsersController(
             }).ToList());
         return File(excel.BuildCsv(sheet), "text/csv",
             $"login-history_{DateTime.UtcNow:yyyyMMdd-HHmm}.csv");
+    }
+
+    /// Set the coarse audience type. Lets admin flip a user between Operator/Member/Hybrid
+    /// without having to manipulate role membership directly. The seeder also reconciles
+    /// this on each boot from role membership, but admin overrides set here are honoured -
+    /// the reconciler only writes when the resolved type from roles DIFFERS from what's
+    /// stored, and it goes role-membership-first. So an Operator user manually flipped to
+    /// Member would get re-flipped on next seed if their roles still say Operator. To
+    /// override permanently, also adjust their role assignment.
+    [HttpPut("{id:guid}/user-type")]
+    public async Task<IActionResult> SetUserType(Guid id, [FromBody] SetUserTypeDto dto)
+    {
+        if (!Enum.TryParse<UserType>(dto.UserType, ignoreCase: true, out var parsed))
+            return BadRequest(new { error = "invalid_user_type", detail = "UserType must be Operator, Member, or Hybrid." });
+        var u = await userMgr.FindByIdAsync(id.ToString());
+        if (u is null) return NotFound();
+        u.UserType = parsed;
+        await userMgr.UpdateAsync(u);
+        return NoContent();
+    }
+
+    /// Provision-or-resend welcome email. Issues a fresh temporary password (rotates the
+    /// previous one if it was still active), flips MustChangePassword=true, and sends the
+    /// UserWelcome notification. Equivalent to the bulk-allow-login flow but for a single
+    /// user, and importantly, does NOT toggle IsLoginAllowed - admin keeps explicit control
+    /// over whether the account can actually sign in. Returns the freshly-issued plaintext
+    /// (admin-only convenience for reading it back if email delivery is in log-only mode).
+    [HttpPost("{id:guid}/send-welcome")]
+    public async Task<IActionResult> SendWelcome(Guid id, CancellationToken ct)
+    {
+        var u = await userMgr.FindByIdAsync(id.ToString());
+        if (u is null) return NotFound();
+        var plaintext = await tempPw.IssueAsync(u, ct);
+        var fresh = await userMgr.FindByIdAsync(id.ToString());
+        if (fresh is not null)
+        {
+            try { await notify.SendAsync(BuildWelcome(fresh, Origin(config)), ct); }
+            catch { /* fire-and-forget; NotificationLog row records the attempt */ }
+        }
+        return Ok(new TempPasswordDto(plaintext, fresh?.TemporaryPasswordExpiresAtUtc, MustChangePassword: true));
     }
 }

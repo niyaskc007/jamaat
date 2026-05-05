@@ -10,4 +10,9 @@
 export const env = {
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? '',
   defaultLanguage: import.meta.env.VITE_DEFAULT_LANGUAGE ?? 'en',
+  // Portal URL prefix. Defaults to '/portal' so member URLs read /portal/me/*. Setting
+  // this to '' makes the portal live at the site root - useful for a future subdomain
+  // split where members.jamaat.com hosts ONLY the portal and the prefix is redundant.
+  // The /m shortcut route always 302s to ${portalBase}/me regardless of this value.
+  portalBase: import.meta.env.VITE_PORTAL_BASE ?? '/portal',
 } as const;

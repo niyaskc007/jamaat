@@ -41,6 +41,20 @@ public class ApplicationUser : IdentityUser<Guid>, ITenantScoped
 
     /// Phone in E.164 format (e.g. +9715xxxxxxx) - used for SMS + WhatsApp delivery.
     public string? PhoneE164 { get; set; }
+
+    /// Coarse audience classification used for default landing route. Distinct from
+    /// permissions: a Hybrid is a real persona (e.g. an Admin who is also a Jamaat member),
+    /// not a permission union. Driving routing off this avoids fragile "every perm starts
+    /// with portal." inferences. Backfilled by the seeder from existing role membership;
+    /// settable by admins on the Users page.
+    public UserType UserType { get; set; } = UserType.Operator;
+}
+
+public enum UserType
+{
+    Operator = 0,  // Staff/admin - lands on /dashboard
+    Member   = 1,  // Provisioned member - lands on /portal/me
+    Hybrid   = 2,  // Both - lands on /dashboard with switcher
 }
 
 public class ApplicationRole : IdentityRole<Guid>

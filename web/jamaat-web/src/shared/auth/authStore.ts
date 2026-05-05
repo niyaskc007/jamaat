@@ -9,6 +9,9 @@ export type AuthUser = {
   tenantId: string;
   permissions: string[];
   preferredLanguage?: string;
+  // 'Member' / 'Operator' / 'Hybrid'. May be missing on tokens stored before the
+  // 2026-05 migration; consumers must handle absence and fall back to permission shape.
+  userType?: 'Member' | 'Operator' | 'Hybrid' | null;
 };
 
 type Listener = () => void;

@@ -28,6 +28,9 @@ type User = {
   temporaryPasswordExpiresAtUtc?: string | null;
   lastPasswordChangedAtUtc?: string | null;
   phoneE164?: string | null;
+  // 'Operator' / 'Member' / 'Hybrid'. May be missing on rows fetched before the 2026-05
+  // backend migration; UI treats absence as Operator (the safe default).
+  userType?: string | null;
 };
 
 type Role = { id: string; name: string; description?: string | null; permissions: string[] };
@@ -211,12 +214,137 @@ function UserDrawer({ open, onClose, user, roles, onSaved }: {
             ),
           },
           ...(isEdit && user ? [
+            { key: 'portal-access', label: 'Portal access', children: <PortalAccessPanel user={user} onChanged={onSaved} /> },
             { key: 'temp-password', label: 'Temp password', children: <TempPasswordPanel user={user} onChanged={onSaved} /> },
             { key: 'login-history', label: 'Login history', children: <UserLoginHistoryPanel userId={user.id} /> },
           ] : []),
         ]}
       />
     </Drawer>
+  );
+}
+
+/// Portal Access panel — surfaces the member-portal status of a user in one place:
+/// audience type (Operator/Member/Hybrid), login-allowed flag, must-change-password,
+/// last login, with a one-click "Send welcome email" action that issues a fresh temp
+/// password + emails the user the credentials. Replaces having to hunt across the
+/// existing tabs to figure out whether a member can actually sign in.
+function PortalAccessPanel({ user, onChanged }: { user: User; onChanged: () => void }) {
+  const { message } = AntdApp.useApp();
+  const qc = useQueryClient();
+  const userType = (user.userType ?? 'Operator') as 'Operator' | 'Member' | 'Hybrid';
+  const canPortal = userType === 'Member' || userType === 'Hybrid';
+
+  const setTypeMut = useMutation({
+    mutationFn: async (t: 'Operator' | 'Member' | 'Hybrid') =>
+      (await api.put(`/api/v1/users/${user.id}/user-type`, { userType: t })).data,
+    onSuccess: () => {
+      message.success('Audience type updated.');
+      onChanged();
+      void qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to update user type'),
+  });
+
+  const sendWelcomeMut = useMutation({
+    mutationFn: async () =>
+      (await api.post<{ plaintext: string; expiresAtUtc: string | null }>(`/api/v1/users/${user.id}/send-welcome`)).data,
+    onSuccess: (data) => {
+      message.success('Welcome email queued. Temp password rotated.');
+      onChanged();
+      void qc.invalidateQueries({ queryKey: ['users'] });
+      void qc.invalidateQueries({ queryKey: ['user-temp-pw', user.id] });
+      // Show the plaintext briefly in case email delivery is in log-only mode.
+      Modal.info({
+        title: 'Welcome email sent',
+        content: (
+          <div>
+            <Typography.Paragraph>
+              Temporary password (also emailed to the user):
+            </Typography.Paragraph>
+            <code style={{ display: 'block', padding: 12, background: '#F5F5F5', borderRadius: 6, fontSize: 14, wordBreak: 'break-all' }}>
+              {data.plaintext}
+            </code>
+            <Typography.Paragraph type="secondary" style={{ marginBlockStart: 12, fontSize: 12 }}>
+              The user must change this on first login. Expires {data.expiresAtUtc ? new Date(data.expiresAtUtc).toLocaleString() : 'soon'}.
+            </Typography.Paragraph>
+          </div>
+        ),
+      });
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to send welcome email'),
+  });
+
+  return (
+    <div>
+      <Alert
+        type="info" showIcon
+        message="Portal access controls"
+        description={
+          <ul className="jm-bullets-flush">
+            <li><b>Operator</b>: staff/admin. Lands on /dashboard after login.</li>
+            <li><b>Member</b>: member-portal user. Lands on /portal/me. Should also have the "Member" role for granular permissions.</li>
+            <li><b>Hybrid</b>: both. Defaults to /dashboard with a "Switch to member portal" link in the avatar menu.</li>
+            <li>The seeder reconciles this from role membership on each boot — manual overrides set here may be reverted unless role membership matches.</li>
+          </ul>
+        }
+      />
+
+      <Card size="small" className="jm-card" style={{ marginBlockStart: 16 }}>
+        <Typography.Text type="secondary" className="jm-overline">Audience type</Typography.Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBlockStart: 8 }}>
+          <Select
+            value={userType}
+            onChange={(t) => setTypeMut.mutate(t)}
+            style={{ inlineSize: 200 }}
+            options={[
+              { value: 'Operator', label: 'Operator' },
+              { value: 'Member', label: 'Member' },
+              { value: 'Hybrid', label: 'Hybrid' },
+            ]}
+          />
+          {setTypeMut.isPending && <Typography.Text type="secondary">Saving…</Typography.Text>}
+        </div>
+      </Card>
+
+      <Card size="small" className="jm-card" style={{ marginBlockStart: 16 }}>
+        <Typography.Text type="secondary" className="jm-overline">Login readiness</Typography.Text>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBlockStart: 8 }}>
+          <div>
+            <Tag color={user.isLoginAllowed ? 'green' : 'default'}>
+              {user.isLoginAllowed ? 'Login allowed' : 'Login disabled'}
+            </Tag>
+            <Tag color={user.mustChangePassword ? 'gold' : 'blue'}>
+              {user.mustChangePassword ? 'Must change password' : 'Has set their own password'}
+            </Tag>
+            <Tag color={user.isActive ? 'green' : 'red'}>
+              {user.isActive ? 'Active' : 'Inactive'}
+            </Tag>
+          </div>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Last login: {user.lastLoginAtUtc ? new Date(user.lastLoginAtUtc).toLocaleString() : 'never'}
+          </Typography.Text>
+        </div>
+      </Card>
+
+      <Card size="small" className="jm-card" style={{ marginBlockStart: 16 }}>
+        <Typography.Text type="secondary" className="jm-overline">Welcome email</Typography.Text>
+        <Typography.Paragraph style={{ marginBlockStart: 8, marginBlockEnd: 12 }}>
+          Issues a fresh temporary password, flips MustChangePassword=true, and emails
+          the user with sign-in instructions. Use this for <b>first-time onboarding</b> or
+          when a member has lost their welcome email. {!canPortal && <em>(This user is currently {userType} — they will receive the email but should be flipped to Member or Hybrid first if they need portal access.)</em>}
+        </Typography.Paragraph>
+        <Popconfirm
+          title="Send welcome email?"
+          description="A fresh temp password will replace any existing one."
+          onConfirm={() => sendWelcomeMut.mutate()}
+          okText="Send"
+          okType="primary"
+        >
+          <Button type="primary" loading={sendWelcomeMut.isPending}>Send welcome email</Button>
+        </Popconfirm>
+      </Card>
+    </div>
   );
 }
 

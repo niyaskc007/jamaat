@@ -8,9 +8,18 @@ public sealed record UserDto(
     bool MustChangePassword = false,
     DateTimeOffset? TemporaryPasswordExpiresAtUtc = null,
     DateTimeOffset? LastPasswordChangedAtUtc = null,
-    string? PhoneE164 = null);
+    string? PhoneE164 = null,
+    /// 'Operator' / 'Member' / 'Hybrid'. Drives default landing route after login;
+    /// also exposed in the admin Users grid so an admin can see at a glance which
+    /// users are member-portal users vs staff.
+    string? UserType = null);
 
 public sealed record BulkAllowLoginDto(IReadOnlyList<Guid> UserIds, bool Allow);
+
+/// PUT /api/v1/users/{id}/user-type body. Lets admin manually flip a user from
+/// Operator to Hybrid (e.g. when an existing Jamaat member is hired as staff)
+/// or back. Server validates: must be one of Operator / Member / Hybrid.
+public sealed record SetUserTypeDto(string UserType);
 
 /// <summary>Minimal user info for tooltips / "who did this?" popovers throughout the app.
 /// Excludes sensitive fields (email, phone, ITS) so non-admin readers can resolve a user-id

@@ -181,8 +181,22 @@ export function AppLayout() {
   const activeKey = resolveActiveKey(location.pathname);
   const breadcrumb = resolveBreadcrumb(location.pathname, t);
 
+  // Hybrid users (e.g. an Administrator who is also a Jamaat member) get a "Switch to member
+  // portal" entry in their avatar dropdown. Members-only users never see this layout at all.
+  // userType may be missing on legacy tokens; we don't render the switcher in that case.
+  const isHybrid = user?.userType === 'Hybrid';
+
   const userMenu: MenuProps['items'] = [
     { key: 'profile', icon: <UserOutlined />, label: t('nav.profile'), onClick: () => navigate('/me') },
+    ...(isHybrid ? [
+      { type: 'divider' as const },
+      {
+        key: 'portal',
+        icon: <UserOutlined />,
+        label: 'Switch to member portal',
+        onClick: () => navigate('/portal/me'),
+      },
+    ] : []),
     { type: 'divider' },
     {
       key: 'logout',

@@ -68,7 +68,8 @@ public sealed class JwtTokenService : ITokenService
             user.TenantId,
             roles,
             permissions,
-            user.PreferredLanguage);
+            user.PreferredLanguage,
+            user.UserType.ToString());
 
         return new AuthResponse(accessToken, refreshTokenRaw, accessExpiresAt, userInfo);
     }
@@ -111,6 +112,7 @@ public sealed class JwtTokenService : ITokenService
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
             new("tenant_id", user.TenantId.ToString()),
             new("full_name", user.FullName),
+            new("user_type", user.UserType.ToString()),
         };
         if (!string.IsNullOrEmpty(user.Email)) claims.Add(new Claim(ClaimTypes.Email, user.Email));
         claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));

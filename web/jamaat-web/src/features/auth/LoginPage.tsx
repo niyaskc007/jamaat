@@ -8,6 +8,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi, isPasswordChangeRequired } from './authApi';
 import { authStore } from '../../shared/auth/authStore';
+import { defaultLandingFor } from '../../shared/auth/routing';
 import { extractProblem } from '../../shared/api/client';
 import { Logo } from '../../shared/ui/Logo';
 import { IslamicPattern } from '../../shared/ui/IslamicPattern';
@@ -70,18 +71,20 @@ export function LoginPage() {
         });
         return;
       }
-      authStore.setSession(res.accessToken, res.refreshToken, {
+      const stored = {
         id: res.user.id,
         userName: res.user.userName,
         fullName: res.user.fullName,
         tenantId: res.user.tenantId,
         permissions: res.user.permissions,
         preferredLanguage: res.user.preferredLanguage,
-      });
-      // If this user only has portal access (no admin/operator perms), land them on /portal/me.
-      const portalOnly = res.user.permissions.length > 0
-        && res.user.permissions.every((p) => p.startsWith('portal.') || p === 'member.self.update' || p === 'member.wealth.view');
-      navigate(portalOnly ? '/portal/me' : from, { replace: true });
+        userType: res.user.userType ?? null,
+      };
+      authStore.setSession(res.accessToken, res.refreshToken, stored);
+      // Routing prefers the server-stamped userType claim. Falls back to permission-shape
+      // inference for tokens issued before the 2026-05 migration so older tokens still
+      // route correctly. Hybrid users land on /dashboard with a switcher exposed there.
+      navigate(defaultLandingFor(stored, from), { replace: true });
     } catch (err) {
       const problem = extractProblem(err);
       setError(problem.detail ?? problem.title ?? t('login.invalid'));
