@@ -1,38 +1,25 @@
-import { Card, Table, Tag, Typography, Empty, Alert, Space, Button, Descriptions } from 'antd';
+import { Card, Table, Tag, Typography, Empty, Alert, Space, Button } from 'antd';
 import { GiftOutlined, HeartOutlined, BankOutlined, TeamOutlined, CalendarOutlined, UserOutlined, PlusOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { portalMeApi, type ContributionRow, type CommitmentRow, type QhLoanRow, type GuarantorRequestRow, type EventRegistrationRow } from './portalMeApi';
 import { authStore } from '../../../shared/auth/authStore';
+import { ProfileEditForm } from './ProfileEditForm';
 
 // All five "list" portal pages share identical layout (header + intro + table card),
 // captured by the SectionHeader / SectionLayout helpers below + the `.jm-card`/`.jm-page-*`
 // classes in app/portal.css. No inline colour/spacing in this file.
 
-// --- Phase E2: Profile ----------------------------------------------------
+// --- Phase B: Self-edit profile -------------------------------------------
 
 export function MemberProfilePage() {
-  const { data, isLoading } = useQuery({ queryKey: ['portal-me'], queryFn: portalMeApi.me });
-  const user = authStore.getUser();
-
   return (
-    <SectionLayout title="My profile"
-      intro="Read-only view of your record. To update your phone, address, or family info, file a change request below — your committee reviews and approves it before the change goes live.">
-      <Card loading={isLoading} className="jm-card">
-        <Descriptions column={1} bordered size="middle">
-          <Descriptions.Item label="Full name">{data?.fullName ?? user?.fullName ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="ITS number"><span className="jm-tnum">{data?.itsNumber ?? '-'}</span></Descriptions.Item>
-          <Descriptions.Item label="Email">{data?.email ?? <em className="jm-muted-em">not on file</em>}</Descriptions.Item>
-          <Descriptions.Item label="Phone">{data?.phoneE164 ?? <em className="jm-muted-em">not on file</em>}</Descriptions.Item>
-          <Descriptions.Item label="Member id">{data?.memberId ?? '-'}</Descriptions.Item>
-        </Descriptions>
-        <Alert
-          type="info" showIcon className="jm-alert-after-card"
-          message="Self-edit form coming next"
-          description="The change-request form (with photo upload + family-tree edits) lands in the next portal release. For urgent changes, please contact your committee."
-        />
-      </Card>
+    <SectionLayout
+      title="My profile"
+      intro="Update your contact and address details. Submitted changes go through committee review before they go live. Name and identity changes are admin-only."
+    >
+      <ProfileEditForm />
     </SectionLayout>
   );
 }
