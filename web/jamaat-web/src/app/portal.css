@@ -247,6 +247,36 @@
 .jm-portal-back-link { display: inline-flex; }
 .jm-portal-back-link :where(.ant-btn) { color: var(--jm-gray-600); }
 
+/* Guarantor inbox card: pending requests render as full-width review cards with a head
+   row (borrower + scheme), the borrower's case in a Descriptions block, then primary +
+   danger action buttons inline. Past decisions fall back to a compact table below. */
+.jm-portal-section-title { margin-block: var(--jm-space-3) var(--jm-space-3) !important; }
+.jm-portal-inbox-card { border-inline-start: 4px solid var(--jm-warning, #d97706); }
+.jm-portal-inbox-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--jm-space-3);
+}
+.jm-portal-inbox-title { font-weight: 600; font-size: 16px; color: var(--jm-gray-900); }
+.jm-portal-inbox-sub   { font-size: 13px; color: var(--jm-gray-600); margin-block-start: 2px; }
+.jm-portal-inbox-actions {
+  display: flex; gap: var(--jm-space-2); flex-wrap: wrap;
+  margin-block-start: var(--jm-space-3);
+  padding-block-start: var(--jm-space-3);
+  border-block-start: 1px solid var(--jm-border);
+}
+
+/* Agreement preview modal: pre-formatted text block with comfortable reading width. */
+.jm-portal-agreement-text {
+  background: var(--jm-surface-muted, #f9fafb);
+  border: 1px solid var(--jm-border);
+  border-radius: var(--jm-radius-md, 8px);
+  padding: var(--jm-space-4);
+  margin-block: var(--jm-space-3);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px; line-height: 1.6; color: var(--jm-gray-800, #1f2937);
+  white-space: pre-wrap;
+  max-block-size: 50vh; overflow: auto;
+}
+
 /* ----- Polished member-portal home -------------------------------- */
 
 /* Hero greeting card: gradient background, member avatar on the left,

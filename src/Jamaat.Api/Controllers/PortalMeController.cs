@@ -113,22 +113,98 @@ public sealed class PortalMeController(
         return Ok(rows);
     }
 
-    /// Phase E6 - guarantor inbox: QH loans where I'm listed as a guarantor and my consent
-    /// is still pending. The Endorse/Decline action lives in QarzanHasanaController via the
-    /// existing token-based portal consent flow.
+    /// Guarantor inbox: QH loans where I'm listed as a guarantor. Each row carries the loan
+    /// details (code, borrower, amount, scheme, purpose) so a member can decide right here
+    /// without opening a token-protected public link. Accept / decline action endpoints live
+    /// just below — they take the consent id (NOT the public token), authenticate via the
+    /// portal JWT, and verify ownership before delegating to the existing service.
     [HttpGet("guarantor-inbox")]
     public async Task<IActionResult> GuarantorInbox(CancellationToken ct)
     {
         var (_, memberId) = await CurrentMemberAsync(ct);
         if (memberId is null) return Ok(Array.Empty<object>());
-        var rows = await db.QarzanHasanaGuarantorConsents.AsNoTracking()
-            .Where(g => g.GuarantorMemberId == memberId.Value)
-            .OrderByDescending(g => g.CreatedAtUtc)
-            .Select(g => new
+        // Join to the loan + borrower so the portal page renders without N follow-up calls.
+        var rows = await (
+            from g in db.QarzanHasanaGuarantorConsents.AsNoTracking()
+            where g.GuarantorMemberId == memberId.Value
+            join l in db.QarzanHasanaLoans.AsNoTracking() on g.LoanId equals l.Id
+            join m in db.Members.AsNoTracking() on l.MemberId equals m.Id
+            orderby g.CreatedAtUtc descending
+            select new
             {
-                g.Id, g.LoanId, g.GuarantorMemberId, g.Status, g.Token,
-                RequestedAtUtc = g.CreatedAtUtc, g.RespondedAtUtc,
-            })
+                g.Id,
+                g.LoanId,
+                g.GuarantorMemberId,
+                Status = (int)g.Status,
+                g.Token,
+                RequestedAtUtc = g.CreatedAtUtc,
+                g.RespondedAtUtc,
+                Loan = new
+                {
+                    l.Code, l.AmountRequested, l.AmountApproved, l.Currency,
+                    l.InstalmentsRequested, l.InstalmentsApproved,
+                    l.Scheme, LoanStatus = (int)l.Status,
+                    l.Purpose, l.RepaymentPlan, l.SourceOfIncome,
+                    l.MonthlyIncome, l.MonthlyExpenses, l.MonthlyExistingEmis,
+                    BorrowerItsNumber = m.ItsNumber.Value,
+                    BorrowerName = m.FullName,
+                    l.StartDate,
+                },
+            }
+        ).ToListAsync(ct);
+        return Ok(rows);
+    }
+
+    /// Portal-authenticated guarantor decision. Mirrors the public token endpoints in
+    /// QarzanHasanaController but identifies the responder via the JWT instead of the token,
+    /// and verifies the consent row's GuarantorMemberId matches the signed-in member before
+    /// recording the decision. <paramref name="decision"/> = "accept" | "decline".
+    [HttpPost("guarantor-inbox/{consentId:guid}/{decision}")]
+    public async Task<IActionResult> GuarantorAct(
+        Guid consentId, string decision,
+        [FromServices] Application.QarzanHasana.IQarzanHasanaService qhSvc,
+        CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return Unauthorized();
+        var consent = await db.QarzanHasanaGuarantorConsents.AsNoTracking()
+            .Where(g => g.Id == consentId && g.GuarantorMemberId == memberId.Value)
+            .Select(g => new { g.Token })
+            .FirstOrDefaultAsync(ct);
+        if (consent is null) return NotFound();
+
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var ua = Request.Headers.UserAgent.ToString();
+        var meta = new Contracts.QarzanHasana.RecordConsentResponseDto(ip, ua);
+        var r = decision.ToLowerInvariant() switch
+        {
+            "accept"  => await qhSvc.AcceptConsentAsync(consent.Token, meta, ct),
+            "decline" => await qhSvc.DeclineConsentAsync(consent.Token, meta, ct),
+            _         => Domain.Common.Result.Failure<Contracts.QarzanHasana.GuarantorConsentPortalDto>(
+                            Domain.Common.Error.Validation("guarantor.bad_decision",
+                                "Decision must be 'accept' or 'decline'.")),
+        };
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
+    /// Member-friendly search for a guarantor or family member to attach to a Qarzan Hasana
+    /// application. Returns minimal fields (id, ITS, full name) so the portal isn't a vector
+    /// for member-directory scraping. Capped at 25 hits; min 2 chars to query.
+    [HttpGet("members/search")]
+    public async Task<IActionResult> SearchMembers([FromQuery] string q, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
+            return Ok(Array.Empty<object>());
+        var s = q.Trim();
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        var rows = await db.Members.AsNoTracking()
+            .Where(m => !m.IsDeleted
+                && (m.Id != memberId
+                    && (EF.Functions.Like(m.FullName, $"%{s}%")
+                        || EF.Functions.Like(m.ItsNumber.Value, $"%{s}%"))))
+            .OrderBy(m => m.FullName)
+            .Take(25)
+            .Select(m => new { m.Id, ItsNumber = m.ItsNumber.Value, FullName = m.FullName })
             .ToListAsync(ct);
         return Ok(rows);
     }

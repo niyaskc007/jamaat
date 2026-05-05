@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Layout, Menu, Avatar, Space, Typography, Dropdown, Button } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   HomeOutlined, UserOutlined, GiftOutlined, HeartOutlined, BankOutlined,
   TeamOutlined, CalendarOutlined, HistoryOutlined, LockOutlined, LogoutOutlined,
+  AppstoreOutlined, ProfileOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -23,17 +25,50 @@ export function MemberPortalLayout() {
   const user = authStore.getUser();
   const { t } = useTranslation('portal');
 
-  const items = [
+  // Grouped nav (matches the operator AppLayout pattern: Operations / Insights). Members
+  // see "My activity" (transactional), "Engagement" (events + kafil), and "Account" (profile,
+  // history). Home stays flat at the top so it's always one click away.
+  const items: MenuProps['items'] = useMemo(() => [
     { key: '/portal/me', icon: <HomeOutlined />, label: t('nav.home') },
-    { key: '/portal/me/profile', icon: <UserOutlined />, label: t('nav.profile') },
-    { key: '/portal/me/contributions', icon: <GiftOutlined />, label: t('nav.contributions') },
-    { key: '/portal/me/commitments', icon: <HeartOutlined />, label: t('nav.commitments') },
-    { key: '/portal/me/fund-enrollments', icon: <GiftOutlined />, label: t('nav.patronages') },
-    { key: '/portal/me/qarzan-hasana', icon: <BankOutlined />, label: t('nav.qarzanHasana') },
-    { key: '/portal/me/guarantor-inbox', icon: <TeamOutlined />, label: t('nav.guarantorInbox') },
-    { key: '/portal/me/events', icon: <CalendarOutlined />, label: t('nav.events') },
-    { key: '/portal/me/login-history', icon: <HistoryOutlined />, label: t('nav.loginHistory') },
-  ];
+    {
+      key: 'activity', icon: <AppstoreOutlined />, label: 'My activity',
+      children: [
+        { key: '/portal/me/contributions', icon: <GiftOutlined />, label: t('nav.contributions') },
+        { key: '/portal/me/commitments', icon: <HeartOutlined />, label: t('nav.commitments') },
+        { key: '/portal/me/fund-enrollments', icon: <GiftOutlined />, label: t('nav.patronages') },
+        { key: '/portal/me/qarzan-hasana', icon: <BankOutlined />, label: t('nav.qarzanHasana') },
+      ],
+    },
+    {
+      key: 'engagement', icon: <TeamOutlined />, label: 'Engagement',
+      children: [
+        { key: '/portal/me/guarantor-inbox', icon: <TeamOutlined />, label: t('nav.guarantorInbox') },
+        { key: '/portal/me/events', icon: <CalendarOutlined />, label: t('nav.events') },
+      ],
+    },
+    {
+      key: 'account', icon: <ProfileOutlined />, label: 'Account',
+      children: [
+        { key: '/portal/me/profile', icon: <UserOutlined />, label: t('nav.profile') },
+        { key: '/portal/me/login-history', icon: <HistoryOutlined />, label: t('nav.loginHistory') },
+      ],
+    },
+  ], [t]);
+
+  // Flatten the grouped tree so the existing matchKey() helper still picks the right
+  // selection from the URL.
+  const flatKeys = useMemo(() => {
+    const out: string[] = [];
+    function walk(nodes: NonNullable<MenuProps['items']>) {
+      for (const n of nodes) {
+        if (!n) continue;
+        if (typeof n === 'object' && 'key' in n && typeof n.key === 'string' && n.key.startsWith('/')) out.push(n.key);
+        if (typeof n === 'object' && 'children' in n && Array.isArray(n.children)) walk(n.children as NonNullable<MenuProps['items']>);
+      }
+    }
+    walk(items);
+    return out;
+  }, [items]);
 
   const onLogout = () => {
     authStore.clear();
@@ -52,9 +87,10 @@ export function MemberPortalLayout() {
         </div>
         <Menu
           mode="inline"
-          selectedKeys={[matchKey(items.map((i) => i.key), location.pathname)]}
+          defaultOpenKeys={['activity', 'engagement', 'account']}
+          selectedKeys={[matchKey(flatKeys, location.pathname)]}
           items={items}
-          onClick={({ key }) => navigate(key)}
+          onClick={({ key }) => { if (key.startsWith('/')) navigate(key); }}
         />
       </Layout.Sider>
 

@@ -25,6 +25,32 @@ export type GuarantorRequestRow = {
   status: number; token: string;
   requestedAtUtc: string; respondedAtUtc?: string | null;
 };
+
+/// Enriched guarantor-inbox row: carries the loan summary the borrower needs to make the
+/// decision in-portal without opening a separate token-protected page.
+export type GuarantorInboxRow = {
+  id: string; loanId: string; guarantorMemberId: string;
+  status: number;             // 1=Pending, 2=Accepted, 3=Declined
+  token: string;
+  requestedAtUtc: string; respondedAtUtc: string | null;
+  loan: {
+    code: string;
+    amountRequested: number; amountApproved: number;
+    currency: string;
+    instalmentsRequested: number; instalmentsApproved: number;
+    scheme: number;
+    loanStatus: number;
+    purpose: string | null;
+    repaymentPlan: string | null;
+    sourceOfIncome: string | null;
+    monthlyIncome: number | null;
+    monthlyExpenses: number | null;
+    monthlyExistingEmis: number | null;
+    borrowerItsNumber: string;
+    borrowerName: string;
+    startDate: string;
+  };
+};
 export type EventRegistrationRow = {
   id: string; eventId: string; registrationCode: string; status: number;
   registeredAtUtc: string; confirmedAtUtc?: string | null; checkedInAtUtc?: string | null;
@@ -257,6 +283,10 @@ export const portalMeApi = {
     api.post('/api/v1/portal/me/commitments', payload).then((r) => r.data),
   commitmentAcceptAgreement: (id: string) =>
     api.post(`/api/v1/portal/me/commitments/${id}/accept-agreement`).then((r) => r.data),
+  commitmentAgreementPreview: (id: string) =>
+    api.get<{ templateId: string | null; templateVersion: number | null; templateName: string | null; renderedText: string; isAlreadyAccepted: boolean }>(
+      `/api/v1/portal/me/commitments/${id}/agreement-preview`,
+    ).then((r) => r.data),
   fundTypes: (category: 'donation' | 'loan' = 'donation') =>
     api.get<PortalFundType[]>(`/api/v1/portal/me/fund-types`, { params: { category } }).then((r) => r.data),
   qarzanHasana: () => api.get<QhLoanRow[]>('/api/v1/portal/me/qarzan-hasana').then((r) => r.data),
@@ -270,7 +300,12 @@ export const portalMeApi = {
     api.get<FundEnrollmentDetail>(`/api/v1/portal/me/fund-enrollments/${id}`).then((r) => r.data),
   fundEnrollmentCreate: (payload: CreatePatronagePayload) =>
     api.post('/api/v1/portal/me/fund-enrollments', payload).then((r) => r.data),
-  guarantorInbox: () => api.get<GuarantorRequestRow[]>('/api/v1/portal/me/guarantor-inbox').then((r) => r.data),
+  guarantorInbox: () =>
+    api.get<GuarantorInboxRow[]>('/api/v1/portal/me/guarantor-inbox').then((r) => r.data),
+  guarantorAct: (consentId: string, decision: 'accept' | 'decline') =>
+    api.post(`/api/v1/portal/me/guarantor-inbox/${consentId}/${decision}`).then((r) => r.data),
+  searchMembers: (q: string) =>
+    api.get<Array<{ id: string; itsNumber: string; fullName: string }>>(`/api/v1/portal/me/members/search`, { params: { q } }).then((r) => r.data),
   events: () => api.get<EventRegistrationRow[]>('/api/v1/portal/me/events').then((r) => r.data),
 
   // Phase B - profile self-edit

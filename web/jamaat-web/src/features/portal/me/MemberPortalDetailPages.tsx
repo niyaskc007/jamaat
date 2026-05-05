@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   Card, Descriptions, Table, Tag, Typography, Empty, Alert, Button, Space, Skeleton,
   Form, Input, InputNumber, Select, DatePicker, Row, Col, message, Result, Progress,
+  Modal, Divider,
 } from 'antd';
 import {
   GiftOutlined, HeartOutlined, BankOutlined, DownloadOutlined, ArrowLeftOutlined,
@@ -16,6 +17,7 @@ import {
   type CreateCommitmentPayload, type CreatePatronagePayload,
 } from './portalMeApi';
 import { WorkflowStepper, qhWorkflow, commitmentWorkflow, patronageWorkflow } from './WorkflowStepper';
+import { MemberSearchSelect } from './MemberSearchSelect';
 
 // --- Shared header --------------------------------------------------------
 
@@ -137,10 +139,18 @@ export function MemberCommitmentDetailPage() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['portal-me-commitment', id], queryFn: () => portalMeApi.commitmentDetail(id), enabled: !!id });
 
+  const [agreementOpen, setAgreementOpen] = useState(false);
+  const previewQ = useQuery({
+    queryKey: ['portal-me-commitment-agreement-preview', id],
+    queryFn: () => portalMeApi.commitmentAgreementPreview(id),
+    enabled: !!id && agreementOpen,
+  });
+
   const accept = useMutation({
     mutationFn: () => portalMeApi.commitmentAcceptAgreement(id),
     onSuccess: () => {
       message.success('Agreement accepted. Your commitment is now active.');
+      setAgreementOpen(false);
       qc.invalidateQueries({ queryKey: ['portal-me-commitment', id] });
       qc.invalidateQueries({ queryKey: ['portal-me-commitments'] });
       qc.invalidateQueries({ queryKey: ['portal-me-dashboard'] });
@@ -163,18 +173,49 @@ export function MemberCommitmentDetailPage() {
       <WorkflowStepper title="Commitment workflow" {...commitmentWorkflow(c.status, c.hasAcceptedAgreement)} />
       {c.status === 1 /* Draft */ && (
         <Alert type="warning" showIcon className="jm-portal-dashboard-alert"
-          message="Action required: accept the agreement to activate."
+          message="Action required: review and accept the agreement to activate."
           description={
             <div>
-              <div>Review the schedule below. Once you accept, the first instalment falls due on {dayjs(c.startDate).format('DD MMM YYYY')}.</div>
+              <div>The first instalment falls due on {dayjs(c.startDate).format('DD MMM YYYY')}. Review the agreement before you accept.</div>
               <div className="jm-portal-upnext-cta">
-                <Button type="primary" loading={accept.isPending} onClick={() => accept.mutate()}>
-                  Accept agreement and activate
+                <Button type="primary" onClick={() => setAgreementOpen(true)}>
+                  Review and accept agreement
                 </Button>
               </div>
             </div>
           } />
       )}
+
+      <Modal
+        title="Commitment agreement"
+        open={agreementOpen}
+        onCancel={() => setAgreementOpen(false)}
+        width={720}
+        footer={[
+          <Button key="cancel" onClick={() => setAgreementOpen(false)}>Close</Button>,
+          <Button key="ok" type="primary" loading={accept.isPending}
+            disabled={previewQ.isLoading || !!previewQ.data?.isAlreadyAccepted}
+            onClick={() => accept.mutate()}>
+            I agree and accept
+          </Button>,
+        ]}>
+        {previewQ.isLoading ? <Skeleton active /> : previewQ.isError ? (
+          <Alert type="error" showIcon message="Couldn't load the agreement"
+            description={(previewQ.error as Error)?.message ?? ''} />
+        ) : previewQ.data ? (
+          <div>
+            {previewQ.data.templateName && (
+              <Typography.Text type="secondary">
+                Template: {previewQ.data.templateName}{previewQ.data.templateVersion ? ` v${previewQ.data.templateVersion}` : ''}
+              </Typography.Text>
+            )}
+            <pre className="jm-portal-agreement-text">{previewQ.data.renderedText}</pre>
+            <Alert type="info" showIcon
+              message="By clicking I agree and accept, you confirm the schedule below and bind yourself to this agreement."
+              description="A timestamped audit record (you, your IP, your browser, and this acceptance) is written to the commitment." />
+          </div>
+        ) : null}
+      </Modal>
 
       <Card className="jm-card">
         <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small">
@@ -434,8 +475,9 @@ type QhFormShape = {
   startDate: Dayjs; scheme: number;
   guarantor1MemberId: string; guarantor2MemberId: string;
   purpose: string; repaymentPlan: string;
+  sourceOfIncome?: string; otherObligations?: string;
   monthlyIncome?: number; monthlyExpenses?: number; monthlyExistingEmis?: number;
-  guarantorsAcknowledged: boolean;
+  goldAmount?: number; goldWeightGrams?: number; goldPurityKarat?: number; goldHeldAt?: string;
 };
 
 export function MemberQhSubmitPage() {
@@ -457,8 +499,15 @@ export function MemberQhSubmitPage() {
   const initial = useMemo<Partial<QhFormShape>>(() => ({
     currency: 'INR', scheme: 1, instalmentsRequested: 12,
     startDate: dayjs().add(7, 'day'),
-    guarantorsAcknowledged: false,
   }), []);
+
+  // Schemes have different supporting evidence: Mohammadi requires gold collateral details;
+  // Hussain is a free-form benevolent loan against guarantors only. Toggle the gold panel.
+  const scheme = Form.useWatch('scheme', form);
+  const guarantor1 = Form.useWatch('guarantor1MemberId', form);
+  const guarantor2 = Form.useWatch('guarantor2MemberId', form);
+  // Same person can't kafil both slots.
+  const sameGuarantor = !!guarantor1 && guarantor1 === guarantor2;
 
   function onFinish(v: QhFormShape) {
     submit.mutate({
@@ -466,15 +515,18 @@ export function MemberQhSubmitPage() {
       instalmentsRequested: v.instalmentsRequested,
       currency: v.currency,
       startDate: v.startDate.format('YYYY-MM-DD'),
-      guarantor1MemberId: v.guarantor1MemberId.trim(),
-      guarantor2MemberId: v.guarantor2MemberId.trim(),
+      guarantor1MemberId: v.guarantor1MemberId,
+      guarantor2MemberId: v.guarantor2MemberId,
       scheme: v.scheme,
+      goldAmount: v.scheme === 1 ? v.goldAmount ?? null : null,
       purpose: v.purpose,
       repaymentPlan: v.repaymentPlan,
+      sourceOfIncome: v.sourceOfIncome ?? null,
+      otherObligations: v.otherObligations ?? null,
       monthlyIncome: v.monthlyIncome ?? null,
       monthlyExpenses: v.monthlyExpenses ?? null,
       monthlyExistingEmis: v.monthlyExistingEmis ?? null,
-      guarantorsAcknowledged: !!v.guarantorsAcknowledged,
+      guarantorsAcknowledged: false,
     });
   }
 
@@ -483,9 +535,10 @@ export function MemberQhSubmitPage() {
       <DetailHeader icon={<BankOutlined />} title="New Qarzan Hasana request" backTo="/portal/me/qarzan-hasana" />
       <Alert type="info" showIcon className="jm-portal-dashboard-alert"
         message="Two members must agree to act as your kafil (guarantors) before this loan can be approved."
-        description="Enter their member IDs (Guid). After you submit, both guarantors will be asked to endorse via the portal." />
+        description="Search for them by name or ITS number. After you submit, both kafil will be notified and asked to endorse from their own portal." />
       <Card className="jm-card">
         <Form<QhFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish}>
+          <Divider orientation="left" plain>Loan details</Divider>
           <Row gutter={16}>
             <Col xs={24} md={8}>
               <Form.Item label="Amount requested" name="amountRequested"
@@ -505,10 +558,11 @@ export function MemberQhSubmitPage() {
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label="Scheme" name="scheme" rules={[{ required: true }]}>
+              <Form.Item label="Scheme" name="scheme" rules={[{ required: true }]}
+                tooltip="Mohammadi: against gold collateral. Hussain: against guarantors only.">
                 <Select options={[
-                  { value: 1, label: 'Mohammadi' },
-                  { value: 2, label: 'Hussain' },
+                  { value: 1, label: 'Mohammadi (against gold)' },
+                  { value: 2, label: 'Hussain (against kafil)' },
                   { value: 0, label: 'Other' },
                 ]} />
               </Form.Item>
@@ -518,28 +572,54 @@ export function MemberQhSubmitPage() {
                 <DatePicker className="jm-full-width" />
               </Form.Item>
             </Col>
+          </Row>
+
+          <Divider orientation="left" plain>Guarantors (Kafil)</Divider>
+          {sameGuarantor && (
+            <Alert type="error" showIcon className="jm-portal-dashboard-alert"
+              message="Guarantor 1 and Guarantor 2 cannot be the same person." />
+          )}
+          <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item label="Guarantor 1 — Member ID (Guid)" name="guarantor1MemberId"
-                rules={[{ required: true, message: 'Required.' }]}>
-                <Input placeholder="00000000-0000-0000-0000-000000000000" />
+              <Form.Item label="Guarantor 1 (Kafil)" name="guarantor1MemberId"
+                rules={[{ required: true, message: 'Pick a member.' }]}>
+                <MemberSearchSelect placeholder="Search by name or ITS" excludeId={guarantor2 ?? null} />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label="Guarantor 2 — Member ID (Guid)" name="guarantor2MemberId"
-                rules={[{ required: true, message: 'Required.' }]}>
-                <Input placeholder="00000000-0000-0000-0000-000000000000" />
+              <Form.Item label="Guarantor 2 (Kafil)" name="guarantor2MemberId"
+                rules={[{ required: true, message: 'Pick a member.' }]}>
+                <MemberSearchSelect placeholder="Search by name or ITS" excludeId={guarantor1 ?? null} />
               </Form.Item>
             </Col>
+          </Row>
+
+          <Divider orientation="left" plain>Borrower's case</Divider>
+          <Row gutter={16}>
             <Col xs={24}>
               <Form.Item label="Purpose" name="purpose" rules={[{ required: true, min: 5 }]}>
-                <Input.TextArea rows={2} placeholder="What is the loan for?" />
+                <Input.TextArea rows={2} placeholder="What is the loan for? (school fees, medical, business expansion…)" />
               </Form.Item>
             </Col>
             <Col xs={24}>
               <Form.Item label="Repayment plan" name="repaymentPlan" rules={[{ required: true, min: 5 }]}>
-                <Input.TextArea rows={2} placeholder="How will you repay each instalment?" />
+                <Input.TextArea rows={2} placeholder="How will you repay each instalment? (salary, business income, family support…)" />
               </Form.Item>
             </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="Source of income (optional)" name="sourceOfIncome">
+                <Input placeholder="Salary, business, freelance, rental…" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="Other obligations (optional)" name="otherObligations">
+                <Input placeholder="Other loans, EMIs, family commitments…" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider orientation="left" plain>Cashflow (helps the approver)</Divider>
+          <Row gutter={16}>
             <Col xs={24} md={8}>
               <Form.Item label="Monthly income" name="monthlyIncome">
                 <InputNumber<number> className="jm-full-width" min={0} />
@@ -556,9 +636,38 @@ export function MemberQhSubmitPage() {
               </Form.Item>
             </Col>
           </Row>
+
+          {scheme === 1 && (
+            <>
+              <Divider orientation="left" plain>Gold collateral (Mohammadi only)</Divider>
+              <Row gutter={16}>
+                <Col xs={24} md={6}>
+                  <Form.Item label="Gold value" name="goldAmount">
+                    <InputNumber<number> className="jm-full-width" min={0} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Form.Item label="Gold weight (g)" name="goldWeightGrams">
+                    <InputNumber<number> className="jm-full-width" min={0} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Form.Item label="Purity (karat)" name="goldPurityKarat">
+                    <InputNumber<number> className="jm-full-width" min={0} max={24} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Form.Item label="Held at" name="goldHeldAt">
+                    <Input placeholder="Locker / safe" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </>
+          )}
           <Form.Item>
             <Space>
-              <Button type="primary" icon={<PlusOutlined />} htmlType="submit" loading={submit.isPending}>Submit application</Button>
+              <Button type="primary" icon={<PlusOutlined />} htmlType="submit"
+                loading={submit.isPending} disabled={sameGuarantor}>Submit application</Button>
               <Button onClick={() => navigate('/portal/me/qarzan-hasana')}>Cancel</Button>
             </Space>
           </Form.Item>

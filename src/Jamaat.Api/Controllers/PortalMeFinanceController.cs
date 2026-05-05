@@ -126,6 +126,34 @@ public sealed class PortalMeFinanceController(
         return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }
 
+    /// Render the agreement text for a Draft commitment WITHOUT accepting it. The portal
+    /// shows this text in a modal so the member can read what they're agreeing to before
+    /// they click Accept. Same template-resolution path as <see cref="CommitmentAcceptAgreement"/>.
+    [HttpGet("commitments/{id:guid}/agreement-preview")]
+    public async Task<IActionResult> CommitmentAgreementPreview(Guid id, CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return NotFound();
+        var c = await db.Commitments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (c is null || c.MemberId != memberId.Value) return NotFound();
+
+        var tpl = await db.CommitmentAgreementTemplates.AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderByDescending(t => t.Version)
+            .FirstOrDefaultAsync(ct);
+        var rendered = tpl is null
+            ? $"I, {c.PartyNameSnapshot}, accept the commitment {c.Code} for {c.FundNameSnapshot} totalling {c.TotalAmount:N2} {c.Currency} over {c.NumberOfInstallments} installments starting {c.StartDate:dd MMM yyyy}."
+            : RenderTemplate(tpl.BodyMarkdown, c);
+        return Ok(new
+        {
+            templateId = tpl?.Id,
+            templateVersion = tpl?.Version,
+            templateName = tpl?.Name,
+            renderedText = rendered,
+            isAlreadyAccepted = c.Status != Domain.Enums.CommitmentStatus.Draft,
+        });
+    }
+
     /// Member-self acceptance of a Draft commitment's agreement, moving it Draft → Active.
     /// Mirrors the operator flow but resolves the agreement template server-side (members don't
     /// have access to template master-data) and stamps method=Self instead of Admin so the audit
