@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Card, Form, Input, InputNumber, Select, Button, Space, DatePicker, Row, Col, Divider,
   AutoComplete, App as AntdApp, Alert, Tag, Tooltip,
@@ -528,8 +528,10 @@ export function NewReceiptPage() {
                   const showNoEnrollmentCue = !!selectedMember && !!isDonationFund && !hasActiveEnrollment
                     && !ln.commitmentId && !ln.qarzanHasanaLoanId && !ln.fundEnrollmentId;
                   return (
-                    <>
-                      <tr key={ln._id} style={{ borderBlockEnd: ln.commitmentId ? 'none' : '1px solid var(--jm-border)' }}>
+                    // Fragment carries the React key because it's the direct child of map().
+                    // The inner <tr> + cue-banner <tr> share the same key via this wrapper.
+                    <Fragment key={ln._id}>
+                      <tr style={{ borderBlockEnd: ln.commitmentId ? 'none' : '1px solid var(--jm-border)' }}>
                         <td style={{ padding: 8 }}>
                           <Select
                             style={{ inlineSize: '100%' }} placeholder="Select fund"
@@ -663,7 +665,7 @@ export function NewReceiptPage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
                 <tr>

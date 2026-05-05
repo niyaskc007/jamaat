@@ -2,7 +2,6 @@
 import { Button, Card, Input, Select, Table, Tag, Empty, Space, App as AntdApp, Drawer, Form, DatePicker, Dropdown, Switch, Modal } from 'antd';
 import type { TableProps, MenuProps } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, MoreOutlined, EditOutlined, DeleteOutlined, StarOutlined, ScanOutlined, SettingOutlined, CalendarOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
@@ -15,7 +14,6 @@ import { useEventCategories, categoryLabelOf } from './useEventCategories';
 
 export function EventsPage() {
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const { hasPermission } = useAuth();
   const canManage = hasPermission('event.manage');
   const { message, modal } = AntdApp.useApp();
@@ -48,7 +46,10 @@ export function EventsPage() {
         {row.eventDateHijri && <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>{row.eventDateHijri}</div>}
       </div>
     ) },
-    { title: 'Name', dataIndex: 'name', render: (v: string, row) => <div><a style={{ fontWeight: 500, color: 'var(--jm-gray-900)' }} onClick={() => navigate(`/events/${row.id}`)}>{v}</a>{row.nameArabic && <div dir="rtl" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.nameArabic}</div>}</div> },
+    // Event detail is a deep, multi-tab page (branding / schedule / registrations / page
+     // designer). Opening it in a new tab keeps the events list as the operator's stable
+     // home-base so they don't lose their search + pagination context when drilling in.
+    { title: 'Name', dataIndex: 'name', render: (v: string, row) => <div><a style={{ fontWeight: 500, color: 'var(--jm-gray-900)' }} href={`/events/${row.id}`} target="_blank" rel="noopener noreferrer">{v}</a>{row.nameArabic && <div dir="rtl" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{row.nameArabic}</div>}</div> },
     { title: 'Category', dataIndex: 'category', width: 140,
       render: (c: EventCategory, row) => <Tag color="blue">{row.categoryName ?? categoryLabelOf(categoriesQ.data, c) ?? EventCategoryLabel[c] ?? `Category ${c}`}</Tag> },
     { title: 'Place', dataIndex: 'place', width: 200, render: (v: string | null) => v ?? '-' },
@@ -59,7 +60,8 @@ export function EventsPage() {
       key: 'actions', width: 60,
       render: (_: unknown, row) => {
         const items: MenuProps['items'] = [
-          { key: 'manage', icon: <SettingOutlined />, label: 'Manage event', onClick: () => navigate(`/events/${row.id}`) },
+          { key: 'manage', icon: <SettingOutlined />, label: 'Manage event',
+            onClick: () => window.open(`/events/${row.id}`, '_blank', 'noopener,noreferrer') },
           { key: 'scan', icon: <ScanOutlined />, label: 'Scan attendance', onClick: () => setScanOpen(row) },
           { key: 'edit', icon: <EditOutlined />, label: 'Quick edit', onClick: () => { setEditing(row); setDrawerOpen(true); } },
           { type: 'divider' },
@@ -107,9 +109,11 @@ export function EventsPage() {
           <Button icon={<ReloadOutlined />} onClick={() => refetch()} loading={isFetching && !isLoading} />
         </div>
         <Table rowKey="id" size="middle" loading={isLoading} columns={cols} dataSource={data?.items ?? []}
-          // Whole-row click navigates to the event detail / management page.
+          // Whole-row click opens the event detail in a new tab so the operator keeps the
+          // events-list context (search + page) instead of being thrown into a deep multi-tab
+          // page they have to "Back" out of.
           onRow={(row) => ({
-            onClick: () => navigate(`/events/${(row as { id: string }).id}`),
+            onClick: () => window.open(`/events/${(row as { id: string }).id}`, '_blank', 'noopener,noreferrer'),
             style: { cursor: 'pointer' },
           })}
           onChange={(p) => setPage(p.current ?? 1)}
