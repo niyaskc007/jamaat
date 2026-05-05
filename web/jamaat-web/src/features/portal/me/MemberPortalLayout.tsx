@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 import { authStore } from '../../../shared/auth/authStore';
 import { Logo } from '../../../shared/ui/Logo';
 import { LanguageSwitcher } from '../../../shared/i18n/LanguageSwitcher';
+import { InstallPrompt } from '../../../shared/pwa/InstallPrompt';
+import { OfflineBanner } from '../../../shared/pwa/OfflineBanner';
 
 /// Self-service portal shell for members. Distinct from the operator AppLayout.
 /// Visual chrome (sider brand, header bar, avatar pill, content padding) is fully styled
@@ -88,7 +90,9 @@ export function MemberPortalLayout() {
         </Layout.Header>
 
         <Layout.Content className="jm-portal-content">
+          <OfflineBanner />
           <Outlet />
+          <InstallPrompt />
         </Layout.Content>
       </Layout>
     </Layout>

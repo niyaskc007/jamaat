@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# vite-plugin-pwa dev cache (sw + workbox) when devOptions.enabled=true
+dev-dist
 *.local
 
 # Editor directories and files
