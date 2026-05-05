@@ -42,6 +42,12 @@ public sealed class MemberLoginProvisioningService(
             MustChangePassword = true,
             PreferredLanguage = "en",
             PhoneE164 = member.Phone,
+            // CRITICAL: this provisioning path is exclusively for member self-service logins.
+            // The default enum value is Operator (=0); without explicitly setting Member here,
+            // the JWT carries user_type=Operator and the SPA routes the user to /dashboard
+            // instead of /portal/me. The seeder's ReconcileUserTypesAsync would correct this
+            // on next API restart, but we shouldn't rely on that grace period for new joiners.
+            UserType = UserType.Member,
         };
 
         // Create with a placeholder password; TemporaryPasswordService rotates it immediately.
