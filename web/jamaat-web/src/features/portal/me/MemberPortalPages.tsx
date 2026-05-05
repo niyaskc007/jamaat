@@ -42,12 +42,17 @@ export function MemberContributionsPage() {
           locale={{ emptyText: <Empty description="No contributions on record." /> }}
           columns={[
             { title: 'Date', dataIndex: 'receiptDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
-            { title: 'Receipt #', dataIndex: 'receiptNumber', width: 140, render: (v: string | null) => <span className="jm-tnum">{v ?? <em className="jm-muted-em">pending</em>}</span> },
+            { title: 'Receipt #', dataIndex: 'receiptNumber', width: 140,
+              render: (v: string | null, r: ContributionRow) => v
+                ? <Link to={`/portal/me/contributions/${r.id}`} className="jm-tnum">{v}</Link>
+                : <em className="jm-muted-em">pending</em> },
             { title: 'Amount', key: 'amt', align: 'end', width: 160,
               render: (_, r: ContributionRow) => <span className="jm-tnum jm-num-strong">{r.amount.toLocaleString()} {r.currency}</span> },
             { title: 'Status', dataIndex: 'status', width: 130,
               render: (s: number) => <Tag color={s === 2 ? 'green' : s === 1 ? 'gold' : 'default'}>{RECEIPT_STATUS[s] ?? s}</Tag> },
             { title: 'Notes', dataIndex: 'notes', render: (v: string | null) => v ?? '-' },
+            { title: '', key: 'a', width: 60,
+              render: (_, r: ContributionRow) => <Link to={`/portal/me/contributions/${r.id}`}>Open</Link> },
           ]}
         />
       </Card>
@@ -82,7 +87,8 @@ export function MemberCommitmentsPage() {
           pagination={{ pageSize: 20 }}
           locale={{ emptyText: <Empty description="No commitments yet." /> }}
           columns={[
-            { title: 'Code', dataIndex: 'code', width: 140, render: (v: string) => <span className="jm-tnum">{v}</span> },
+            { title: 'Code', dataIndex: 'code', width: 140,
+              render: (v: string, r: CommitmentRow) => <Link to={`/portal/me/commitments/${r.id}`} className="jm-tnum">{v}</Link> },
             { title: 'Fund', dataIndex: 'fundNameSnapshot' },
             { title: 'Total', key: 'total', align: 'end', width: 140,
               render: (_, r: CommitmentRow) => <span className="jm-tnum">{r.totalAmount.toLocaleString()} {r.currency}</span> },
@@ -92,6 +98,8 @@ export function MemberCommitmentsPage() {
             { title: 'Started', dataIndex: 'startDate', width: 130, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
             { title: 'Status', dataIndex: 'status', width: 130,
               render: (s: number) => <Tag color={COMMIT_STATUS[s]?.color}>{COMMIT_STATUS[s]?.label ?? s}</Tag> },
+            { title: '', key: 'a', width: 60,
+              render: (_, r: CommitmentRow) => <Link to={`/portal/me/commitments/${r.id}`}>Open</Link> },
           ]}
         />
       </Card>
@@ -123,7 +131,7 @@ export function MemberQhPage() {
     <SectionLayout
       icon={<BankOutlined />} title="Qarzan Hasana"
       intro="Your existing Qarzan Hasana applications and loans. New requests go through the standard L1 + L2 approval workflow."
-      action={canRequest ? <Link to="/qarzan-hasana/new"><Button type="primary" icon={<PlusOutlined />}>Request a loan</Button></Link> : undefined}
+      action={canRequest ? <Link to="/portal/me/qarzan-hasana/new"><Button type="primary" icon={<PlusOutlined />}>Request a loan</Button></Link> : undefined}
     >
       <Card className="jm-card" styles={{ body: { padding: 0 } }}>
         <Table<QhLoanRow>
@@ -131,7 +139,8 @@ export function MemberQhPage() {
           pagination={{ pageSize: 20 }}
           locale={{ emptyText: <Empty description="No QH applications yet." /> }}
           columns={[
-            { title: 'Loan #', dataIndex: 'code', width: 140, render: (v: string) => <span className="jm-tnum">{v}</span> },
+            { title: 'Loan #', dataIndex: 'code', width: 140,
+              render: (v: string, r: QhLoanRow) => <Link to={`/portal/me/qarzan-hasana/${r.id}`} className="jm-tnum">{v}</Link> },
             { title: 'Started', dataIndex: 'startDate', width: 130, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
             { title: 'Requested', key: 'req', align: 'end', width: 140,
               render: (_, r: QhLoanRow) => <span className="jm-tnum">{r.amountRequested.toLocaleString()} {r.currency}</span> },
@@ -142,6 +151,8 @@ export function MemberQhPage() {
             { title: 'Installments', dataIndex: 'installmentCount', width: 120 },
             { title: 'Status', dataIndex: 'status', width: 130,
               render: (s: number) => <Tag color={QH_STATUS[s]?.color}>{QH_STATUS[s]?.label ?? s}</Tag> },
+            { title: '', key: 'a', width: 60,
+              render: (_, r: QhLoanRow) => <Link to={`/portal/me/qarzan-hasana/${r.id}`}>Open</Link> },
           ]}
         />
       </Card>

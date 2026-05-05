@@ -1,0 +1,324 @@
+using System.Security.Claims;
+using Jamaat.Application.Commitments;
+using Jamaat.Application.FundEnrollments;
+using Jamaat.Application.Persistence;
+using Jamaat.Application.QarzanHasana;
+using Jamaat.Application.Receipts;
+using Jamaat.Contracts.QarzanHasana;
+using Jamaat.Domain.Enums;
+using Jamaat.Domain.ValueObjects;
+using Jamaat.Infrastructure.Identity;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Jamaat.Api.Controllers;
+
+/// Portal "finance" controller - extends the basic list endpoints in <see cref="PortalMeController"/>
+/// with detail views, downloads, member-scoped fund enrollments (patronages), member self-submit
+/// for Qarzan Hasana, and a real KPI dashboard. Every endpoint resolves the current member from
+/// the JWT and double-checks ownership before returning service-layer data, so even with a stolen
+/// JWT a member can never read another member's records through this controller.
+[ApiController]
+[Authorize(Policy = "portal.access")]
+[Route("api/v1/portal/me")]
+public sealed class PortalMeFinanceController(
+    UserManager<ApplicationUser> users,
+    JamaatDbContextFacade db,
+    IReceiptService receiptSvc,
+    ICommitmentService commitmentSvc,
+    IQarzanHasanaService qhSvc,
+    IFundEnrollmentService fundEnrollmentSvc) : ControllerBase
+{
+    // ----- Receipts -----------------------------------------------------------
+
+    /// Receipt detail for the current member. Wraps <see cref="IReceiptService.GetAsync"/>
+    /// after asserting the receipt belongs to me; otherwise 404.
+    [HttpGet("contributions/{id:guid}")]
+    public async Task<IActionResult> ContributionDetail(Guid id, CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return NotFound();
+        var owns = await db.Receipts.AsNoTracking()
+            .AnyAsync(r => r.Id == id && r.MemberId == memberId.Value, ct);
+        if (!owns) return NotFound();
+        var r = await receiptSvc.GetAsync(id, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
+    /// Streams the receipt PDF (a "duplicate copy" - reprint=true, so the rendered PDF carries
+    /// the standard reprint banner and we log it via the same path operators use).
+    [HttpGet("contributions/{id:guid}/pdf")]
+    public async Task<IActionResult> ContributionPdf(Guid id, CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return NotFound();
+        var owns = await db.Receipts.AsNoTracking()
+            .AnyAsync(r => r.Id == id && r.MemberId == memberId.Value, ct);
+        if (!owns) return NotFound();
+        var r = await receiptSvc.RenderPdfAsync(id, reprint: true, ct);
+        if (!r.IsSuccess) return ErrorMapper.ToActionResult(this, r.Error);
+        return File(r.Value, "application/pdf", $"receipt-{id}.pdf");
+    }
+
+    // ----- Commitments --------------------------------------------------------
+
+    [HttpGet("commitments/{id:guid}")]
+    public async Task<IActionResult> CommitmentDetail(Guid id, CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return NotFound();
+        var owns = await db.Commitments.AsNoTracking()
+            .AnyAsync(c => c.Id == id && c.MemberId == memberId.Value, ct);
+        if (!owns) return NotFound();
+        var r = await commitmentSvc.GetAsync(id, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
+    // ----- Qarzan Hasana ------------------------------------------------------
+
+    [HttpGet("qarzan-hasana/{id:guid}")]
+    public async Task<IActionResult> QhDetail(Guid id, CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return NotFound();
+        var owns = await db.QarzanHasanaLoans.AsNoTracking()
+            .AnyAsync(l => l.Id == id && l.MemberId == memberId.Value, ct);
+        if (!owns) return NotFound();
+        var r = await qhSvc.GetAsync(id, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
+    /// Self-submit a Qarzan Hasana application from the member portal. The body is the same
+    /// CreateQarzanHasanaDto that operators post, BUT we override <c>MemberId</c> to the current
+    /// signed-in member so a member can never apply on behalf of someone else.
+    [HttpPost("qarzan-hasana")]
+    [Authorize(Policy = "portal.qh.request")]
+    public async Task<IActionResult> QhCreate([FromBody] CreateQarzanHasanaDto dto, CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return BadRequest(new { error = "no_member_link", detail = "Sign-in is not linked to a member record." });
+
+        // Force the borrower to be the current member regardless of what the client sent.
+        var safe = dto with { MemberId = memberId.Value };
+        var r = await qhSvc.CreateDraftAsync(safe, ct);
+        if (!r.IsSuccess) return ErrorMapper.ToActionResult(this, r.Error);
+
+        // Auto-submit so the application immediately enters L1 review (operators do this in
+        // two clicks; a member shouldn't have to come back to a separate page to confirm).
+        var submit = await qhSvc.SubmitAsync(r.Value.Id, ct);
+        return submit.IsSuccess ? Ok(submit.Value) : ErrorMapper.ToActionResult(this, submit.Error);
+    }
+
+    // ----- Fund enrollments (patronages) -------------------------------------
+
+    /// List the current member's fund enrollments / patronages (active + history).
+    [HttpGet("fund-enrollments")]
+    public async Task<IActionResult> FundEnrollments(CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return Ok(Array.Empty<object>());
+        // FundEnrollment doesn't snapshot the fund-type name so we join the FundTypes table
+        // for display - cheap because the set is small (one row per fund type).
+        var rows = await db.FundEnrollments.AsNoTracking()
+            .Where(e => e.MemberId == memberId.Value)
+            .OrderByDescending(e => e.StartDate)
+            .Join(db.FundTypes.AsNoTracking(), e => e.FundTypeId, ft => ft.Id, (e, ft) => new
+            {
+                e.Id, e.Code, e.FundTypeId, FundTypeName = ft.NameEnglish, FundTypeCode = ft.Code,
+                e.SubType, e.Recurrence, e.StartDate, e.EndDate, e.Status, e.Notes,
+                e.CreatedAtUtc,
+            })
+            .ToListAsync(ct);
+        return Ok(rows);
+    }
+
+    [HttpGet("fund-enrollments/{id:guid}")]
+    public async Task<IActionResult> FundEnrollmentDetail(Guid id, CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return NotFound();
+        var owns = await db.FundEnrollments.AsNoTracking()
+            .AnyAsync(e => e.Id == id && e.MemberId == memberId.Value, ct);
+        if (!owns) return NotFound();
+        var detail = await fundEnrollmentSvc.GetAsync(id, ct);
+        if (!detail.IsSuccess) return ErrorMapper.ToActionResult(this, detail.Error);
+        var receipts = await fundEnrollmentSvc.ListReceiptsAsync(id, ct);
+        return Ok(new { Enrollment = detail.Value, Receipts = receipts.IsSuccess ? receipts.Value : Array.Empty<PatronageReceiptDto>() });
+    }
+
+    // ----- Dashboard ----------------------------------------------------------
+
+    /// One-shot KPI bundle for the member home screen. Cheap aggregate queries; computed
+    /// on demand because materializing a per-member rollup table for ~all the moving pieces
+    /// (receipts/commitments/QH/guarantor inbox/upcoming installments) would be premature.
+    [HttpGet("dashboard")]
+    public async Task<IActionResult> Dashboard(CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null)
+        {
+            return Ok(new MemberDashboardDto(
+                YtdContributions: 0, YtdReceiptCount: 0, Currency: "INR",
+                ActiveCommitments: 0, CommitmentOutstanding: 0,
+                ActiveQhLoans: 0, QhOutstanding: 0,
+                PendingGuarantorRequests: 0, PendingChangeRequests: 0,
+                UpcomingEventCount: 0,
+                NextInstallment: null,
+                RecentContributions: Array.Empty<DashboardContributionDto>(),
+                ActiveCommitmentsList: Array.Empty<DashboardCommitmentDto>()));
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var startOfYear = new DateOnly(today.Year, 1, 1);
+
+        // YTD confirmed contributions (include returnable too - they still represent member activity).
+        var ytdAgg = await db.Receipts.AsNoTracking()
+            .Where(r => r.MemberId == memberId.Value
+                && r.Status == ReceiptStatus.Confirmed
+                && r.ReceiptDate >= startOfYear)
+            .GroupBy(r => 1)
+            .Select(g => new { Total = g.Sum(x => x.AmountTotal), Count = g.Count() })
+            .FirstOrDefaultAsync(ct);
+
+        var primaryCurrency = await db.Receipts.AsNoTracking()
+            .Where(r => r.MemberId == memberId.Value && r.Status == ReceiptStatus.Confirmed)
+            .OrderByDescending(r => r.ReceiptDate)
+            .Select(r => r.Currency)
+            .FirstOrDefaultAsync(ct) ?? "INR";
+
+        var commitmentRows = await db.Commitments.AsNoTracking()
+            .Where(c => c.MemberId == memberId.Value && c.Status == CommitmentStatus.Active)
+            .Select(c => new { c.Id, c.Code, c.FundNameSnapshot, c.TotalAmount, c.PaidAmount, c.Currency })
+            .ToListAsync(ct);
+
+        var qhRows = await db.QarzanHasanaLoans.AsNoTracking()
+            .Where(l => l.MemberId == memberId.Value
+                && (l.Status == QarzanHasanaStatus.Disbursed || l.Status == QarzanHasanaStatus.Active))
+            .Select(l => new { l.AmountDisbursed, l.AmountRepaid })
+            .ToListAsync(ct);
+
+        var pendingGuarantor = await db.QarzanHasanaGuarantorConsents.AsNoTracking()
+            .Where(g => g.GuarantorMemberId == memberId.Value && g.Status == QhGuarantorConsentStatus.Pending)
+            .CountAsync(ct);
+
+        var pendingChange = await db.MemberChangeRequests.AsNoTracking()
+            .Where(c => c.MemberId == memberId.Value && c.Status == MemberChangeRequestStatus.Pending)
+            .CountAsync(ct);
+
+        var upcomingEvents = await db.EventRegistrations.AsNoTracking()
+            .Where(r => r.MemberId == memberId.Value
+                && (r.Status == RegistrationStatus.Confirmed || r.Status == RegistrationStatus.Pending))
+            .CountAsync(ct);
+
+        // Next due installment across all active commitments. EF can't easily project owned types
+        // through a join, so pull the active commitment IDs first and then look at their installments.
+        var activeCommitmentIds = commitmentRows.Select(c => c.Id).ToList();
+        DashboardInstallmentDto? next = null;
+        if (activeCommitmentIds.Count > 0)
+        {
+            var loaded = await db.Commitments.AsNoTracking()
+                .Where(c => activeCommitmentIds.Contains(c.Id))
+                .Select(c => new
+                {
+                    c.Id, c.Code, c.FundNameSnapshot, c.Currency,
+                    Pending = c.Installments
+                        .Where(i => i.PaidAmount < i.ScheduledAmount && i.Status != InstallmentStatus.Waived)
+                        .OrderBy(i => i.DueDate)
+                        .Select(i => new { i.InstallmentNo, i.DueDate, i.ScheduledAmount, i.PaidAmount })
+                        .FirstOrDefault(),
+                })
+                .ToListAsync(ct);
+            var earliest = loaded
+                .Where(x => x.Pending != null)
+                .OrderBy(x => x.Pending!.DueDate)
+                .FirstOrDefault();
+            if (earliest != null)
+            {
+                next = new DashboardInstallmentDto(
+                    earliest.Id, earliest.Code, earliest.FundNameSnapshot,
+                    earliest.Pending!.InstallmentNo, earliest.Pending.DueDate,
+                    earliest.Pending.ScheduledAmount - earliest.Pending.PaidAmount, earliest.Currency);
+            }
+        }
+
+        var recent = await db.Receipts.AsNoTracking()
+            .Where(r => r.MemberId == memberId.Value && r.Status == ReceiptStatus.Confirmed)
+            .OrderByDescending(r => r.ReceiptDate)
+            .Take(5)
+            .Select(r => new DashboardContributionDto(
+                r.Id, r.ReceiptNumber, r.ReceiptDate, r.AmountTotal, r.Currency))
+            .ToListAsync(ct);
+
+        var activeCommitmentDtos = commitmentRows
+            .OrderBy(c => c.TotalAmount - c.PaidAmount > 0 ? 0 : 1)
+            .Take(5)
+            .Select(c => new DashboardCommitmentDto(
+                c.Id, c.Code, c.FundNameSnapshot,
+                c.TotalAmount, c.PaidAmount, c.TotalAmount - c.PaidAmount, c.Currency))
+            .ToList();
+
+        var dto = new MemberDashboardDto(
+            YtdContributions: ytdAgg?.Total ?? 0m,
+            YtdReceiptCount: ytdAgg?.Count ?? 0,
+            Currency: primaryCurrency,
+            ActiveCommitments: commitmentRows.Count,
+            CommitmentOutstanding: commitmentRows.Sum(c => c.TotalAmount - c.PaidAmount),
+            ActiveQhLoans: qhRows.Count,
+            QhOutstanding: qhRows.Sum(q => q.AmountDisbursed - q.AmountRepaid),
+            PendingGuarantorRequests: pendingGuarantor,
+            PendingChangeRequests: pendingChange,
+            UpcomingEventCount: upcomingEvents,
+            NextInstallment: next,
+            RecentContributions: recent,
+            ActiveCommitmentsList: activeCommitmentDtos);
+        return Ok(dto);
+    }
+
+    // ---- helpers -----------------------------------------------------------
+
+    private async Task<(ApplicationUser? User, Guid? MemberId)> CurrentMemberAsync(CancellationToken ct)
+    {
+        var sub = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+        if (!Guid.TryParse(sub, out var userId)) return (null, null);
+        var user = await users.FindByIdAsync(userId.ToString());
+        if (user is null) return (null, null);
+        Guid? memberId = null;
+        if (!string.IsNullOrWhiteSpace(user.ItsNumber) && ItsNumber.TryCreate(user.ItsNumber!, out var its))
+        {
+            memberId = await db.Members.AsNoTracking()
+                .Where(m => m.ItsNumber == its && !m.IsDeleted)
+                .Select(m => (Guid?)m.Id)
+                .FirstOrDefaultAsync(ct);
+        }
+        return (user, memberId);
+    }
+}
+
+// Dashboard payload. Lives next to the controller because it is bespoke to /portal/me/dashboard.
+public sealed record MemberDashboardDto(
+    decimal YtdContributions,
+    int YtdReceiptCount,
+    string Currency,
+    int ActiveCommitments,
+    decimal CommitmentOutstanding,
+    int ActiveQhLoans,
+    decimal QhOutstanding,
+    int PendingGuarantorRequests,
+    int PendingChangeRequests,
+    int UpcomingEventCount,
+    DashboardInstallmentDto? NextInstallment,
+    IReadOnlyList<DashboardContributionDto> RecentContributions,
+    IReadOnlyList<DashboardCommitmentDto> ActiveCommitmentsList);
+
+public sealed record DashboardInstallmentDto(
+    Guid CommitmentId, string CommitmentCode, string FundName,
+    int InstallmentNo, DateOnly DueDate, decimal AmountDue, string Currency);
+
+public sealed record DashboardContributionDto(
+    Guid Id, string? ReceiptNumber, DateOnly ReceiptDate, decimal Amount, string Currency);
+
+public sealed record DashboardCommitmentDto(
+    Guid Id, string Code, string FundName,
+    decimal TotalAmount, decimal PaidAmount, decimal RemainingAmount, string Currency);

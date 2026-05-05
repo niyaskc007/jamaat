@@ -1,4 +1,5 @@
 import { api } from '../../../shared/api/client';
+import { openAuthenticatedPdf } from '../../../shared/api/pdf';
 
 export type Me = {
   id: string; userName: string; fullName: string; email?: string | null;
@@ -82,11 +83,170 @@ export type NotificationPrefs = {
   preferredChannel: 'Email' | 'Sms' | 'WhatsApp' | null;
 };
 
+// --- Detail / dashboard / patronage shapes (Phase J: gap-fill) -----------
+
+/// Mirrors the backend ReceiptDto / ReceiptLineDto (fields the portal cares about).
+export type PortalReceipt = {
+  id: string; receiptNumber: string | null; receiptDate: string;
+  memberId: string; itsNumberSnapshot: string; memberNameSnapshot: string;
+  amountTotal: number; currency: string; baseCurrency: string; baseAmountTotal: number;
+  paymentMode: number; chequeNumber: string | null; chequeDate: string | null;
+  bankAccountName: string | null; paymentReference: string | null;
+  remarks: string | null; status: number;
+  confirmedAtUtc: string | null; confirmedByUserName: string | null;
+  createdAtUtc: string;
+  intention: number;
+  niyyathNote: string | null;
+  maturityDate: string | null;
+  amountReturned: number;
+  drawnOnBank: string | null;
+  lines: Array<{
+    id: string; lineNo: number; fundTypeId: string; fundTypeCode: string; fundTypeName: string;
+    amount: number; purpose: string | null; periodReference: string | null;
+    commitmentCode?: string | null; installmentNo?: number | null;
+    fundEnrollmentCode?: string | null;
+    qarzanHasanaLoanCode?: string | null; qarzanHasanaInstallmentNo?: number | null;
+  }>;
+};
+
+export type CommitmentInstallment = {
+  id: string; installmentNo: number; dueDate: string;
+  scheduledAmount: number; paidAmount: number; remainingAmount: number;
+  lastPaymentDate: string | null; status: number;
+  waiverReason: string | null;
+  lastPaymentReceiptId: string | null;
+  lastPaymentReceiptNumber: string | null;
+};
+
+export type PortalCommitmentDetail = {
+  commitment: {
+    id: string; code: string; partyName: string;
+    fundTypeName: string; currency: string;
+    totalAmount: number; paidAmount: number; remainingAmount: number; progressPercent: number;
+    frequency: number; numberOfInstallments: number;
+    startDate: string; endDate: string | null;
+    status: number; notes: string | null;
+    hasAcceptedAgreement: boolean; agreementAcceptedAtUtc: string | null;
+  };
+  installments: CommitmentInstallment[];
+  agreementText: string | null;
+};
+
+export type QhInstallment = {
+  id: string; installmentNo: number; dueDate: string;
+  scheduledAmount: number; paidAmount: number; remainingAmount: number;
+  lastPaymentDate: string | null; status: number;
+  waiverReason: string | null;
+};
+
+export type PortalQhDetail = {
+  loan: {
+    id: string; code: string;
+    memberName: string; memberItsNumber: string;
+    scheme: number;
+    amountRequested: number; amountApproved: number; amountDisbursed: number;
+    amountRepaid: number; amountOutstanding: number;
+    instalmentsRequested: number; instalmentsApproved: number;
+    currency: string;
+    startDate: string; endDate: string | null;
+    status: number;
+    guarantor1Name: string; guarantor2Name: string;
+    rejectionReason: string | null;
+    progressPercent: number;
+    purpose: string | null;
+    repaymentPlan: string | null;
+    monthlyIncome: number | null;
+    monthlyExpenses: number | null;
+    disbursedOn: string | null;
+    level1ApprovedAtUtc: string | null;
+    level2ApprovedAtUtc: string | null;
+  };
+  installments: QhInstallment[];
+};
+
+export type CreateQhPayload = {
+  amountRequested: number;
+  instalmentsRequested: number;
+  currency: string;
+  startDate: string;
+  guarantor1MemberId: string;
+  guarantor2MemberId: string;
+  scheme: number;
+  goldAmount?: number | null;
+  purpose?: string | null;
+  repaymentPlan?: string | null;
+  sourceOfIncome?: string | null;
+  otherObligations?: string | null;
+  monthlyIncome?: number | null;
+  monthlyExpenses?: number | null;
+  monthlyExistingEmis?: number | null;
+  guarantorsAcknowledged?: boolean;
+};
+
+export type FundEnrollmentRow = {
+  id: string; code: string;
+  fundTypeId: string; fundTypeName: string; fundTypeCode: string;
+  subType: string | null;
+  recurrence: number; status: number;
+  startDate: string; endDate: string | null;
+  notes: string | null;
+  createdAtUtc: string;
+};
+
+export type PatronageReceipt = {
+  receiptId: string; receiptNumber: string | null;
+  receiptDate: string; amount: number; currency: string;
+  status: number;
+};
+
+export type FundEnrollmentDetail = {
+  enrollment: {
+    id: string; code: string;
+    fundTypeName: string; fundTypeCode: string;
+    subType: string | null;
+    recurrence: number; status: number;
+    startDate: string; endDate: string | null;
+    notes: string | null;
+    totalCollected: number; receiptCount: number;
+    createdAtUtc: string;
+  };
+  receipts: PatronageReceipt[];
+};
+
+export type MemberDashboard = {
+  ytdContributions: number; ytdReceiptCount: number; currency: string;
+  activeCommitments: number; commitmentOutstanding: number;
+  activeQhLoans: number; qhOutstanding: number;
+  pendingGuarantorRequests: number; pendingChangeRequests: number;
+  upcomingEventCount: number;
+  nextInstallment: null | {
+    commitmentId: string; commitmentCode: string; fundName: string;
+    installmentNo: number; dueDate: string; amountDue: number; currency: string;
+  };
+  recentContributions: Array<{ id: string; receiptNumber: string | null; receiptDate: string; amount: number; currency: string }>;
+  activeCommitmentsList: Array<{ id: string; code: string; fundName: string; totalAmount: number; paidAmount: number; remainingAmount: number; currency: string }>;
+};
+
 export const portalMeApi = {
   me: () => api.get<Me>('/api/v1/portal/me').then((r) => r.data),
+  dashboard: () => api.get<MemberDashboard>('/api/v1/portal/me/dashboard').then((r) => r.data),
   contributions: () => api.get<ContributionRow[]>('/api/v1/portal/me/contributions').then((r) => r.data),
+  contributionDetail: (id: string) =>
+    api.get<PortalReceipt>(`/api/v1/portal/me/contributions/${id}`).then((r) => r.data),
+  contributionPdf: (id: string) =>
+    openAuthenticatedPdf(`/api/v1/portal/me/contributions/${id}/pdf`, `receipt-${id}.pdf`),
   commitments: () => api.get<CommitmentRow[]>('/api/v1/portal/me/commitments').then((r) => r.data),
+  commitmentDetail: (id: string) =>
+    api.get<PortalCommitmentDetail>(`/api/v1/portal/me/commitments/${id}`).then((r) => r.data),
   qarzanHasana: () => api.get<QhLoanRow[]>('/api/v1/portal/me/qarzan-hasana').then((r) => r.data),
+  qhDetail: (id: string) =>
+    api.get<PortalQhDetail>(`/api/v1/portal/me/qarzan-hasana/${id}`).then((r) => r.data),
+  qhCreate: (payload: CreateQhPayload) =>
+    api.post('/api/v1/portal/me/qarzan-hasana', payload).then((r) => r.data),
+  fundEnrollments: () =>
+    api.get<FundEnrollmentRow[]>('/api/v1/portal/me/fund-enrollments').then((r) => r.data),
+  fundEnrollmentDetail: (id: string) =>
+    api.get<FundEnrollmentDetail>(`/api/v1/portal/me/fund-enrollments/${id}`).then((r) => r.data),
   guarantorInbox: () => api.get<GuarantorRequestRow[]>('/api/v1/portal/me/guarantor-inbox').then((r) => r.data),
   events: () => api.get<EventRegistrationRow[]>('/api/v1/portal/me/events').then((r) => r.data),
 

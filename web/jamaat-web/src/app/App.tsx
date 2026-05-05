@@ -21,6 +21,12 @@ const MemberCommitmentsPage = lazy(() => import('../features/portal/me/MemberPor
 const MemberQhPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberQhPage })));
 const MemberGuarantorInboxPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberGuarantorInboxPage })));
 const MemberEventsPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberEventsPage })));
+const MemberContributionDetailPage = lazy(() => import('../features/portal/me/MemberPortalDetailPages').then((m) => ({ default: m.MemberContributionDetailPage })));
+const MemberCommitmentDetailPage = lazy(() => import('../features/portal/me/MemberPortalDetailPages').then((m) => ({ default: m.MemberCommitmentDetailPage })));
+const MemberQhDetailPage = lazy(() => import('../features/portal/me/MemberPortalDetailPages').then((m) => ({ default: m.MemberQhDetailPage })));
+const MemberQhSubmitPage = lazy(() => import('../features/portal/me/MemberPortalDetailPages').then((m) => ({ default: m.MemberQhSubmitPage })));
+const MemberPatronagesPage = lazy(() => import('../features/portal/me/MemberPortalDetailPages').then((m) => ({ default: m.MemberPatronagesPage })));
+const MemberPatronageDetailPage = lazy(() => import('../features/portal/me/MemberPortalDetailPages').then((m) => ({ default: m.MemberPatronageDetailPage })));
 // Phase H: code-split. Operator features lazy-load by route so the initial bundle stays
 // small. The auth flow (LoginPage, ChangePasswordPage, SetupWizardPage) and the chrome
 // (AppLayout, RequireAuth) stay eagerly imported because they are on the boot path. Public
@@ -185,8 +191,14 @@ export function App() {
         <Route path="login-history" element={<MemberLoginHistoryPage />} />
         <Route path="profile" element={<PortalMemberProfilePage />} />
         <Route path="contributions" element={<MemberContributionsPage />} />
+        <Route path="contributions/:id" element={<MemberContributionDetailPage />} />
         <Route path="commitments" element={<MemberCommitmentsPage />} />
+        <Route path="commitments/:id" element={<MemberCommitmentDetailPage />} />
         <Route path="qarzan-hasana" element={<MemberQhPage />} />
+        <Route path="qarzan-hasana/new" element={<MemberQhSubmitPage />} />
+        <Route path="qarzan-hasana/:id" element={<MemberQhDetailPage />} />
+        <Route path="fund-enrollments" element={<MemberPatronagesPage />} />
+        <Route path="fund-enrollments/:id" element={<MemberPatronageDetailPage />} />
         <Route path="guarantor-inbox" element={<MemberGuarantorInboxPage />} />
         <Route path="events" element={<MemberEventsPage />} />
       </Route>

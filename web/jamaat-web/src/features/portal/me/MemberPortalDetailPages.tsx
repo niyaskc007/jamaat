@@ -1,0 +1,528 @@
+import { useMemo, useState } from 'react';
+import {
+  Card, Descriptions, Table, Tag, Typography, Empty, Alert, Button, Space, Skeleton,
+  Form, Input, InputNumber, Select, DatePicker, Row, Col, message, Result, Progress,
+} from 'antd';
+import {
+  GiftOutlined, HeartOutlined, BankOutlined, DownloadOutlined, ArrowLeftOutlined,
+  TeamOutlined, PlusOutlined,
+} from '@ant-design/icons';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import dayjs, { type Dayjs } from 'dayjs';
+import {
+  portalMeApi,
+  type FundEnrollmentRow, type CreateQhPayload,
+} from './portalMeApi';
+
+// --- Shared header --------------------------------------------------------
+
+function DetailHeader({ icon, title, backTo, children }: {
+  icon: React.ReactNode; title: string; backTo: string; children?: React.ReactNode;
+}) {
+  return (
+    <div className="jm-section-head">
+      <Space size={8}>
+        <Link to={backTo} className="jm-portal-back-link">
+          <Button type="text" icon={<ArrowLeftOutlined />} size="small" />
+        </Link>
+        <Typography.Title level={4} className="jm-section-title">
+          {icon} {title}
+        </Typography.Title>
+      </Space>
+      {children}
+    </div>
+  );
+}
+
+// --- Receipt (Contribution) detail ---------------------------------------
+
+const RECEIPT_STATUS: Record<number, { label: string; color: string }> = {
+  1: { label: 'Draft', color: 'default' },
+  2: { label: 'Confirmed', color: 'green' },
+  3: { label: 'Cancelled', color: 'red' },
+  4: { label: 'Reversed', color: 'red' },
+  5: { label: 'Pending clearance', color: 'gold' },
+};
+
+const PAYMENT_MODE: Record<number, string> = {
+  0: '—', 1: 'Cash', 2: 'Cheque', 4: 'Bank transfer', 8: 'Card', 16: 'Online', 32: 'UPI',
+};
+
+export function MemberContributionDetailPage() {
+  const { id = '' } = useParams();
+  const q = useQuery({ queryKey: ['portal-me-contribution', id], queryFn: () => portalMeApi.contributionDetail(id), enabled: !!id });
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadPdf() {
+    setDownloading(true);
+    try {
+      await portalMeApi.contributionPdf(id);
+    } catch (err) {
+      message.error((err as Error).message || 'Failed to download receipt PDF.');
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  if (q.isLoading) return <Skeleton active />;
+  if (q.isError) return <Result status="error" title="Couldn't load receipt" subTitle={(q.error as Error)?.message} />;
+  const r = q.data!;
+  const statusMeta = RECEIPT_STATUS[r.status] ?? { label: String(r.status), color: 'default' };
+
+  return (
+    <div>
+      <DetailHeader icon={<GiftOutlined />} title={`Receipt ${r.receiptNumber ?? '(pending)'}`} backTo="/portal/me/contributions">
+        <Button type="primary" icon={<DownloadOutlined />} loading={downloading} onClick={downloadPdf}>
+          Download duplicate copy
+        </Button>
+      </DetailHeader>
+
+      <Card className="jm-card">
+        <Descriptions column={{ xs: 1, sm: 2, md: 2 }} size="small">
+          <Descriptions.Item label="Date">{dayjs(r.receiptDate).format('DD MMM YYYY')}</Descriptions.Item>
+          <Descriptions.Item label="Status"><Tag color={statusMeta.color}>{statusMeta.label}</Tag></Descriptions.Item>
+          <Descriptions.Item label="Amount">
+            <span className="jm-tnum jm-num-strong">{r.amountTotal.toLocaleString()} {r.currency}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label="Payment mode">{PAYMENT_MODE[r.paymentMode] ?? r.paymentMode}</Descriptions.Item>
+          {r.chequeNumber && <Descriptions.Item label="Cheque #">{r.chequeNumber}</Descriptions.Item>}
+          {r.chequeDate && <Descriptions.Item label="Cheque date">{dayjs(r.chequeDate).format('DD MMM YYYY')}</Descriptions.Item>}
+          {r.drawnOnBank && <Descriptions.Item label="Drawn on">{r.drawnOnBank}</Descriptions.Item>}
+          {r.bankAccountName && <Descriptions.Item label="Received in">{r.bankAccountName}</Descriptions.Item>}
+          {r.paymentReference && <Descriptions.Item label="Reference">{r.paymentReference}</Descriptions.Item>}
+          {r.confirmedByUserName && <Descriptions.Item label="Confirmed by">{r.confirmedByUserName}</Descriptions.Item>}
+          {r.remarks && <Descriptions.Item label="Notes" span={2}>{r.remarks}</Descriptions.Item>}
+        </Descriptions>
+      </Card>
+
+      <Card className="jm-card jm-portal-section-spaced" title="Lines" styles={{ body: { padding: 0 } }}>
+        <Table
+          rowKey="id" dataSource={r.lines} pagination={false} size="small"
+          columns={[
+            { title: '#', dataIndex: 'lineNo', width: 60 },
+            { title: 'Fund', dataIndex: 'fundTypeName',
+              render: (v: string, row) => <span>{v}{row.commitmentCode ? ` · ${row.commitmentCode}` : ''}{row.qarzanHasanaLoanCode ? ` · ${row.qarzanHasanaLoanCode}` : ''}</span> },
+            { title: 'Purpose', dataIndex: 'purpose', render: (v: string | null) => v ?? '—' },
+            { title: 'Period', dataIndex: 'periodReference', render: (v: string | null) => v ?? '—' },
+            { title: 'Amount', dataIndex: 'amount', align: 'end', width: 140,
+              render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {r.currency}</span> },
+          ]}
+        />
+      </Card>
+    </div>
+  );
+}
+
+// --- Commitment detail ---------------------------------------------------
+
+const COMMIT_STATUS: Record<number, { label: string; color: string }> = {
+  1: { label: 'Draft', color: 'default' }, 2: { label: 'Active', color: 'green' },
+  3: { label: 'Completed', color: 'blue' }, 4: { label: 'Cancelled', color: 'red' },
+  5: { label: 'Defaulted', color: 'red' }, 6: { label: 'Paused', color: 'orange' },
+};
+
+const INSTALLMENT_STATUS: Record<number, { label: string; color: string }> = {
+  1: { label: 'Pending', color: 'default' },
+  2: { label: 'Partially paid', color: 'gold' },
+  3: { label: 'Paid', color: 'green' },
+  4: { label: 'Overdue', color: 'red' },
+  5: { label: 'Waived', color: 'purple' },
+};
+
+export function MemberCommitmentDetailPage() {
+  const { id = '' } = useParams();
+  const q = useQuery({ queryKey: ['portal-me-commitment', id], queryFn: () => portalMeApi.commitmentDetail(id), enabled: !!id });
+
+  if (q.isLoading) return <Skeleton active />;
+  if (q.isError) return <Result status="error" title="Couldn't load commitment" subTitle={(q.error as Error)?.message} />;
+  const d = q.data!;
+  const c = d.commitment;
+  const statusMeta = COMMIT_STATUS[c.status] ?? { label: String(c.status), color: 'default' };
+
+  return (
+    <div>
+      <DetailHeader icon={<HeartOutlined />} title={`Commitment ${c.code}`} backTo="/portal/me/commitments" />
+
+      <Card className="jm-card">
+        <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small">
+          <Descriptions.Item label="Fund">{c.fundTypeName}</Descriptions.Item>
+          <Descriptions.Item label="Status"><Tag color={statusMeta.color}>{statusMeta.label}</Tag></Descriptions.Item>
+          <Descriptions.Item label="Started">{dayjs(c.startDate).format('DD MMM YYYY')}</Descriptions.Item>
+          <Descriptions.Item label="Ends">{c.endDate ? dayjs(c.endDate).format('DD MMM YYYY') : '—'}</Descriptions.Item>
+          <Descriptions.Item label="Total">
+            <span className="jm-tnum jm-num-strong">{c.totalAmount.toLocaleString()} {c.currency}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label="Paid">
+            <span className="jm-tnum">{c.paidAmount.toLocaleString()} {c.currency}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label="Outstanding" span={3}>
+            <Progress percent={Math.round(c.progressPercent)} format={() => `${c.remainingAmount.toLocaleString()} ${c.currency} left`} />
+          </Descriptions.Item>
+          {c.notes && <Descriptions.Item label="Notes" span={3}>{c.notes}</Descriptions.Item>}
+        </Descriptions>
+      </Card>
+
+      <Card className="jm-card jm-portal-section-spaced" title="Installment schedule" styles={{ body: { padding: 0 } }}>
+        <Table
+          rowKey="id" dataSource={d.installments} pagination={false} size="small"
+          locale={{ emptyText: <Empty description="No installments." /> }}
+          columns={[
+            { title: '#', dataIndex: 'installmentNo', width: 60 },
+            { title: 'Due date', dataIndex: 'dueDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
+            { title: 'Scheduled', dataIndex: 'scheduledAmount', align: 'end', width: 140,
+              render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {c.currency}</span> },
+            { title: 'Paid', dataIndex: 'paidAmount', align: 'end', width: 140,
+              render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {c.currency}</span> },
+            { title: 'Remaining', dataIndex: 'remainingAmount', align: 'end', width: 140,
+              render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {c.currency}</span> },
+            { title: 'Last payment', dataIndex: 'lastPaymentDate', width: 140,
+              render: (v: string | null) => v ? dayjs(v).format('DD MMM YYYY') : '—' },
+            { title: 'Status', dataIndex: 'status', width: 130,
+              render: (s: number) => {
+                const m = INSTALLMENT_STATUS[s] ?? { label: String(s), color: 'default' };
+                return <Tag color={m.color}>{m.label}</Tag>;
+              } },
+          ]}
+        />
+      </Card>
+    </div>
+  );
+}
+
+// --- QH detail page ------------------------------------------------------
+
+const QH_STATUS: Record<number, { label: string; color: string }> = {
+  1: { label: 'Draft', color: 'default' },
+  2: { label: 'Pending L1', color: 'gold' },
+  3: { label: 'Pending L2', color: 'gold' },
+  4: { label: 'Approved', color: 'green' },
+  5: { label: 'Disbursed', color: 'blue' },
+  6: { label: 'Active', color: 'cyan' },
+  7: { label: 'Completed', color: 'green' },
+  8: { label: 'Defaulted', color: 'red' },
+  9: { label: 'Cancelled', color: 'default' },
+  10: { label: 'Rejected', color: 'red' },
+};
+
+const QH_INSTALLMENT_STATUS: Record<number, { label: string; color: string }> = {
+  1: { label: 'Pending', color: 'default' },
+  2: { label: 'Partially paid', color: 'gold' },
+  3: { label: 'Paid', color: 'green' },
+  4: { label: 'Overdue', color: 'red' },
+  5: { label: 'Waived', color: 'purple' },
+};
+
+export function MemberQhDetailPage() {
+  const { id = '' } = useParams();
+  const q = useQuery({ queryKey: ['portal-me-qh', id], queryFn: () => portalMeApi.qhDetail(id), enabled: !!id });
+
+  if (q.isLoading) return <Skeleton active />;
+  if (q.isError) return <Result status="error" title="Couldn't load loan" subTitle={(q.error as Error)?.message} />;
+  const d = q.data!;
+  const l = d.loan;
+  const statusMeta = QH_STATUS[l.status] ?? { label: String(l.status), color: 'default' };
+
+  return (
+    <div>
+      <DetailHeader icon={<BankOutlined />} title={`Qarzan Hasana ${l.code}`} backTo="/portal/me/qarzan-hasana" />
+
+      <Card className="jm-card">
+        <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small">
+          <Descriptions.Item label="Status"><Tag color={statusMeta.color}>{statusMeta.label}</Tag></Descriptions.Item>
+          <Descriptions.Item label="Started">{dayjs(l.startDate).format('DD MMM YYYY')}</Descriptions.Item>
+          <Descriptions.Item label="Ends">{l.endDate ? dayjs(l.endDate).format('DD MMM YYYY') : '—'}</Descriptions.Item>
+          <Descriptions.Item label="Requested">
+            <span className="jm-tnum">{l.amountRequested.toLocaleString()} {l.currency}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label="Approved">
+            <span className="jm-tnum">{l.amountApproved.toLocaleString()} {l.currency}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label="Disbursed">
+            <span className="jm-tnum">{l.amountDisbursed.toLocaleString()} {l.currency}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label="Repaid">
+            <span className="jm-tnum">{l.amountRepaid.toLocaleString()} {l.currency}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label="Outstanding">
+            <span className="jm-tnum jm-num-strong">{l.amountOutstanding.toLocaleString()} {l.currency}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label="Installments">{l.instalmentsApproved} of {l.instalmentsRequested}</Descriptions.Item>
+          <Descriptions.Item label="Guarantor 1"><Space><TeamOutlined />{l.guarantor1Name}</Space></Descriptions.Item>
+          <Descriptions.Item label="Guarantor 2"><Space><TeamOutlined />{l.guarantor2Name}</Space></Descriptions.Item>
+          {l.disbursedOn && <Descriptions.Item label="Disbursed on">{dayjs(l.disbursedOn).format('DD MMM YYYY')}</Descriptions.Item>}
+          {l.purpose && <Descriptions.Item label="Purpose" span={3}>{l.purpose}</Descriptions.Item>}
+          {l.repaymentPlan && <Descriptions.Item label="Repayment plan" span={3}>{l.repaymentPlan}</Descriptions.Item>}
+          {l.rejectionReason && <Descriptions.Item label="Rejection reason" span={3}>
+            <Alert type="error" showIcon message={l.rejectionReason} />
+          </Descriptions.Item>}
+        </Descriptions>
+      </Card>
+
+      <Card className="jm-card jm-portal-section-spaced" title="Repayment schedule" styles={{ body: { padding: 0 } }}>
+        <Table
+          rowKey="id" dataSource={d.installments} pagination={false} size="small"
+          locale={{ emptyText: <Empty description="No installments scheduled yet." /> }}
+          columns={[
+            { title: '#', dataIndex: 'installmentNo', width: 60 },
+            { title: 'Due date', dataIndex: 'dueDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
+            { title: 'Scheduled', dataIndex: 'scheduledAmount', align: 'end', width: 140,
+              render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {l.currency}</span> },
+            { title: 'Paid', dataIndex: 'paidAmount', align: 'end', width: 140,
+              render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {l.currency}</span> },
+            { title: 'Remaining', dataIndex: 'remainingAmount', align: 'end', width: 140,
+              render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {l.currency}</span> },
+            { title: 'Status', dataIndex: 'status', width: 130,
+              render: (s: number) => {
+                const m = QH_INSTALLMENT_STATUS[s] ?? { label: String(s), color: 'default' };
+                return <Tag color={m.color}>{m.label}</Tag>;
+              } },
+          ]}
+        />
+      </Card>
+    </div>
+  );
+}
+
+// --- Patronages list -----------------------------------------------------
+
+const FE_STATUS: Record<number, { label: string; color: string }> = {
+  1: { label: 'Draft', color: 'default' },
+  2: { label: 'Active', color: 'green' },
+  3: { label: 'Paused', color: 'orange' },
+  4: { label: 'Cancelled', color: 'red' },
+  5: { label: 'Expired', color: 'default' },
+};
+
+const FE_RECURRENCE: Record<number, string> = {
+  1: 'One-time', 2: 'Monthly', 3: 'Quarterly', 4: 'Half-yearly', 5: 'Yearly', 99: 'Custom',
+};
+
+export function MemberPatronagesPage() {
+  const q = useQuery({ queryKey: ['portal-me-patronages'], queryFn: portalMeApi.fundEnrollments });
+  return (
+    <div>
+      <div className="jm-section-head">
+        <Typography.Title level={4} className="jm-section-title">
+          <GiftOutlined /> Patronages
+        </Typography.Title>
+      </div>
+      <Typography.Paragraph type="secondary" className="jm-page-intro">
+        Your fund enrollments — Sabil, Mutafariq, Niyaz, etc. Each row tracks how much has been collected against that fund and links to the underlying receipts.
+      </Typography.Paragraph>
+      <Card className="jm-card" styles={{ body: { padding: 0 } }}>
+        <Table<FundEnrollmentRow>
+          rowKey="id" loading={q.isLoading} dataSource={q.data ?? []}
+          pagination={{ pageSize: 20 }}
+          locale={{ emptyText: <Empty description="No patronages on record yet." /> }}
+          columns={[
+            { title: 'Code', dataIndex: 'code', width: 140, render: (v, r) => <Link to={`/portal/me/fund-enrollments/${r.id}`} className="jm-tnum">{v}</Link> },
+            { title: 'Fund', dataIndex: 'fundTypeName' },
+            { title: 'Sub-type', dataIndex: 'subType', render: (v: string | null) => v ?? '—' },
+            { title: 'Recurrence', dataIndex: 'recurrence', width: 130, render: (v: number) => FE_RECURRENCE[v] ?? v },
+            { title: 'Started', dataIndex: 'startDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
+            { title: 'Status', dataIndex: 'status', width: 130,
+              render: (s: number) => {
+                const m = FE_STATUS[s] ?? { label: String(s), color: 'default' };
+                return <Tag color={m.color}>{m.label}</Tag>;
+              } },
+          ]}
+        />
+      </Card>
+    </div>
+  );
+}
+
+export function MemberPatronageDetailPage() {
+  const { id = '' } = useParams();
+  const q = useQuery({ queryKey: ['portal-me-patronage', id], queryFn: () => portalMeApi.fundEnrollmentDetail(id), enabled: !!id });
+
+  if (q.isLoading) return <Skeleton active />;
+  if (q.isError) return <Result status="error" title="Couldn't load patronage" subTitle={(q.error as Error)?.message} />;
+  const d = q.data!;
+  const e = d.enrollment;
+  const statusMeta = FE_STATUS[e.status] ?? { label: String(e.status), color: 'default' };
+
+  return (
+    <div>
+      <DetailHeader icon={<GiftOutlined />} title={`Patronage ${e.code}`} backTo="/portal/me/fund-enrollments" />
+      <Card className="jm-card">
+        <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small">
+          <Descriptions.Item label="Fund">{e.fundTypeName}</Descriptions.Item>
+          <Descriptions.Item label="Sub-type">{e.subType ?? '—'}</Descriptions.Item>
+          <Descriptions.Item label="Status"><Tag color={statusMeta.color}>{statusMeta.label}</Tag></Descriptions.Item>
+          <Descriptions.Item label="Recurrence">{FE_RECURRENCE[e.recurrence] ?? e.recurrence}</Descriptions.Item>
+          <Descriptions.Item label="Started">{dayjs(e.startDate).format('DD MMM YYYY')}</Descriptions.Item>
+          <Descriptions.Item label="Ends">{e.endDate ? dayjs(e.endDate).format('DD MMM YYYY') : '—'}</Descriptions.Item>
+          <Descriptions.Item label="Total collected">
+            <span className="jm-tnum jm-num-strong">{e.totalCollected.toLocaleString()}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label="Receipt count">{e.receiptCount}</Descriptions.Item>
+          {e.notes && <Descriptions.Item label="Notes" span={3}>{e.notes}</Descriptions.Item>}
+        </Descriptions>
+      </Card>
+
+      <Card className="jm-card jm-portal-section-spaced" title="Contributing receipts" styles={{ body: { padding: 0 } }}>
+        <Table
+          rowKey="receiptId" dataSource={d.receipts} pagination={{ pageSize: 20 }} size="small"
+          locale={{ emptyText: <Empty description="No receipts have contributed yet." /> }}
+          columns={[
+            { title: 'Date', dataIndex: 'receiptDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
+            { title: 'Receipt #', dataIndex: 'receiptNumber', width: 160,
+              render: (v: string | null, row) => v
+                ? <Link to={`/portal/me/contributions/${row.receiptId}`} className="jm-tnum">{v}</Link>
+                : <em className="jm-muted-em">pending</em> },
+            { title: 'Amount', dataIndex: 'amount', align: 'end', width: 160,
+              render: (v: number, row) => <span className="jm-tnum">{v.toLocaleString()} {row.currency}</span> },
+            { title: 'Status', dataIndex: 'status', width: 130,
+              render: (s: number) => {
+                const m = RECEIPT_STATUS[s] ?? { label: String(s), color: 'default' };
+                return <Tag color={m.color}>{m.label}</Tag>;
+              } },
+          ]}
+        />
+      </Card>
+    </div>
+  );
+}
+
+// --- QH self-submit form -------------------------------------------------
+
+type QhFormShape = {
+  amountRequested: number; instalmentsRequested: number; currency: string;
+  startDate: Dayjs; scheme: number;
+  guarantor1MemberId: string; guarantor2MemberId: string;
+  purpose: string; repaymentPlan: string;
+  monthlyIncome?: number; monthlyExpenses?: number; monthlyExistingEmis?: number;
+  guarantorsAcknowledged: boolean;
+};
+
+export function MemberQhSubmitPage() {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [form] = Form.useForm<QhFormShape>();
+
+  const submit = useMutation({
+    mutationFn: (payload: CreateQhPayload) => portalMeApi.qhCreate(payload),
+    onSuccess: () => {
+      message.success('Application submitted. You will be notified once it is reviewed.');
+      qc.invalidateQueries({ queryKey: ['portal-me-qh'] });
+      qc.invalidateQueries({ queryKey: ['portal-me-dashboard'] });
+      navigate('/portal/me/qarzan-hasana');
+    },
+    onError: (err: Error) => message.error(err.message || 'Submit failed.'),
+  });
+
+  const initial = useMemo<Partial<QhFormShape>>(() => ({
+    currency: 'INR', scheme: 1, instalmentsRequested: 12,
+    startDate: dayjs().add(7, 'day'),
+    guarantorsAcknowledged: false,
+  }), []);
+
+  function onFinish(v: QhFormShape) {
+    submit.mutate({
+      amountRequested: v.amountRequested,
+      instalmentsRequested: v.instalmentsRequested,
+      currency: v.currency,
+      startDate: v.startDate.format('YYYY-MM-DD'),
+      guarantor1MemberId: v.guarantor1MemberId.trim(),
+      guarantor2MemberId: v.guarantor2MemberId.trim(),
+      scheme: v.scheme,
+      purpose: v.purpose,
+      repaymentPlan: v.repaymentPlan,
+      monthlyIncome: v.monthlyIncome ?? null,
+      monthlyExpenses: v.monthlyExpenses ?? null,
+      monthlyExistingEmis: v.monthlyExistingEmis ?? null,
+      guarantorsAcknowledged: !!v.guarantorsAcknowledged,
+    });
+  }
+
+  return (
+    <div>
+      <DetailHeader icon={<BankOutlined />} title="New Qarzan Hasana request" backTo="/portal/me/qarzan-hasana" />
+      <Alert type="info" showIcon className="jm-portal-dashboard-alert"
+        message="Two members must agree to act as your kafil (guarantors) before this loan can be approved."
+        description="Enter their member IDs (Guid). After you submit, both guarantors will be asked to endorse via the portal." />
+      <Card className="jm-card">
+        <Form<QhFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish}>
+          <Row gutter={16}>
+            <Col xs={24} md={8}>
+              <Form.Item label="Amount requested" name="amountRequested"
+                rules={[{ required: true, message: 'Enter the amount you need.' }, { type: 'number', min: 1 }]}>
+                <InputNumber<number> className="jm-full-width" min={1} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Currency" name="currency" rules={[{ required: true }]}>
+                <Select options={[{ value: 'INR', label: 'INR' }, { value: 'AED', label: 'AED' }, { value: 'USD', label: 'USD' }]} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Number of instalments" name="instalmentsRequested"
+                rules={[{ required: true }, { type: 'number', min: 1, max: 60 }]}>
+                <InputNumber<number> className="jm-full-width" min={1} max={60} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="Scheme" name="scheme" rules={[{ required: true }]}>
+                <Select options={[
+                  { value: 1, label: 'Mohammadi' },
+                  { value: 2, label: 'Hussain' },
+                  { value: 0, label: 'Other' },
+                ]} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="Start date" name="startDate" rules={[{ required: true }]}>
+                <DatePicker className="jm-full-width" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="Guarantor 1 — Member ID (Guid)" name="guarantor1MemberId"
+                rules={[{ required: true, message: 'Required.' }]}>
+                <Input placeholder="00000000-0000-0000-0000-000000000000" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="Guarantor 2 — Member ID (Guid)" name="guarantor2MemberId"
+                rules={[{ required: true, message: 'Required.' }]}>
+                <Input placeholder="00000000-0000-0000-0000-000000000000" />
+              </Form.Item>
+            </Col>
+            <Col xs={24}>
+              <Form.Item label="Purpose" name="purpose" rules={[{ required: true, min: 5 }]}>
+                <Input.TextArea rows={2} placeholder="What is the loan for?" />
+              </Form.Item>
+            </Col>
+            <Col xs={24}>
+              <Form.Item label="Repayment plan" name="repaymentPlan" rules={[{ required: true, min: 5 }]}>
+                <Input.TextArea rows={2} placeholder="How will you repay each instalment?" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Monthly income" name="monthlyIncome">
+                <InputNumber<number> className="jm-full-width" min={0} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Monthly expenses" name="monthlyExpenses">
+                <InputNumber<number> className="jm-full-width" min={0} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Existing EMIs" name="monthlyExistingEmis">
+                <InputNumber<number> className="jm-full-width" min={0} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item>
+            <Space>
+              <Button type="primary" icon={<PlusOutlined />} htmlType="submit" loading={submit.isPending}>Submit application</Button>
+              <Button onClick={() => navigate('/portal/me/qarzan-hasana')}>Cancel</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Card>
+    </div>
+  );
+}

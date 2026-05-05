@@ -28,6 +28,7 @@ export function MemberPortalLayout() {
     { key: '/portal/me/profile', icon: <UserOutlined />, label: t('nav.profile') },
     { key: '/portal/me/contributions', icon: <GiftOutlined />, label: t('nav.contributions') },
     { key: '/portal/me/commitments', icon: <HeartOutlined />, label: t('nav.commitments') },
+    { key: '/portal/me/fund-enrollments', icon: <GiftOutlined />, label: t('nav.patronages') },
     { key: '/portal/me/qarzan-hasana', icon: <BankOutlined />, label: t('nav.qarzanHasana') },
     { key: '/portal/me/guarantor-inbox', icon: <TeamOutlined />, label: t('nav.guarantorInbox') },
     { key: '/portal/me/events', icon: <CalendarOutlined />, label: t('nav.events') },

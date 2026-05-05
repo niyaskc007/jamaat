@@ -152,6 +152,7 @@ public static class DatabaseSeeder
             {
                 "portal.access",
                 "portal.contributions.view.own",
+                "portal.contributions.download.own",
                 "portal.commitments.view.own",
                 "portal.commitments.create.own",
                 "portal.qh.view.own",
@@ -160,6 +161,8 @@ public static class DatabaseSeeder
                 "portal.events.view",
                 "portal.events.register",
                 "portal.login_history.view.own",
+                "portal.fund_enrollments.view.own",
+                "portal.dashboard.view.own",
                 "member.self.update",
                 "member.wealth.view",
             }),
@@ -1099,16 +1102,19 @@ Jamaat is a community-finance platform that gives your organisation a single, au
         // Member self-service portal scope. These are intentionally distinct from the operator
         // permissions above - they are scoped to OWN data only (controllers must filter by the
         // current user's MemberId). Granted to the seeded "Member" role by default.
-        "portal.access",                   // can hit /portal/me at all
-        "portal.contributions.view.own",   // own receipts / past contributions
-        "portal.commitments.view.own",     // own commitments
-        "portal.commitments.create.own",   // create new commitment for self
-        "portal.qh.view.own",              // own QH loans
-        "portal.qh.request",               // submit a new QH application that goes to L1 approver
-        "portal.qh.endorse_guarantor",     // endorse / decline guarantor requests addressed to me
-        "portal.events.view",              // see published events on the portal
-        "portal.events.register",          // register self / family for events
-        "portal.login_history.view.own",   // own login attempts
+        "portal.access",                       // can hit /portal/me at all
+        "portal.contributions.view.own",       // own receipts / past contributions
+        "portal.contributions.download.own",   // download a duplicate-copy PDF of own receipts
+        "portal.commitments.view.own",         // own commitments
+        "portal.commitments.create.own",       // create new commitment for self
+        "portal.qh.view.own",                  // own QH loans
+        "portal.qh.request",                   // submit a new QH application that goes to L1 approver
+        "portal.qh.endorse_guarantor",         // endorse / decline guarantor requests addressed to me
+        "portal.events.view",                  // see published events on the portal
+        "portal.events.register",              // register self / family for events
+        "portal.login_history.view.own",       // own login attempts
+        "portal.fund_enrollments.view.own",    // own fund enrollments / patronages
+        "portal.dashboard.view.own",           // member-facing KPI dashboard at /portal/me
         // CMS - manage marketing copy on the login screen, legal pages (terms/privacy),
         // help articles, FAQ, etc. Reads are anonymous (the login page hits /api/v1/cms/blocks
         // pre-auth) so there is no separate cms.view permission - only the write side is gated.

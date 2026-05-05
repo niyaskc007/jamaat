@@ -216,6 +216,37 @@
 .jm-num-strong { font-weight: 500; }
 .jm-alert-after-card { margin-block-start: var(--jm-space-4); }
 
+/* ----- Member portal home: KPIs + dashboard ------------------------ */
+
+.jm-portal-dashboard-alert { margin-block-end: var(--jm-space-4); }
+.jm-portal-section-spaced  { margin-block-start: var(--jm-space-4); }
+.jm-portal-browse-title    { margin-block-start: var(--jm-space-6); }
+
+.jm-kpi-label    { margin-block-end: 4px; font-size: 13px; color: var(--jm-gray-600); line-height: 1.5; }
+.jm-kpi-hint     { font-size: 12px; margin-block-start: 4px; color: var(--jm-gray-400); }
+.jm-kpi-value :where(.ant-statistic-content) { font-size: 22px; font-weight: 600; }
+
+.jm-portal-upnext-text { margin-block-end: 8px; }
+.jm-portal-upnext-amt :where(.ant-statistic-content) { font-size: 22px; }
+.jm-portal-upnext-cta  { margin-block-start: var(--jm-space-3); }
+.jm-portal-upnext-tags { margin-block-start: var(--jm-space-4); }
+
+.jm-portal-mini-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.jm-portal-mini-list a {
+  display: grid; grid-template-columns: minmax(80px, 1fr) auto auto;
+  gap: 12px; align-items: center; padding: 6px 0;
+  border-block-end: 1px dashed var(--jm-border-soft, var(--jm-border));
+}
+.jm-portal-mini-list li:last-child a { border-block-end: 0; }
+.jm-portal-mini-meta { font-size: 12px; color: var(--jm-gray-500); }
+.jm-portal-mini-amt  { font-weight: 500; color: var(--jm-gray-900); }
+
+.jm-portal-commit-progress { margin-block-start: 8px; }
+.jm-portal-commit-outstanding { color: var(--jm-gray-400); font-size: 12px; }
+
+.jm-portal-back-link { display: inline-flex; }
+.jm-portal-back-link :where(.ant-btn) { color: var(--jm-gray-600); }
+
 /* ----- Change-password page ---------------------------------------- */
 
 .jm-changepw-icon { font-size: 28px; color: var(--jm-primary-500); }
