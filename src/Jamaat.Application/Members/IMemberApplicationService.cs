@@ -176,6 +176,31 @@ public sealed class MemberApplicationService(
                    clock.UtcNow, dto.Note!);
         db.MemberApplications.Update(app);
         await uow.SaveChangesAsync(ct);
+
+        // Best-effort applicant notification. Distinct from operator-side approve/reject audit;
+        // the applicant gets a plain-spoken email so they're not left wondering. Resubmits after
+        // rejection are explicitly allowed (the duplicate-Pending guard only blocks while a
+        // current Pending row exists).
+        if (!string.IsNullOrEmpty(app.Email) || !string.IsNullOrEmpty(app.PhoneE164))
+        {
+            try
+            {
+                await notify.SendAsync(new NotificationMessage(
+                    Kind: NotificationKind.ApplicationRejected,
+                    Subject: "Update on your Jamaat portal application",
+                    Body: $"Salaam {app.FullName},\n\n" +
+                          $"Your application for portal access could not be approved at this time.\n\n" +
+                          $"Reason from the committee: {dto.Note}\n\n" +
+                          $"You may re-apply at any time once the issue is resolved. Contact the " +
+                          $"committee directly if you have questions.",
+                    RecipientEmail: app.Email,
+                    RecipientUserId: null,
+                    SourceId: app.Id,
+                    SourceReference: $"member-application-rejected:{app.ItsNumber}",
+                    RecipientPhoneE164: app.PhoneE164), ct);
+            }
+            catch { /* swallowed - NotificationLog row records the attempt */ }
+        }
         return Map(app);
     }
 

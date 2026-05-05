@@ -21,56 +21,61 @@ const MemberCommitmentsPage = lazy(() => import('../features/portal/me/MemberPor
 const MemberQhPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberQhPage })));
 const MemberGuarantorInboxPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberGuarantorInboxPage })));
 const MemberEventsPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberEventsPage })));
-import { DashboardPage } from '../features/dashboard/DashboardPage';
-import { MembersPage } from '../features/members/MembersPage';
-import { MemberProfilePage } from '../features/members/profile/MemberProfilePage';
-import { FamiliesPage } from '../features/families/FamiliesPage';
-import { CommitmentsPage } from '../features/commitments/CommitmentsPage';
-import { NewCommitmentPage } from '../features/commitments/NewCommitmentPage';
-import { CommitmentDetailPage } from '../features/commitments/CommitmentDetailPage';
-import { FundEnrollmentsPage } from '../features/fund-enrollments/FundEnrollmentsPage';
-import { PatronageDetailPage } from '../features/fund-enrollments/PatronageDetailPage';
-import { QarzanHasanaPage } from '../features/qarzan-hasana/QarzanHasanaPage';
-import { NewQarzanHasanaPage } from '../features/qarzan-hasana/NewQarzanHasanaPage';
-import { QarzanHasanaDetailPage } from '../features/qarzan-hasana/QarzanHasanaDetailPage';
-import { EventsPage } from '../features/events/EventsPage';
-import { EventDetailPage } from '../features/events/EventDetailPage';
+// Phase H: code-split. Operator features lazy-load by route so the initial bundle stays
+// small. The auth flow (LoginPage, ChangePasswordPage, SetupWizardPage) and the chrome
+// (AppLayout, RequireAuth) stay eagerly imported because they are on the boot path. Public
+// portal pages (PortalEventsListPage etc.) also stay eager because they are tiny + reachable
+// before any operator JS would otherwise be needed.
+const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const MembersPage = lazy(() => import('../features/members/MembersPage').then((m) => ({ default: m.MembersPage })));
+const MemberProfilePage = lazy(() => import('../features/members/profile/MemberProfilePage').then((m) => ({ default: m.MemberProfilePage })));
+const FamiliesPage = lazy(() => import('../features/families/FamiliesPage').then((m) => ({ default: m.FamiliesPage })));
+const CommitmentsPage = lazy(() => import('../features/commitments/CommitmentsPage').then((m) => ({ default: m.CommitmentsPage })));
+const NewCommitmentPage = lazy(() => import('../features/commitments/NewCommitmentPage').then((m) => ({ default: m.NewCommitmentPage })));
+const CommitmentDetailPage = lazy(() => import('../features/commitments/CommitmentDetailPage').then((m) => ({ default: m.CommitmentDetailPage })));
+const FundEnrollmentsPage = lazy(() => import('../features/fund-enrollments/FundEnrollmentsPage').then((m) => ({ default: m.FundEnrollmentsPage })));
+const PatronageDetailPage = lazy(() => import('../features/fund-enrollments/PatronageDetailPage').then((m) => ({ default: m.PatronageDetailPage })));
+const QarzanHasanaPage = lazy(() => import('../features/qarzan-hasana/QarzanHasanaPage').then((m) => ({ default: m.QarzanHasanaPage })));
+const NewQarzanHasanaPage = lazy(() => import('../features/qarzan-hasana/NewQarzanHasanaPage').then((m) => ({ default: m.NewQarzanHasanaPage })));
+const QarzanHasanaDetailPage = lazy(() => import('../features/qarzan-hasana/QarzanHasanaDetailPage').then((m) => ({ default: m.QarzanHasanaDetailPage })));
+const EventsPage = lazy(() => import('../features/events/EventsPage').then((m) => ({ default: m.EventsPage })));
+const EventDetailPage = lazy(() => import('../features/events/EventDetailPage').then((m) => ({ default: m.EventDetailPage })));
 import { PortalEventsListPage } from '../features/portal/PortalEventsListPage';
 import { PortalEventPage } from '../features/portal/PortalEventPage';
 import { PortalGuarantorConsentPage } from '../features/portal/PortalGuarantorConsentPage';
-import { ReceiptsPage } from '../features/receipts/ReceiptsPage';
-import { NewReceiptPage } from '../features/receipts/NewReceiptPage';
-import { ReceiptDetailPage } from '../features/receipts/ReceiptDetailPage';
-import { VouchersPage } from '../features/vouchers/VouchersPage';
-import { PostDatedChequesPage } from '../features/post-dated-cheques/PostDatedChequesPage';
-import { NewVoucherPage } from '../features/vouchers/NewVoucherPage';
-import { VoucherDetailPage } from '../features/vouchers/VoucherDetailPage';
-import { ReportsPage } from '../features/reports/ReportsPage';
-import { DashboardsPage } from '../features/dashboards/DashboardsPage';
-import { EventDetailDashboardPage } from '../features/dashboards/EventDetailDashboard';
-import { FundTypeDetailDashboardPage } from '../features/dashboards/FundTypeDetailDashboard';
-import { MemberDetailDashboardPage } from '../features/dashboards/MemberDetailDashboard';
-import { CommitmentDetailDashboardPage } from '../features/dashboards/CommitmentDetailDashboard';
-import { LedgerPage } from '../features/ledger/LedgerPage';
-import { UsersPage } from '../features/admin/UsersPage';
-import { MasterDataPage } from '../features/admin/MasterDataPage';
-import { IntegrationsPage } from '../features/admin/IntegrationsPage';
-import { AuditPage } from '../features/admin/AuditPage';
-import { ErrorLogsPage } from '../features/admin/error-logs/ErrorLogsPage';
-import { NotificationLogPage } from '../features/admin/notifications/NotificationLogPage';
-import { AdministrationPage } from '../features/admin/AdministrationPage';
-import { ReliabilityDashboard } from '../features/admin/reliability/ReliabilityDashboard';
-import { ChangeRequestsPage } from '../features/admin/change-requests/ChangeRequestsPage';
-import { CmsAdminPage } from '../features/admin/CmsPage';
+const ReceiptsPage = lazy(() => import('../features/receipts/ReceiptsPage').then((m) => ({ default: m.ReceiptsPage })));
+const NewReceiptPage = lazy(() => import('../features/receipts/NewReceiptPage').then((m) => ({ default: m.NewReceiptPage })));
+const ReceiptDetailPage = lazy(() => import('../features/receipts/ReceiptDetailPage').then((m) => ({ default: m.ReceiptDetailPage })));
+const VouchersPage = lazy(() => import('../features/vouchers/VouchersPage').then((m) => ({ default: m.VouchersPage })));
+const PostDatedChequesPage = lazy(() => import('../features/post-dated-cheques/PostDatedChequesPage').then((m) => ({ default: m.PostDatedChequesPage })));
+const NewVoucherPage = lazy(() => import('../features/vouchers/NewVoucherPage').then((m) => ({ default: m.NewVoucherPage })));
+const VoucherDetailPage = lazy(() => import('../features/vouchers/VoucherDetailPage').then((m) => ({ default: m.VoucherDetailPage })));
+const ReportsPage = lazy(() => import('../features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const DashboardsPage = lazy(() => import('../features/dashboards/DashboardsPage').then((m) => ({ default: m.DashboardsPage })));
+const EventDetailDashboardPage = lazy(() => import('../features/dashboards/EventDetailDashboard').then((m) => ({ default: m.EventDetailDashboardPage })));
+const FundTypeDetailDashboardPage = lazy(() => import('../features/dashboards/FundTypeDetailDashboard').then((m) => ({ default: m.FundTypeDetailDashboardPage })));
+const MemberDetailDashboardPage = lazy(() => import('../features/dashboards/MemberDetailDashboard').then((m) => ({ default: m.MemberDetailDashboardPage })));
+const CommitmentDetailDashboardPage = lazy(() => import('../features/dashboards/CommitmentDetailDashboard').then((m) => ({ default: m.CommitmentDetailDashboardPage })));
+const LedgerPage = lazy(() => import('../features/ledger/LedgerPage').then((m) => ({ default: m.LedgerPage })));
+const UsersPage = lazy(() => import('../features/admin/UsersPage').then((m) => ({ default: m.UsersPage })));
+const MasterDataPage = lazy(() => import('../features/admin/MasterDataPage').then((m) => ({ default: m.MasterDataPage })));
+const IntegrationsPage = lazy(() => import('../features/admin/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })));
+const AuditPage = lazy(() => import('../features/admin/AuditPage').then((m) => ({ default: m.AuditPage })));
+const ErrorLogsPage = lazy(() => import('../features/admin/error-logs/ErrorLogsPage').then((m) => ({ default: m.ErrorLogsPage })));
+const NotificationLogPage = lazy(() => import('../features/admin/notifications/NotificationLogPage').then((m) => ({ default: m.NotificationLogPage })));
+const AdministrationPage = lazy(() => import('../features/admin/AdministrationPage').then((m) => ({ default: m.AdministrationPage })));
+const ReliabilityDashboard = lazy(() => import('../features/admin/reliability/ReliabilityDashboard').then((m) => ({ default: m.ReliabilityDashboard })));
+const ChangeRequestsPage = lazy(() => import('../features/admin/change-requests/ChangeRequestsPage').then((m) => ({ default: m.ChangeRequestsPage })));
+const CmsAdminPage = lazy(() => import('../features/admin/CmsPage').then((m) => ({ default: m.CmsAdminPage })));
 import { CmsPageView } from '../features/cms/CmsPageView';
-import { ApplicationsPage } from '../features/admin/ApplicationsPage';
+const ApplicationsPage = lazy(() => import('../features/admin/ApplicationsPage').then((m) => ({ default: m.ApplicationsPage })));
 import { RegisterPage } from '../features/portal/RegisterPage';
-import { SystemMonitorPage } from '../features/system/SystemMonitorPage';
-import { SystemAnalyticsPage } from '../features/system/SystemAnalyticsPage';
+const SystemMonitorPage = lazy(() => import('../features/system/SystemMonitorPage').then((m) => ({ default: m.SystemMonitorPage })));
+const SystemAnalyticsPage = lazy(() => import('../features/system/SystemAnalyticsPage').then((m) => ({ default: m.SystemAnalyticsPage })));
 import { analyticsApi } from '../features/system/analyticsApi';
-import { AccountingPage } from '../features/accounting/AccountingPage';
-import { HelpPage } from '../features/help/HelpPage';
-import { MePage } from '../features/me/MePage';
+const AccountingPage = lazy(() => import('../features/accounting/AccountingPage').then((m) => ({ default: m.AccountingPage })));
+const HelpPage = lazy(() => import('../features/help/HelpPage').then((m) => ({ default: m.HelpPage })));
+const MePage = lazy(() => import('../features/me/MePage').then((m) => ({ default: m.MePage })));
 import { RequireAuth } from '../shared/auth/RequireAuth';
 import { RequirePermission } from '../shared/auth/RequirePermission';
 import type { ReactNode } from 'react';
@@ -188,7 +193,9 @@ export function App() {
       <Route
         element={
           <RequireAuth>
-            <AppLayout />
+            <Suspense fallback={<div style={{ display: 'grid', placeItems: 'center', minBlockSize: '100dvh' }}><Spin size="large" /></div>}>
+              <AppLayout />
+            </Suspense>
           </RequireAuth>
         }
       >

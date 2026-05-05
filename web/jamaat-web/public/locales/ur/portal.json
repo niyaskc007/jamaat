@@ -1,5 +1,5 @@
 {
-  "_meta": "[REVIEW] Machine-translated. Have a native Urdu speaker review before production. Keys missing here fall back to English at runtime.",
+  "_meta": "[REVIEW] Machine-translated. Have a native Urdu speaker review before production.",
   "shell": {
     "label": "ممبر پورٹل",
     "memberRole": "ممبر"
@@ -18,5 +18,84 @@
     "profile": "میرا پروفائل",
     "changePassword": "پاس ورڈ تبدیل کریں",
     "signOut": "سائن آؤٹ"
+  },
+  "profile": {
+    "title": "میرا پروفائل",
+    "intro": "اپنا رابطہ اور پتہ کی تفصیلات اپ ڈیٹ کریں۔ جمع کردہ تبدیلیاں لائیو ہونے سے پہلے کمیٹی کے جائزے سے گزرتی ہیں۔ نام اور شناخت کی تبدیلیاں صرف ایڈمن کے لیے ہیں۔",
+    "pendingTitle": "زیرِ جائزہ",
+    "pendingDescription": "آپ کی {{count}} تبدیلی(یاں) کمیٹی کی منظوری کا انتظار کر رہی ہیں ({{sections}})۔ ان حصوں میں نئی ترامیم اس کے بعد قطار میں آئیں گی۔",
+    "tabs": {
+      "contact": "رابطہ",
+      "address": "پتہ",
+      "notifications": "اطلاعات"
+    },
+    "contact": {
+      "phone": "فون",
+      "whatsapp": "واٹس ایپ",
+      "email": "ای میل",
+      "website": "ویب سائٹ",
+      "linkedin": "لنکڈ اِن",
+      "facebook": "فیس بک",
+      "instagram": "انسٹاگرام",
+      "twitter": "ٹوئٹر / X",
+      "submit": "جائزے کے لیے جمع کریں",
+      "submitHint": "کمیٹی کی منظوری کے بعد تبدیلیاں لائیو ہوتی ہیں۔",
+      "pendingTitle": "رابطہ تبدیلی زیرِ التوا",
+      "pendingDescription": "آپ کے رابطے کی تفصیلات میں پچھلی تبدیلی ابھی بھی زیرِ جائزہ ہے۔"
+    },
+    "address": {
+      "addressLine": "پتہ لائن",
+      "building": "عمارت",
+      "street": "گلی",
+      "area": "علاقہ",
+      "city": "شہر",
+      "state": "ریاست / امارات",
+      "postcode": "پوسٹل کوڈ",
+      "submit": "جائزے کے لیے جمع کریں",
+      "pendingTitle": "پتہ تبدیلی زیرِ التوا",
+      "pendingDescription": "آپ کے پتہ میں پچھلی تبدیلی ابھی بھی زیرِ جائزہ ہے۔"
+    },
+    "photo": {
+      "change": "تصویر تبدیل کریں",
+      "tooLarge": "تصویر 10 MB سے کم ہونی چاہیے۔",
+      "uploaded": "تصویر اپ ڈیٹ ہو گئی۔",
+      "failed": "تصویر اپ لوڈ ناکام۔"
+    },
+    "header": {
+      "itsLabel": "ITS",
+      "namesAdminOnly": "نام اور شناخت کی تبدیلیاں صرف ایڈمن کے لیے ہیں۔ اپ ڈیٹ کے لیے اپنی کمیٹی سے رابطہ کریں۔"
+    }
+  },
+  "notifications": {
+    "intro": "سسٹم ڈیفالٹ کے طور پر سب سے بہتر دستیاب چینل منتخب کرتا ہے (واٹس ایپ > SMS > ای میل)۔ اوور رائڈ کرنے کے لیے نیچے ترجیحی چینل منتخب کریں۔ ہر اطلاع کی قسم کو الگ سے بند کیا جا سکتا ہے۔ اپ ڈیٹس سرور سائیڈ آڈٹ لاگ میں درج ہوتی ہیں چاہے ڈیلیوری لاگ-اونلی موڈ میں ہو۔",
+    "channelLabel": "ترجیحی چینل",
+    "channelAuto": "خودکار (سب سے بہتر دستیاب)",
+    "channelEmail": "ای میل",
+    "channelSms": "SMS",
+    "channelWhatsApp": "واٹس ایپ",
+    "typesLabel": "اطلاعات کی اقسام",
+    "save": "ترجیحات محفوظ کریں",
+    "noUnsavedChanges": "کوئی غیر محفوظ تبدیلیاں نہیں۔",
+    "saved": "ترجیحات محفوظ ہو گئیں۔",
+    "saveFailed": "محفوظ کرنا ناکام۔",
+    "kinds": {
+      "commitmentDue": {
+        "title": "وعدہ قسط واجب الادا",
+        "description": "ہر قسط کی واجب الادا تاریخ سے 3 دن پہلے یاد دہانی۔"
+      },
+      "qhStateChanged": {
+        "title": "قرض حسنہ اپ ڈیٹس",
+        "description": "جب آپ کا قرض منظوری / ادائیگی کی حالتوں کے درمیان منتقل ہو۔"
+      },
+      "eventReminder": {
+        "title": "پروگرام یاد دہانیاں",
+        "description": "آپ کے تصدیق شدہ ہر پروگرام سے 24 گھنٹے پہلے۔"
+      }
+    }
+  },
+  "common": {
+    "loading": "لوڈ ہو رہا ہے…",
+    "noData": "کوئی ڈیٹا ریکارڈ نہیں۔",
+    "loadFailed": "ڈیٹا لوڈ نہیں ہو سکا۔"
   }
 }

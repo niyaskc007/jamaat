@@ -1,5 +1,5 @@
 {
-  "_meta": "[REVIEW] Machine-translated. Have a native Arabic speaker review before production. Keys missing here fall back to English at runtime.",
+  "_meta": "[REVIEW] Machine-translated. Have a native Arabic speaker review before production.",
   "shell": {
     "label": "بوابة الأعضاء",
     "memberRole": "عضو"
@@ -18,5 +18,84 @@
     "profile": "ملفي الشخصي",
     "changePassword": "تغيير كلمة المرور",
     "signOut": "تسجيل الخروج"
+  },
+  "profile": {
+    "title": "ملفي الشخصي",
+    "intro": "قم بتحديث تفاصيل الاتصال والعنوان. تخضع التغييرات المقدمة لمراجعة اللجنة قبل سريانها. تغييرات الاسم والهوية متاحة للمسؤول فقط.",
+    "pendingTitle": "بانتظار المراجعة",
+    "pendingDescription": "لديك {{count}} تغيير(ات) بانتظار موافقة اللجنة ({{sections}}). ستنتظر التعديلات الجديدة في هذه الأقسام في الطابور.",
+    "tabs": {
+      "contact": "الاتصال",
+      "address": "العنوان",
+      "notifications": "الإشعارات"
+    },
+    "contact": {
+      "phone": "الهاتف",
+      "whatsapp": "واتساب",
+      "email": "البريد الإلكتروني",
+      "website": "الموقع",
+      "linkedin": "لينكدإن",
+      "facebook": "فيسبوك",
+      "instagram": "إنستغرام",
+      "twitter": "تويتر / إكس",
+      "submit": "إرسال للمراجعة",
+      "submitHint": "تسري التغييرات بعد موافقة اللجنة.",
+      "pendingTitle": "تغيير اتصال معلق",
+      "pendingDescription": "تغيير سابق على تفاصيل الاتصال الخاصة بك لا يزال قيد المراجعة."
+    },
+    "address": {
+      "addressLine": "سطر العنوان",
+      "building": "المبنى",
+      "street": "الشارع",
+      "area": "المنطقة",
+      "city": "المدينة",
+      "state": "الإمارة / المحافظة",
+      "postcode": "الرمز البريدي",
+      "submit": "إرسال للمراجعة",
+      "pendingTitle": "تغيير عنوان معلق",
+      "pendingDescription": "تغيير سابق على عنوانك لا يزال قيد المراجعة."
+    },
+    "photo": {
+      "change": "تغيير الصورة",
+      "tooLarge": "يجب أن تكون الصورة أصغر من 10 ميغابايت.",
+      "uploaded": "تم تحديث الصورة.",
+      "failed": "فشل تحميل الصورة."
+    },
+    "header": {
+      "itsLabel": "ITS",
+      "namesAdminOnly": "تغييرات الاسم والهوية متاحة للمسؤول فقط. تواصل مع اللجنة لتحديثها."
+    }
+  },
+  "notifications": {
+    "intro": "يختار النظام أفضل قناة متاحة (واتساب > رسائل قصيرة > بريد إلكتروني) افتراضياً. حدد قناة مفضلة أدناه للتجاوز. يمكن كتم كل نوع إشعار بشكل مستقل. يتم تسجيل التحديثات في سجل تدقيق على الخادم حتى عند التسليم في وضع السجل فقط.",
+    "channelLabel": "القناة المفضلة",
+    "channelAuto": "تلقائي (الأفضل المتاح)",
+    "channelEmail": "البريد الإلكتروني",
+    "channelSms": "رسائل قصيرة",
+    "channelWhatsApp": "واتساب",
+    "typesLabel": "أنواع الإشعارات",
+    "save": "حفظ التفضيلات",
+    "noUnsavedChanges": "لا توجد تغييرات غير محفوظة.",
+    "saved": "تم حفظ التفضيلات.",
+    "saveFailed": "فشل الحفظ.",
+    "kinds": {
+      "commitmentDue": {
+        "title": "موعد قسط الالتزام",
+        "description": "تذكير قبل 3 أيام من تاريخ استحقاق كل قسط."
+      },
+      "qhStateChanged": {
+        "title": "تحديثات القرض الحسن",
+        "description": "عند انتقال قرضك بين حالات الموافقة والصرف."
+      },
+      "eventReminder": {
+        "title": "تذكيرات الفعاليات",
+        "description": "قبل 24 ساعة من كل فعالية تم تأكيد حضورك لها."
+      }
+    }
+  },
+  "common": {
+    "loading": "جاري التحميل…",
+    "noData": "لا توجد بيانات مسجلة.",
+    "loadFailed": "تعذر تحميل البيانات."
   }
 }

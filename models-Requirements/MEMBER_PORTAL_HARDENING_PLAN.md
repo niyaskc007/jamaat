@@ -222,15 +222,108 @@ message — no claiming "done" from compilation alone.
 
 ---
 
+## Phase F — Self-registration (shipped 2026-05-05, commit `62e4abe`)
+
+Public `/register` form + admin moderation queue at `/admin/applications`. Anonymous
+submission creates a `MemberApplication` row; approval provisions an `ApplicationUser`
+via the existing `IMemberLoginProvisioningService` and emails the applicant a welcome
+message + temporary password. Rejection requires a reviewer note, and (after Phase G)
+the applicant gets an email explaining why.
+
+Originally deferred under the "out of scope" list below; promoted to a full phase
+after the original 5-phase plan shipped.
+
+---
+
+## Phase G — Rejection + new-device-login notifications (shipped 2026-05-05)
+
+- New `NotificationKind.ApplicationRejected (9)`. Wired into
+  `MemberApplicationService.RejectAsync` so the applicant receives the reviewer note
+  via the same `INotificationSender` plumbing as approve/welcome.
+- New `NotificationKind.NewDeviceLogin (10)`. `LoginAuditService.RecordAsync` now
+  detects "new IP for this user" after a successful login and fires a security email.
+  Skipped on first-ever login (welcome email already covers it) and on repeats from
+  known IPs to avoid noise.
+- Receipt-confirmed notifications were already wired in `ReceiptService` from a
+  prior release; no change needed.
+
+---
+
+## Phase H — Operator bundle code-split (shipped 2026-05-05)
+
+Initial JS bundle dropped from **3.14 MB → 732 KB** (76% reduction) by lazy-loading
+every operator page (admin/*, dashboards/*, reports, ledger, accounting, members,
+events, receipts, vouchers, qarzan-hasana, system/*) plus the operator
+dashboard. Auth flow + chrome stay eagerly imported because they're on the boot path.
+
+Members never load operator JS; operators only load each operator page on first navigation.
+Builds now produce ~50 small chunks with proper route-level splitting; the PWA precache
+manifest carries them all so post-install offline navigation still works.
+
+---
+
+## Phase I — Full AR/HI/UR portal translations (shipped 2026-05-05)
+
+Every key in `en/portal.json` now has matching machine translations in `ar/`, `hi/`,
+`ur/`. The `_meta` field still flags them as `[REVIEW]` — production deployments should
+have a native speaker pass before going live.
+
+---
+
 ## Out of scope (deferred)
 
 | Item | Why deferred |
 |---|---|
-| Self-registration (`/portal/register` + admin moderation queue) | Curated governance model fits admin-provisioning. Add if/when an open community needs it. |
-| Subdomain split (`members.jamaat.com`) | Premature for current member volume. The `VITE_PORTAL_BASE` config var added in Phase A keeps this a future config change, not a refactor. |
 | Native mobile apps | The PWA shell in Phase E gives 80% of the value. Native is a separate decision. |
 | GDPR data-export ("download my data") | Add when first member asks. |
 | Per-tenant notification template overrides | Templates ship in CMS as global; per-tenant variants land if/when tenants ask. |
+| Hangfire dashboard | The hosted-service-with-PeriodicTimer pattern from Phase C is sufficient at this scale. Hangfire's value is the dashboard + retry semantics; revisit if jobs grow beyond the 3 we have. |
+| Native push notifications | Email/SMS/WhatsApp covers it; web push needs VAPID + service worker + browser-permission UX that's not worth the complexity for current member count. |
+
+---
+
+## Subdomain split — deployment guide
+
+The `VITE_PORTAL_BASE` env var added in Phase A makes splitting `members.jamaat.com` a
+deploy-time decision, not a code change. Steps when you're ready:
+
+### Single-domain (current default)
+- One Kestrel host serving both API and SPA at e.g. `app.jamaat.com`
+- Members hit `app.jamaat.com/portal/me`; operators hit `app.jamaat.com/dashboard`
+- `VITE_PORTAL_BASE` defaults to `/portal`; nothing to set
+
+### Split-subdomain (when you want it)
+- DNS: point `app.jamaat.com` and `members.jamaat.com` at the same Kestrel host (or
+  separate hosts behind a load balancer).
+- Build the SPA twice with different env vars:
+  ```bash
+  # Operator build
+  VITE_PORTAL_BASE=/portal npm run build
+  # → deploy to app.jamaat.com
+
+  # Member build
+  VITE_PORTAL_BASE='' npm run build
+  # → deploy to members.jamaat.com (the portal lives at the root, /me etc.)
+  ```
+- The `/m` shortcut redirects to `${env.portalBase}/me` so it works in both modes.
+- JWT cookies: set the cookie domain to the parent (`.jamaat.com`) so a single login
+  carries across both subdomains. Already configured this way in
+  `Program.cs` JWT options if you set `Jwt:CookieDomain` to `.jamaat.com`.
+- CORS: add both origins to `Cors:Origins` in `appsettings.json`.
+- CSP: if you set one, allow both origins as `connect-src`.
+
+### Why split at all
+- Brand clarity: members never see admin URLs.
+- Marketing: bookmarkable `members.jamaat.com` is easier to share.
+- Independent deploy cadence: hot-fix the operator dashboard without touching member
+  bundles.
+- Bundle size: each subdomain only ships its own audience's chunks, smaller initial
+  download than even the lazy-loaded shared build.
+
+Trade-off: two SPA builds + two CDN/host configs to maintain. Not worth doing until
+member count ≫ operator count or when marketing genuinely needs the URL.
+
+---
 
 ---
 

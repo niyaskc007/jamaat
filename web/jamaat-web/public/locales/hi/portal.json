@@ -1,5 +1,5 @@
 {
-  "_meta": "[REVIEW] Machine-translated. Have a native Hindi speaker review before production. Keys missing here fall back to English at runtime.",
+  "_meta": "[REVIEW] Machine-translated. Have a native Hindi speaker review before production.",
   "shell": {
     "label": "सदस्य पोर्टल",
     "memberRole": "सदस्य"
@@ -18,5 +18,84 @@
     "profile": "मेरी प्रोफ़ाइल",
     "changePassword": "पासवर्ड बदलें",
     "signOut": "साइन आउट"
+  },
+  "profile": {
+    "title": "मेरी प्रोफ़ाइल",
+    "intro": "अपने संपर्क और पते का विवरण अपडेट करें। प्रस्तुत बदलाव लाइव होने से पहले समिति की समीक्षा से गुज़रते हैं। नाम और पहचान बदलाव केवल व्यवस्थापक के लिए हैं।",
+    "pendingTitle": "समीक्षा बाकी है",
+    "pendingDescription": "आपके पास {{count}} परिवर्तन समिति की मंज़ूरी का इंतज़ार कर रहे हैं ({{sections}})। उन सेक्शन में नए परिवर्तन इसके पीछे क़तार में लगेंगे।",
+    "tabs": {
+      "contact": "संपर्क",
+      "address": "पता",
+      "notifications": "सूचनाएँ"
+    },
+    "contact": {
+      "phone": "फ़ोन",
+      "whatsapp": "व्हाट्सऐप",
+      "email": "ईमेल",
+      "website": "वेबसाइट",
+      "linkedin": "लिंक्डइन",
+      "facebook": "फ़ेसबुक",
+      "instagram": "इंस्टाग्राम",
+      "twitter": "ट्विटर / X",
+      "submit": "समीक्षा हेतु प्रस्तुत करें",
+      "submitHint": "समिति की मंज़ूरी के बाद बदलाव लाइव होते हैं।",
+      "pendingTitle": "संपर्क परिवर्तन लंबित",
+      "pendingDescription": "आपके संपर्क विवरण में पिछला परिवर्तन अब भी समीक्षा का इंतज़ार कर रहा है।"
+    },
+    "address": {
+      "addressLine": "पता लाइन",
+      "building": "बिल्डिंग",
+      "street": "सड़क",
+      "area": "क्षेत्र",
+      "city": "शहर",
+      "state": "राज्य / अमीरात",
+      "postcode": "पिन कोड",
+      "submit": "समीक्षा हेतु प्रस्तुत करें",
+      "pendingTitle": "पता परिवर्तन लंबित",
+      "pendingDescription": "आपके पते में पिछला परिवर्तन अब भी समीक्षा का इंतज़ार कर रहा है।"
+    },
+    "photo": {
+      "change": "फ़ोटो बदलें",
+      "tooLarge": "फ़ोटो 10 MB से कम होनी चाहिए।",
+      "uploaded": "फ़ोटो अपडेट हो गई।",
+      "failed": "फ़ोटो अपलोड विफल।"
+    },
+    "header": {
+      "itsLabel": "ITS",
+      "namesAdminOnly": "नाम और पहचान बदलाव केवल व्यवस्थापक के लिए हैं। अपडेट हेतु अपनी समिति से संपर्क करें।"
+    }
+  },
+  "notifications": {
+    "intro": "सिस्टम डिफ़ॉल्ट रूप से सबसे अच्छा उपलब्ध चैनल चुनता है (व्हाट्सऐप > SMS > ईमेल)। ओवरराइड करने हेतु नीचे पसंदीदा चैनल चुनें। हर सूचना प्रकार को स्वतंत्र रूप से म्यूट किया जा सकता है। अपडेट सर्वर-साइड ऑडिट लॉग में दर्ज होते हैं भले ही डिलीवरी लॉग-ओनली मोड में हो।",
+    "channelLabel": "पसंदीदा चैनल",
+    "channelAuto": "स्वचालित (सर्वश्रेष्ठ उपलब्ध)",
+    "channelEmail": "ईमेल",
+    "channelSms": "SMS",
+    "channelWhatsApp": "व्हाट्सऐप",
+    "typesLabel": "सूचना प्रकार",
+    "save": "प्राथमिकताएँ सहेजें",
+    "noUnsavedChanges": "कोई अनसहेजे परिवर्तन नहीं।",
+    "saved": "प्राथमिकताएँ सहेजी गईं।",
+    "saveFailed": "सहेजना विफल।",
+    "kinds": {
+      "commitmentDue": {
+        "title": "प्रतिबद्धता क़िस्त देय",
+        "description": "हर क़िस्त की देय तारीख़ से 3 दिन पहले अनुस्मारक।"
+      },
+      "qhStateChanged": {
+        "title": "क़र्ज़न हसना अपडेट",
+        "description": "जब आपका ऋण मंज़ूरी / वितरण की स्थितियों के बीच बदलता है।"
+      },
+      "eventReminder": {
+        "title": "कार्यक्रम अनुस्मारक",
+        "description": "आपके पुष्टि किए गए हर कार्यक्रम से 24 घंटे पहले।"
+      }
+    }
+  },
+  "common": {
+    "loading": "लोड हो रहा है…",
+    "noData": "कोई डेटा रिकॉर्ड नहीं।",
+    "loadFailed": "डेटा लोड नहीं हो सका।"
   }
 }

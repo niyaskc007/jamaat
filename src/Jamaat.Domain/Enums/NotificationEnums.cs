@@ -24,6 +24,13 @@ public enum NotificationKind
     /// Subject + body are pre-formatted by the evaluator; recipients are SuperAdmin role
     /// members (or the explicit list in Alerts:Recipients).</summary>
     SystemAlert = 8,
+    /// <summary>A self-registration application was rejected by the admin queue. Notifies
+    /// the applicant with the reviewer note so they understand why and can re-apply
+    /// (resubmits after rejection are allowed).</summary>
+    ApplicationRejected = 9,
+    /// <summary>A successful sign-in from an IP / user-agent we have not seen for that user
+    /// before. Security signal so the user can self-detect a credential leak; not blocking.</summary>
+    NewDeviceLogin = 10,
 }
 
 /// <summary>How the notification was delivered (or attempted). Multiple channels can be
