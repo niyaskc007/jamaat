@@ -126,10 +126,15 @@ public sealed class MemberApplicationService(
         }
 
         // Provision the login. The existing service handles role assignment + claim mirroring +
-        // temp password issuance + welcome notification. IsLoginAllowed=false by default; admin
-        // flips it on from the Users page when ready. ProvisionAsync is idempotent: if a user
-        // already exists for this ITS, it returns WasCreated=false and the existing UserId.
+        // temp password issuance. ProvisionAsync is idempotent: if a user already exists for
+        // this ITS, it returns WasCreated=false and the existing UserId.
         var prov = await provisioning.ProvisionAsync(member, ct);
+
+        // Approving the application IS the admin's "go live" decision - flip IsLoginAllowed
+        // immediately so the welcome email's temp password is actually usable. Splitting this
+        // across two clicks (approve, then enable login) is pointless friction. Admins who
+        // need to "approve but disable" for some reason can flip it off on the Users page.
+        await provisioning.EnableLoginAsync(prov.UserId, ct);
 
         // Fire the welcome email regardless of whether ProvisionAsync created a fresh user
         // or returned an existing one - re-approving an application should still notify the

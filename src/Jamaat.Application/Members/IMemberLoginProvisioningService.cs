@@ -30,6 +30,11 @@ public interface IMemberLoginProvisioningService
     /// for any that don't yet have one. Called from the database seeder on startup. Returns the
     /// number of new logins created.
     Task<int> BackfillTenantAsync(CancellationToken ct = default);
+
+    /// Flip IsLoginAllowed=true on the ApplicationUser. Called from the application-approval
+    /// flow so that approving a member application is a single decision point - the admin
+    /// doesn't need a second click on the Users page to actually let the member sign in.
+    Task EnableLoginAsync(Guid userId, CancellationToken ct = default);
 }
 
 public sealed record MemberLoginProvisioningResult(Guid UserId, string UserName, bool WasCreated, string? TemporaryPasswordPlaintext);

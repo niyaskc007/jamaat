@@ -99,6 +99,15 @@ public sealed class MemberLoginProvisioningService(
         return created;
     }
 
+    public async Task EnableLoginAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await users.FindByIdAsync(userId.ToString());
+        if (user is null) return;
+        if (user.IsLoginAllowed) return;
+        user.IsLoginAllowed = true;
+        await users.UpdateAsync(user);
+    }
+
     private async Task EnsureMemberRoleExistsAsync(Guid tenantId)
     {
         if (await roles.RoleExistsAsync(MemberRoleName)) return;
