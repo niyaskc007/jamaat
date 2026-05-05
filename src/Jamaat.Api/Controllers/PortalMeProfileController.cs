@@ -83,6 +83,28 @@ public sealed class PortalMeProfileController(
     public Task<IActionResult> RequestEducationWork([FromBody] UpdateEducationWorkDto dto, CancellationToken ct) =>
         SubmitChange(MemberChangeRequestSection.EducationWork, dto, ct);
 
+    /// Persists the signed-in user's preferred UI language. Updates ApplicationUser.PreferredLanguage
+    /// so the next JWT issued (on refresh / re-login) carries the new value, plus a future server-
+    /// rendered email can pick the right locale. Accepts the same 2-letter codes the SPA uses.
+    [HttpPut("language")]
+    public async Task<IActionResult> SetLanguage([FromBody] SetLanguageDto dto, CancellationToken ct)
+    {
+        var allowed = new[] { "en", "ar", "hi", "ur" };
+        if (string.IsNullOrWhiteSpace(dto.Language) || !allowed.Contains(dto.Language))
+            return BadRequest(new { error = "language.invalid", detail = "Language must be one of: en, ar, hi, ur." });
+
+        var sub = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                  ?? User.FindFirst("sub")?.Value;
+        if (!Guid.TryParse(sub, out var userId)) return Unauthorized();
+        var user = await users.FindByIdAsync(userId.ToString());
+        if (user is null) return NotFound();
+        user.PreferredLanguage = dto.Language;
+        await users.UpdateAsync(user);
+        return NoContent();
+    }
+
+    public sealed record SetLanguageDto(string Language);
+
     /// Notification preferences for the signed-in member. Returned shape mirrors
     /// MemberNotificationPreferences. Null channels / unset kinds are treated as defaults.
     [HttpGet("notification-prefs")]

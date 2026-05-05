@@ -1,0 +1,100 @@
+{
+  "shell": {
+    "label": "Member portal",
+    "memberRole": "Member"
+  },
+  "nav": {
+    "home": "Home",
+    "profile": "My profile",
+    "contributions": "Contributions",
+    "commitments": "Commitments",
+    "qarzanHasana": "Qarzan Hasana",
+    "guarantorInbox": "Guarantor inbox",
+    "events": "Events",
+    "loginHistory": "Login history"
+  },
+  "menu": {
+    "profile": "My profile",
+    "changePassword": "Change password",
+    "signOut": "Sign out"
+  },
+  "profile": {
+    "title": "My profile",
+    "intro": "Update your contact and address details. Submitted changes go through committee review before they go live. Name and identity changes are admin-only.",
+    "pendingTitle": "Pending review",
+    "pendingDescription": "You have {{count}} change(s) awaiting committee approval ({{sections}}). New edits in those sections will queue behind it.",
+    "tabs": {
+      "contact": "Contact",
+      "address": "Address",
+      "notifications": "Notifications"
+    },
+    "contact": {
+      "phone": "Phone",
+      "whatsapp": "WhatsApp",
+      "email": "Email",
+      "website": "Website",
+      "linkedin": "LinkedIn",
+      "facebook": "Facebook",
+      "instagram": "Instagram",
+      "twitter": "Twitter / X",
+      "submit": "Submit for review",
+      "submitHint": "Changes go live after committee approval.",
+      "pendingTitle": "Contact change pending",
+      "pendingDescription": "A previous change to your contact details is still awaiting review."
+    },
+    "address": {
+      "addressLine": "Address line",
+      "building": "Building",
+      "street": "Street",
+      "area": "Area",
+      "city": "City",
+      "state": "State / Emirate",
+      "postcode": "Postal code",
+      "submit": "Submit for review",
+      "pendingTitle": "Address change pending",
+      "pendingDescription": "A previous change to your address is still awaiting review."
+    },
+    "photo": {
+      "change": "Change photo",
+      "tooLarge": "Photo must be smaller than 10 MB.",
+      "uploaded": "Photo updated.",
+      "failed": "Photo upload failed."
+    },
+    "header": {
+      "itsLabel": "ITS",
+      "namesAdminOnly": "Name and identity changes are admin-only. Contact your committee to update them."
+    }
+  },
+  "notifications": {
+    "intro": "The system picks the best channel available (WhatsApp > SMS > email) by default. Set a preferred channel below to override. Each notification type can be muted independently. Updates are written to a server-side audit log even when delivery is in log-only mode.",
+    "channelLabel": "Preferred channel",
+    "channelAuto": "Auto (best available)",
+    "channelEmail": "Email",
+    "channelSms": "SMS",
+    "channelWhatsApp": "WhatsApp",
+    "typesLabel": "Notification types",
+    "save": "Save preferences",
+    "noUnsavedChanges": "No unsaved changes.",
+    "saved": "Preferences saved.",
+    "saveFailed": "Save failed.",
+    "kinds": {
+      "commitmentDue": {
+        "title": "Commitment installment due",
+        "description": "Reminder 3 days before each installment due date."
+      },
+      "qhStateChanged": {
+        "title": "Qarzan Hasana updates",
+        "description": "When your loan moves between approval / disbursement states."
+      },
+      "eventReminder": {
+        "title": "Event reminders",
+        "description": "24 hours before each event you are confirmed for."
+      }
+    }
+  },
+  "common": {
+    "loading": "Loading…",
+    "noData": "No data on record.",
+    "loadFailed": "Could not load data."
+  }
+}

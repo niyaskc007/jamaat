@@ -110,4 +110,9 @@ export const portalMeApi = {
     api.get<NotificationPrefs>('/api/v1/portal/me/profile/notification-prefs').then((r) => r.data),
   setNotificationPrefs: (dto: NotificationPrefs) =>
     api.put('/api/v1/portal/me/profile/notification-prefs', dto).then(() => undefined),
+
+  // Phase D - language preference (server-side persistence so locale follows the user
+  // across devices instead of just being in localStorage)
+  setLanguage: (language: 'en' | 'ar' | 'hi' | 'ur') =>
+    api.put('/api/v1/portal/me/profile/language', { language }).then(() => undefined),
 };

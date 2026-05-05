@@ -1,0 +1,22 @@
+{
+  "_meta": "[REVIEW] Machine-translated. Have a native Urdu speaker review before production. Keys missing here fall back to English at runtime.",
+  "shell": {
+    "label": "ممبر پورٹل",
+    "memberRole": "ممبر"
+  },
+  "nav": {
+    "home": "ہوم",
+    "profile": "میرا پروفائل",
+    "contributions": "تعاون",
+    "commitments": "وعدے",
+    "qarzanHasana": "قرض حسنہ",
+    "guarantorInbox": "ضامن انباکس",
+    "events": "پروگرام",
+    "loginHistory": "لاگ ان ہسٹری"
+  },
+  "menu": {
+    "profile": "میرا پروفائل",
+    "changePassword": "پاس ورڈ تبدیل کریں",
+    "signOut": "سائن آؤٹ"
+  }
+}

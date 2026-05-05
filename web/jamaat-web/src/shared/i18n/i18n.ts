@@ -24,7 +24,7 @@ void i18n
     load: 'languageOnly',
     interpolation: { escapeValue: false },
     backend: { loadPath: '/locales/{{lng}}/{{ns}}.json' },
-    ns: ['common', 'auth', 'members', 'receipts', 'vouchers', 'reports', 'admin'],
+    ns: ['common', 'auth', 'members', 'receipts', 'vouchers', 'reports', 'admin', 'portal'],
     defaultNS: 'common',
     detection: {
       order: ['localStorage', 'navigator'],
@@ -32,5 +32,19 @@ void i18n
       caches: ['localStorage'],
     },
   });
+
+// Apply <html dir> based on the active language. Wired here (not at App mount) so the
+// document direction stays in sync even when language changes mid-session via the
+// LanguageSwitcher. Initial pass once i18n initialises; subsequent passes on each
+// languageChanged event.
+function applyDir(lang: string) {
+  const dir = isRtl(lang) ? 'rtl' : 'ltr';
+  if (typeof document !== 'undefined') {
+    document.documentElement.dir = dir;
+    document.documentElement.lang = lang;
+  }
+}
+i18n.on('initialized', () => applyDir(i18n.resolvedLanguage ?? 'en'));
+i18n.on('languageChanged', (lng) => applyDir(lng));
 
 export default i18n;

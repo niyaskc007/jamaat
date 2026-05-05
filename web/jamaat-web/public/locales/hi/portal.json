@@ -1,0 +1,22 @@
+{
+  "_meta": "[REVIEW] Machine-translated. Have a native Hindi speaker review before production. Keys missing here fall back to English at runtime.",
+  "shell": {
+    "label": "सदस्य पोर्टल",
+    "memberRole": "सदस्य"
+  },
+  "nav": {
+    "home": "होम",
+    "profile": "मेरी प्रोफ़ाइल",
+    "contributions": "योगदान",
+    "commitments": "प्रतिबद्धताएँ",
+    "qarzanHasana": "क़र्ज़न हसना",
+    "guarantorInbox": "गारंटर इनबॉक्स",
+    "events": "कार्यक्रम",
+    "loginHistory": "लॉगिन इतिहास"
+  },
+  "menu": {
+    "profile": "मेरी प्रोफ़ाइल",
+    "changePassword": "पासवर्ड बदलें",
+    "signOut": "साइन आउट"
+  }
+}
