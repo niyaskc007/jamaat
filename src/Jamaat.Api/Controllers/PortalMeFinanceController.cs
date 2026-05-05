@@ -126,6 +126,50 @@ public sealed class PortalMeFinanceController(
         return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }
 
+    /// Member-self acceptance of a Draft commitment's agreement, moving it Draft → Active.
+    /// Mirrors the operator flow but resolves the agreement template server-side (members don't
+    /// have access to template master-data) and stamps method=Self instead of Admin so the audit
+    /// trail records who actually accepted.
+    [HttpPost("commitments/{id:guid}/accept-agreement")]
+    [Authorize(Policy = "portal.commitments.create.own")]
+    public async Task<IActionResult> CommitmentAcceptAgreement(Guid id, CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return NotFound();
+        var c = await db.Commitments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (c is null || c.MemberId != memberId.Value) return NotFound();
+
+        // Fall back to a self-rendered text if no template is configured for this fund - never
+        // block the member because master-data wasn't seeded. The text becomes part of the audit
+        // record on the commitment.
+        var tpl = await db.CommitmentAgreementTemplates.AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderByDescending(t => t.Version)
+            .FirstOrDefaultAsync(ct);
+        var rendered = tpl is null
+            ? $"I, the signed-in member, accept the commitment {c.Code} for {c.FundNameSnapshot} totalling {c.TotalAmount:N2} {c.Currency} over {c.NumberOfInstallments} installments starting {c.StartDate:dd MMM yyyy}."
+            : RenderTemplate(tpl.BodyMarkdown, c);
+
+        var dto = new AcceptAgreementDto(tpl?.Id, rendered, AcceptedByAdmin: false);
+        var r = await commitmentSvc.AcceptAgreementAsync(id, dto, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
+    private static string RenderTemplate(string body, Domain.Entities.Commitment c)
+    {
+        // Lightweight token replacement; matches the public template variables documented in
+        // the operator agreement-template editor. Keeps this endpoint independent of any template
+        // engine so agreement content stays auditable + identical to what the member sees.
+        return body
+            .Replace("{Code}", c.Code, StringComparison.Ordinal)
+            .Replace("{FundName}", c.FundNameSnapshot, StringComparison.Ordinal)
+            .Replace("{TotalAmount}", c.TotalAmount.ToString("N2"), StringComparison.Ordinal)
+            .Replace("{Currency}", c.Currency, StringComparison.Ordinal)
+            .Replace("{NumberOfInstallments}", c.NumberOfInstallments.ToString(), StringComparison.Ordinal)
+            .Replace("{StartDate}", c.StartDate.ToString("dd MMM yyyy"), StringComparison.Ordinal)
+            .Replace("{PartyName}", c.PartyNameSnapshot, StringComparison.Ordinal);
+    }
+
     // ----- Qarzan Hasana ------------------------------------------------------
 
     [HttpGet("qarzan-hasana/{id:guid}")]

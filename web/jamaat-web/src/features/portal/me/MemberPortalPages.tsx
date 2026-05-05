@@ -217,7 +217,14 @@ export function MemberEventsPage() {
     <SectionLayout
       icon={<CalendarOutlined />} title="Events"
       intro="Your event registrations. The Browse button opens the public event portal where you can register for new ones."
-      action={<Link to="/portal/events"><Button type="primary" icon={<PlusOutlined />}>Browse upcoming events</Button></Link>}
+      action={
+        // /portal/events is the public anonymous event portal - it has its own minimal chrome
+        // and NO member-portal sidebar. Open it in a new tab so the member doesn't lose their
+        // /portal/me navigation context when they go browsing.
+        <a href="/portal/events" target="_blank" rel="noopener noreferrer">
+          <Button type="primary" icon={<PlusOutlined />}>Browse upcoming events</Button>
+        </a>
+      }
     >
       <Card className="jm-card" styles={{ body: { padding: 0 } }}>
         <Table<EventRegistrationRow>

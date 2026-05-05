@@ -255,6 +255,8 @@ export const portalMeApi = {
     api.get<PortalCommitmentDetail>(`/api/v1/portal/me/commitments/${id}`).then((r) => r.data),
   commitmentCreate: (payload: CreateCommitmentPayload) =>
     api.post('/api/v1/portal/me/commitments', payload).then((r) => r.data),
+  commitmentAcceptAgreement: (id: string) =>
+    api.post(`/api/v1/portal/me/commitments/${id}/accept-agreement`).then((r) => r.data),
   fundTypes: (category: 'donation' | 'loan' = 'donation') =>
     api.get<PortalFundType[]>(`/api/v1/portal/me/fund-types`, { params: { category } }).then((r) => r.data),
   qarzanHasana: () => api.get<QhLoanRow[]>('/api/v1/portal/me/qarzan-hasana').then((r) => r.data),
