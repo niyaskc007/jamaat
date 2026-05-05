@@ -204,6 +204,9 @@ export function LoginPage() {
                   {t('login.forgot')}
                 </Button>
               </div>
+              <div style={{ marginBlockEnd: 16, fontSize: 13, color: 'var(--jm-gray-500)' }}>
+                Don't have an account? <Link to="/register">Apply for portal access</Link>
+              </div>
 
               {error && <Alert type="error" message={error} showIcon style={{ marginBlockEnd: 16 }} />}
 

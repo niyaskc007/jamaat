@@ -144,6 +144,7 @@ public static class DependencyInjection
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IMemberProfileService, MemberProfileService>();
         services.AddScoped<IMemberChangeRequestService, MemberChangeRequestService>();
+        services.AddScoped<IMemberApplicationService, MemberApplicationService>();
         services.AddScoped<IReliabilityService, ReliabilityService>();
         services.AddScoped<IFundEnrollmentService, FundEnrollmentService>();
         services.AddScoped<IQarzanHasanaService, QarzanHasanaService>();

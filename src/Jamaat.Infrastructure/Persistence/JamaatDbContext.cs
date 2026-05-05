@@ -72,6 +72,7 @@ public class JamaatDbContext : IdentityDbContext<ApplicationUser, ApplicationRol
     public DbSet<SystemAuditLog> SystemAuditLogs => Set<SystemAuditLog>();
     public DbSet<CmsPage> CmsPages => Set<CmsPage>();
     public DbSet<CmsBlock> CmsBlocks => Set<CmsBlock>();
+    public DbSet<MemberApplication> MemberApplications => Set<MemberApplication>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
