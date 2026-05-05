@@ -13,6 +13,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 import {
   portalMeApi,
   type FundEnrollmentRow, type CreateQhPayload,
+  type CreateCommitmentPayload, type CreatePatronagePayload,
 } from './portalMeApi';
 
 // --- Shared header --------------------------------------------------------
@@ -306,6 +307,9 @@ export function MemberPatronagesPage() {
         <Typography.Title level={4} className="jm-section-title">
           <GiftOutlined /> Patronages
         </Typography.Title>
+        <Link to="/portal/me/fund-enrollments/new">
+          <Button type="primary" icon={<PlusOutlined />}>Request enrollment</Button>
+        </Link>
       </div>
       <Typography.Paragraph type="secondary" className="jm-page-intro">
         Your fund enrollments — Sabil, Mutafariq, Niyaz, etc. Each row tracks how much has been collected against that fund and links to the underlying receipts.
@@ -519,6 +523,216 @@ export function MemberQhSubmitPage() {
             <Space>
               <Button type="primary" icon={<PlusOutlined />} htmlType="submit" loading={submit.isPending}>Submit application</Button>
               <Button onClick={() => navigate('/portal/me/qarzan-hasana')}>Cancel</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Card>
+    </div>
+  );
+}
+
+// --- Commitment self-submit form ----------------------------------------
+
+type CommitmentFormShape = {
+  fundTypeId: string; currency: string; totalAmount: number;
+  frequency: number; numberOfInstallments: number;
+  startDate: Dayjs; notes?: string;
+};
+
+export function MemberCommitmentSubmitPage() {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [form] = Form.useForm<CommitmentFormShape>();
+  const fundsQ = useQuery({ queryKey: ['portal-me-fund-types', 'donation'], queryFn: () => portalMeApi.fundTypes('donation') });
+
+  const submit = useMutation({
+    mutationFn: (payload: CreateCommitmentPayload) => portalMeApi.commitmentCreate(payload),
+    onSuccess: () => {
+      message.success('Commitment submitted. An administrator will activate it after the agreement is accepted.');
+      qc.invalidateQueries({ queryKey: ['portal-me-commitments'] });
+      qc.invalidateQueries({ queryKey: ['portal-me-dashboard'] });
+      navigate('/portal/me/commitments');
+    },
+    onError: (err: Error) => message.error(err.message || 'Submit failed.'),
+  });
+
+  const initial = useMemo<Partial<CommitmentFormShape>>(() => ({
+    currency: 'INR', frequency: 2, numberOfInstallments: 12,
+    startDate: dayjs().add(7, 'day'),
+  }), []);
+
+  function onFinish(v: CommitmentFormShape) {
+    submit.mutate({
+      fundTypeId: v.fundTypeId,
+      currency: v.currency,
+      totalAmount: v.totalAmount,
+      frequency: v.frequency,
+      numberOfInstallments: v.numberOfInstallments,
+      startDate: v.startDate.format('YYYY-MM-DD'),
+      notes: v.notes ?? null,
+    });
+  }
+
+  return (
+    <div>
+      <DetailHeader icon={<HeartOutlined />} title="New commitment" backTo="/portal/me/commitments" />
+      <Alert type="info" showIcon className="jm-portal-dashboard-alert"
+        message="Submit a pledge to one of the funds you wish to support."
+        description="The commitment lands in Draft. An administrator will accept the agreement on your behalf, after which the schedule becomes active." />
+      <Card className="jm-card">
+        <Form<CommitmentFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish}>
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item label="Fund" name="fundTypeId" rules={[{ required: true, message: 'Choose a fund.' }]}>
+                <Select loading={fundsQ.isLoading}
+                  placeholder="Select fund"
+                  options={(fundsQ.data ?? []).map((f) => ({ value: f.id, label: `${f.code} — ${f.name}` }))} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={6}>
+              <Form.Item label="Currency" name="currency" rules={[{ required: true }]}>
+                <Select options={[{ value: 'INR', label: 'INR' }, { value: 'AED', label: 'AED' }, { value: 'USD', label: 'USD' }]} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={6}>
+              <Form.Item label="Total amount" name="totalAmount"
+                rules={[{ required: true, message: 'Enter a total.' }, { type: 'number', min: 1 }]}>
+                <InputNumber<number> className="jm-full-width" min={1} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Frequency" name="frequency" rules={[{ required: true }]}>
+                <Select options={[
+                  { value: 1, label: 'Weekly' },
+                  { value: 2, label: 'Monthly' },
+                  { value: 3, label: 'Quarterly' },
+                  { value: 4, label: 'Half-yearly' },
+                  { value: 5, label: 'Yearly' },
+                ]} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Number of installments" name="numberOfInstallments"
+                rules={[{ required: true }, { type: 'number', min: 1, max: 240 }]}>
+                <InputNumber<number> className="jm-full-width" min={1} max={240} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Start date" name="startDate" rules={[{ required: true }]}>
+                <DatePicker className="jm-full-width" />
+              </Form.Item>
+            </Col>
+            <Col xs={24}>
+              <Form.Item label="Notes" name="notes">
+                <Input.TextArea rows={2} placeholder="Anything the administrator should know about this commitment." />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item>
+            <Space>
+              <Button type="primary" icon={<PlusOutlined />} htmlType="submit" loading={submit.isPending}>Submit commitment</Button>
+              <Button onClick={() => navigate('/portal/me/commitments')}>Cancel</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Card>
+    </div>
+  );
+}
+
+// --- Patronage / fund-enrollment request form --------------------------
+
+type PatronageFormShape = {
+  fundTypeId: string; subType?: string;
+  recurrence: number;
+  startDate: Dayjs; endDate?: Dayjs;
+  notes?: string;
+};
+
+export function MemberPatronageSubmitPage() {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [form] = Form.useForm<PatronageFormShape>();
+  const fundsQ = useQuery({ queryKey: ['portal-me-fund-types', 'donation'], queryFn: () => portalMeApi.fundTypes('donation') });
+
+  const submit = useMutation({
+    mutationFn: (payload: CreatePatronagePayload) => portalMeApi.fundEnrollmentCreate(payload),
+    onSuccess: () => {
+      message.success('Enrollment request submitted. An administrator will approve it shortly.');
+      qc.invalidateQueries({ queryKey: ['portal-me-patronages'] });
+      qc.invalidateQueries({ queryKey: ['portal-me-dashboard'] });
+      navigate('/portal/me/fund-enrollments');
+    },
+    onError: (err: Error) => message.error(err.message || 'Submit failed.'),
+  });
+
+  const initial = useMemo<Partial<PatronageFormShape>>(() => ({
+    recurrence: 2, startDate: dayjs(),
+  }), []);
+
+  function onFinish(v: PatronageFormShape) {
+    submit.mutate({
+      fundTypeId: v.fundTypeId,
+      subType: v.subType?.trim() || null,
+      recurrence: v.recurrence,
+      startDate: v.startDate.format('YYYY-MM-DD'),
+      endDate: v.endDate ? v.endDate.format('YYYY-MM-DD') : null,
+      notes: v.notes ?? null,
+    });
+  }
+
+  return (
+    <div>
+      <DetailHeader icon={<GiftOutlined />} title="Request enrollment" backTo="/portal/me/fund-enrollments" />
+      <Alert type="info" showIcon className="jm-portal-dashboard-alert"
+        message="Subscribe to one of the recurring donation funds (Sabil, Mutafariq, Niyaz, etc.)."
+        description="Your enrollment lands as a request. Once approved, every receipt issued to you against this fund will be tracked here." />
+      <Card className="jm-card">
+        <Form<PatronageFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish}>
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item label="Fund" name="fundTypeId" rules={[{ required: true, message: 'Choose a fund.' }]}>
+                <Select loading={fundsQ.isLoading}
+                  placeholder="Select fund"
+                  options={(fundsQ.data ?? []).map((f) => ({ value: f.id, label: `${f.code} — ${f.name}` }))} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="Sub-type (optional)" name="subType">
+                <Input placeholder="e.g. Individual / Establishment" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Recurrence" name="recurrence" rules={[{ required: true }]}>
+                <Select options={[
+                  { value: 1, label: 'One-time' },
+                  { value: 2, label: 'Monthly' },
+                  { value: 3, label: 'Quarterly' },
+                  { value: 4, label: 'Half-yearly' },
+                  { value: 5, label: 'Yearly' },
+                ]} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Start date" name="startDate" rules={[{ required: true }]}>
+                <DatePicker className="jm-full-width" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="End date (optional)" name="endDate">
+                <DatePicker className="jm-full-width" />
+              </Form.Item>
+            </Col>
+            <Col xs={24}>
+              <Form.Item label="Notes" name="notes">
+                <Input.TextArea rows={2} placeholder="Anything the administrator should know about this enrollment." />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item>
+            <Space>
+              <Button type="primary" icon={<PlusOutlined />} htmlType="submit" loading={submit.isPending}>Submit request</Button>
+              <Button onClick={() => navigate('/portal/me/fund-enrollments')}>Cancel</Button>
             </Space>
           </Form.Item>
         </Form>

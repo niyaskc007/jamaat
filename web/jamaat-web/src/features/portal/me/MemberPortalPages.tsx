@@ -79,7 +79,7 @@ export function MemberCommitmentsPage() {
     <SectionLayout
       icon={<HeartOutlined />} title="My commitments"
       intro={'Active and historical pledges. The "New commitment" button opens the standard commitment form scoped to your record.'}
-      action={canCreate ? <Link to="/commitments/new"><Button type="primary" icon={<PlusOutlined />}>New commitment</Button></Link> : undefined}
+      action={canCreate ? <Link to="/portal/me/commitments/new"><Button type="primary" icon={<PlusOutlined />}>New commitment</Button></Link> : undefined}
     >
       <Card className="jm-card" styles={{ body: { padding: 0 } }}>
         <Table<CommitmentRow>

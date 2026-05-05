@@ -4,6 +4,8 @@ using Jamaat.Application.FundEnrollments;
 using Jamaat.Application.Persistence;
 using Jamaat.Application.QarzanHasana;
 using Jamaat.Application.Receipts;
+using Jamaat.Contracts.Commitments;
+using Jamaat.Contracts.FundEnrollments;
 using Jamaat.Contracts.QarzanHasana;
 using Jamaat.Domain.Enums;
 using Jamaat.Domain.ValueObjects;
@@ -62,7 +64,55 @@ public sealed class PortalMeFinanceController(
         return File(r.Value, "application/pdf", $"receipt-{id}.pdf");
     }
 
+    // ----- Fund-types lookup (portal-accessible) -----------------------------
+
+    /// Slim fund-type picker for the portal commitment + patronage forms. Members don't have
+    /// admin.masterdata so the operator FundTypesController is off-limits. <c>category</c> filter:
+    /// "donation" → non-loan funds (commitment / patronage submission); "loan" → loan funds.
+    [HttpGet("fund-types")]
+    public async Task<IActionResult> FundTypeLookup([FromQuery] string? category, CancellationToken ct)
+    {
+        IQueryable<Domain.Entities.FundType> q = db.FundTypes.AsNoTracking().Where(f => f.IsActive);
+        if (string.Equals(category, "loan", StringComparison.OrdinalIgnoreCase))
+            q = q.Where(f => f.Category == FundCategory.Loan);
+        else
+            q = q.Where(f => f.Category != FundCategory.Loan);
+        var rows = await q
+            .OrderBy(f => f.NameEnglish)
+            .Select(f => new { f.Id, f.Code, Name = f.NameEnglish, Category = (int)f.Category, f.AllowedPaymentModes })
+            .ToListAsync(ct);
+        return Ok(rows);
+    }
+
     // ----- Commitments --------------------------------------------------------
+
+    /// Self-submit a Draft commitment from the member portal. Forces <c>PartyType=Member</c>
+    /// and <c>MemberId</c>=current so a stolen JWT can never pledge on someone else's behalf.
+    /// The commitment lands in Draft status; an admin (or a future portal "accept agreement"
+    /// step) moves it to Active.
+    [HttpPost("commitments")]
+    [Authorize(Policy = "portal.commitments.create.own")]
+    public async Task<IActionResult> CommitmentCreate([FromBody] PortalCreateCommitmentDto dto, CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return BadRequest(new { error = "no_member_link", detail = "Sign-in is not linked to a member record." });
+        var safe = new CreateCommitmentDto(
+            PartyType: CommitmentPartyType.Member,
+            MemberId: memberId.Value,
+            FamilyId: null,
+            FundTypeId: dto.FundTypeId,
+            Currency: dto.Currency,
+            TotalAmount: dto.TotalAmount,
+            Frequency: dto.Frequency,
+            NumberOfInstallments: dto.NumberOfInstallments,
+            StartDate: dto.StartDate,
+            AllowPartialPayments: true,
+            AllowAutoAdvance: true,
+            Notes: dto.Notes,
+            Intention: ContributionIntention.Permanent);
+        var r = await commitmentSvc.CreateDraftAsync(safe, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
 
     [HttpGet("commitments/{id:guid}")]
     public async Task<IActionResult> CommitmentDetail(Guid id, CancellationToken ct)
@@ -132,6 +182,27 @@ public sealed class PortalMeFinanceController(
             })
             .ToListAsync(ct);
         return Ok(rows);
+    }
+
+    /// Self-submit a fund enrollment / patronage request. Forces <c>MemberId</c> to the current
+    /// member; an admin approves the resulting Draft via the existing approval workflow.
+    [HttpPost("fund-enrollments")]
+    [Authorize(Policy = "portal.fund_enrollments.request")]
+    public async Task<IActionResult> FundEnrollmentCreate([FromBody] PortalCreateFundEnrollmentDto dto, CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return BadRequest(new { error = "no_member_link", detail = "Sign-in is not linked to a member record." });
+        var safe = new CreateFundEnrollmentDto(
+            MemberId: memberId.Value,
+            FundTypeId: dto.FundTypeId,
+            SubType: dto.SubType,
+            Recurrence: dto.Recurrence,
+            StartDate: dto.StartDate,
+            EndDate: dto.EndDate,
+            FamilyId: null,
+            Notes: dto.Notes);
+        var r = await fundEnrollmentSvc.CreateAsync(safe, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }
 
     [HttpGet("fund-enrollments/{id:guid}")]
@@ -322,3 +393,23 @@ public sealed record DashboardContributionDto(
 public sealed record DashboardCommitmentDto(
     Guid Id, string Code, string FundName,
     decimal TotalAmount, decimal PaidAmount, decimal RemainingAmount, string Currency);
+
+/// Portal-self commitment submit body. PartyType + MemberId are forced server-side; the
+/// portal client only has to choose the fund + amount + schedule.
+public sealed record PortalCreateCommitmentDto(
+    Guid FundTypeId,
+    string Currency,
+    decimal TotalAmount,
+    CommitmentFrequency Frequency,
+    int NumberOfInstallments,
+    DateOnly StartDate,
+    string? Notes);
+
+/// Portal-self fund-enrollment / patronage request body.
+public sealed record PortalCreateFundEnrollmentDto(
+    Guid FundTypeId,
+    string? SubType,
+    FundEnrollmentRecurrence Recurrence,
+    DateOnly StartDate,
+    DateOnly? EndDate,
+    string? Notes);

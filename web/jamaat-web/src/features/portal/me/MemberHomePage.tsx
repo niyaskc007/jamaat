@@ -34,6 +34,26 @@ export function MemberHomePage() {
           description={(dq.error as Error)?.message ?? 'Please retry.'} />
       )}
 
+      {/* --- Active-invite banners (only render when there's something to do) -- */}
+      {data && data.pendingGuarantorRequests > 0 && (
+        <Alert type="warning" showIcon className="jm-portal-dashboard-alert"
+          message={`You have ${data.pendingGuarantorRequests} pending guarantor request${data.pendingGuarantorRequests === 1 ? '' : 's'}.`}
+          description="A fellow member has asked you to act as a kafil for their Qarzan Hasana application. Endorse or decline from your inbox."
+          action={<Link to="/portal/me/guarantor-inbox"><Button type="primary" size="small">Open inbox</Button></Link>} />
+      )}
+      {data && data.nextInstallment && dayjs(data.nextInstallment.dueDate).diff(dayjs(), 'day') <= 7 && (
+        <Alert type="info" showIcon className="jm-portal-dashboard-alert"
+          message={`Installment #${data.nextInstallment.installmentNo} of ${data.nextInstallment.commitmentCode} is due ${dayjs(data.nextInstallment.dueDate).fromNow()}.`}
+          description={`${formatCur(data.nextInstallment.amountDue)} ${data.nextInstallment.currency} for ${data.nextInstallment.fundName}.`}
+          action={<Link to={`/portal/me/commitments/${data.nextInstallment.commitmentId}`}><Button type="primary" size="small">View commitment</Button></Link>} />
+      )}
+      {data && data.pendingChangeRequests > 0 && (
+        <Alert type="info" showIcon className="jm-portal-dashboard-alert"
+          message={`${data.pendingChangeRequests} profile change${data.pendingChangeRequests === 1 ? '' : 's'} awaiting administrator review.`}
+          description="No further action required from you - you'll be notified once the change has been reviewed."
+          action={<Link to="/portal/me/profile"><Button size="small">View profile</Button></Link>} />
+      )}
+
       {/* --- KPI strip ----------------------------------------------------- */}
       <Row gutter={[16, 16]}>
         <KpiCol><KpiCard

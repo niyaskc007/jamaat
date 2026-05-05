@@ -227,6 +227,21 @@ export type MemberDashboard = {
   activeCommitmentsList: Array<{ id: string; code: string; fundName: string; totalAmount: number; paidAmount: number; remainingAmount: number; currency: string }>;
 };
 
+export type PortalFundType = {
+  id: string; code: string; name: string; category: number; allowedPaymentModes: number;
+};
+
+export type CreateCommitmentPayload = {
+  fundTypeId: string; currency: string; totalAmount: number;
+  frequency: number; numberOfInstallments: number;
+  startDate: string; notes?: string | null;
+};
+
+export type CreatePatronagePayload = {
+  fundTypeId: string; subType?: string | null;
+  recurrence: number; startDate: string; endDate?: string | null; notes?: string | null;
+};
+
 export const portalMeApi = {
   me: () => api.get<Me>('/api/v1/portal/me').then((r) => r.data),
   dashboard: () => api.get<MemberDashboard>('/api/v1/portal/me/dashboard').then((r) => r.data),
@@ -238,6 +253,10 @@ export const portalMeApi = {
   commitments: () => api.get<CommitmentRow[]>('/api/v1/portal/me/commitments').then((r) => r.data),
   commitmentDetail: (id: string) =>
     api.get<PortalCommitmentDetail>(`/api/v1/portal/me/commitments/${id}`).then((r) => r.data),
+  commitmentCreate: (payload: CreateCommitmentPayload) =>
+    api.post('/api/v1/portal/me/commitments', payload).then((r) => r.data),
+  fundTypes: (category: 'donation' | 'loan' = 'donation') =>
+    api.get<PortalFundType[]>(`/api/v1/portal/me/fund-types`, { params: { category } }).then((r) => r.data),
   qarzanHasana: () => api.get<QhLoanRow[]>('/api/v1/portal/me/qarzan-hasana').then((r) => r.data),
   qhDetail: (id: string) =>
     api.get<PortalQhDetail>(`/api/v1/portal/me/qarzan-hasana/${id}`).then((r) => r.data),
@@ -247,6 +266,8 @@ export const portalMeApi = {
     api.get<FundEnrollmentRow[]>('/api/v1/portal/me/fund-enrollments').then((r) => r.data),
   fundEnrollmentDetail: (id: string) =>
     api.get<FundEnrollmentDetail>(`/api/v1/portal/me/fund-enrollments/${id}`).then((r) => r.data),
+  fundEnrollmentCreate: (payload: CreatePatronagePayload) =>
+    api.post('/api/v1/portal/me/fund-enrollments', payload).then((r) => r.data),
   guarantorInbox: () => api.get<GuarantorRequestRow[]>('/api/v1/portal/me/guarantor-inbox').then((r) => r.data),
   events: () => api.get<EventRegistrationRow[]>('/api/v1/portal/me/events').then((r) => r.data),
 

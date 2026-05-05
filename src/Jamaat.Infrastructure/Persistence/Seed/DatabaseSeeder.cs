@@ -162,6 +162,7 @@ public static class DatabaseSeeder
                 "portal.events.register",
                 "portal.login_history.view.own",
                 "portal.fund_enrollments.view.own",
+                "portal.fund_enrollments.request",
                 "portal.dashboard.view.own",
                 "member.self.update",
                 "member.wealth.view",
@@ -305,6 +306,7 @@ public static class DatabaseSeeder
         await SeedOrganisationsAsync(db, defaultTenantId, logger, ct);
         await SeedCmsDefaultsAsync(db, logger, ct);
         await ReconcileAdminUserPermissionsAsync(userMgr, logger);
+        await ReconcileMemberRoleUserPermissionsAsync(userMgr, scope.ServiceProvider, logger);
         await ReconcileUserTypesAsync(userMgr, logger);
         await SeedTestUsersAsync(userMgr, defaultTenantId, logger, config);
 
@@ -891,6 +893,43 @@ Accepted on {{today}}.
         }
     }
 
+    /// Mirror role-claim permissions for the seeded "Member" role onto every user that is in
+    /// that role. <see cref="MemberLoginProvisioningService"/> snapshots the role claims to
+    /// each user at provisioning time, but it does NOT re-snapshot when new permissions are
+    /// added to the role in a later release. Without this reconciliation, members provisioned
+    /// before a permission existed never see it - we just hit that exact bug with
+    /// portal.fund_enrollments.request / portal.dashboard.view.own. Idempotent and additive.
+    private static async Task ReconcileMemberRoleUserPermissionsAsync(
+        UserManager<ApplicationUser> userMgr, IServiceProvider services, ILogger logger)
+    {
+        var roleMgr = services.GetRequiredService<RoleManager<ApplicationRole>>();
+        var memberRole = await roleMgr.FindByNameAsync("Member");
+        if (memberRole is null) return;
+        var rolePerms = (await roleMgr.GetClaimsAsync(memberRole))
+            .Where(c => c.Type == "permission")
+            .Select(c => c.Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (rolePerms.Count == 0) return;
+
+        var members = await userMgr.GetUsersInRoleAsync("Member");
+        var totalAdded = 0;
+        foreach (var u in members)
+        {
+            var existing = (await userMgr.GetClaimsAsync(u))
+                .Where(c => c.Type == "permission")
+                .Select(c => c.Value)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in rolePerms)
+            {
+                if (existing.Contains(p)) continue;
+                await userMgr.AddClaimAsync(u, new Claim("permission", p));
+                totalAdded++;
+            }
+        }
+        if (totalAdded > 0)
+            logger.LogInformation("Reconciled {Count} new permission claim(s) across {Count2} Member-role users.", totalAdded, members.Count);
+    }
+
     /// Backfill the new ApplicationUser.UserType column from existing role membership.
     /// Member-only role -> Member. Any operator role -> Operator. Both -> Hybrid.
     /// Idempotent: only writes when the resolved type differs from the stored one, so
@@ -1114,6 +1153,7 @@ Jamaat is a community-finance platform that gives your organisation a single, au
         "portal.events.register",              // register self / family for events
         "portal.login_history.view.own",       // own login attempts
         "portal.fund_enrollments.view.own",    // own fund enrollments / patronages
+        "portal.fund_enrollments.request",     // submit a new patronage / fund-enrollment from the portal
         "portal.dashboard.view.own",           // member-facing KPI dashboard at /portal/me
         // CMS - manage marketing copy on the login screen, legal pages (terms/privacy),
         // help articles, FAQ, etc. Reads are anonymous (the login page hits /api/v1/cms/blocks
