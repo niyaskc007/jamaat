@@ -1,6 +1,7 @@
 using FluentValidation;
 using Jamaat.Application.Accounting;
 using Jamaat.Application.Common;
+using Jamaat.Application.Notifications;
 using Jamaat.Application.Persistence;
 using Jamaat.Contracts.QarzanHasana;
 using Jamaat.Domain.Abstractions;
@@ -61,8 +62,23 @@ public sealed class QarzanHasanaService(
     IValidator<CreateQarzanHasanaDto> createV,
     IValidator<UpdateQarzanHasanaDraftDto> updateV,
     IValidator<ApproveL1Dto> approveL1V,
+    IMemberNotifier memberNotifier,
     IServiceProvider services) : IQarzanHasanaService
 {
+    /// State-change notification helper. Fire-and-forget at the call site - failure here
+    /// must not roll back the underlying state transition or its accounting effect.
+    private async Task NotifyQhStateAsync(QarzanHasanaLoan loan, CancellationToken ct)
+    {
+        var vars = new Dictionary<string, string>
+        {
+            ["loanCode"] = loan.Code ?? "",
+            ["status"]   = loan.Status.ToString(),
+            ["amount"]   = (loan.AmountApproved > 0 ? loan.AmountApproved : loan.AmountRequested).ToString("N2"),
+        };
+        try { await memberNotifier.NotifyAsync(loan.MemberId, MemberNotificationKind.QhStateChanged, vars, ct); }
+        catch { /* swallowed: NotificationLog row + logger handle visibility */ }
+    }
+
     public async Task<PagedResult<QarzanHasanaLoanDto>> ListAsync(QarzanHasanaListQuery q, CancellationToken ct = default)
     {
         IQueryable<QarzanHasanaLoan> query = db.QarzanHasanaLoans.AsNoTracking();
@@ -249,6 +265,7 @@ public sealed class QarzanHasanaService(
             dto.AmountApproved, dto.InstalmentsApproved, dto.Comments);
         db.QarzanHasanaLoans.Update(loan);
         await uow.SaveChangesAsync(ct);
+        await NotifyQhStateAsync(loan, ct);
         return await LoadAsync(id, ct);
     }
 
@@ -263,6 +280,7 @@ public sealed class QarzanHasanaService(
         // instead of Added; explicitly mark each fresh installment as Added so INSERTs (not UPDATEs) are issued.
         foreach (var inst in loan.Installments) db.MarkAdded(inst);
         await uow.SaveChangesAsync(ct);
+        await NotifyQhStateAsync(loan, ct);
         return await LoadAsync(id, ct);
     }
 
@@ -274,6 +292,7 @@ public sealed class QarzanHasanaService(
         loan.Reject(dto.Reason, clock.UtcNow);
         db.QarzanHasanaLoans.Update(loan);
         await uow.SaveChangesAsync(ct);
+        await NotifyQhStateAsync(loan, ct);
         return await LoadAsync(id, ct);
     }
 
@@ -348,6 +367,7 @@ public sealed class QarzanHasanaService(
             await uow.SaveChangesAsync(ct);
         }
         await InvalidateReliabilityAsync(loan.MemberId, ct);
+        await NotifyQhStateAsync(loan, ct);
         return await LoadAsync(id, ct);
     }
 

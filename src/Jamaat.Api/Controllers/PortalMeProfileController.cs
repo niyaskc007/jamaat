@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using Jamaat.Application.Members;
+using Jamaat.Application.Notifications;
 using Jamaat.Application.Persistence;
 using Jamaat.Contracts.Members;
+using Jamaat.Domain.Abstractions;
 using Jamaat.Domain.ValueObjects;
 using Jamaat.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
@@ -27,6 +29,7 @@ namespace Jamaat.Api.Controllers;
 public sealed class PortalMeProfileController(
     UserManager<ApplicationUser> users,
     JamaatDbContextFacade db,
+    IUnitOfWork uow,
     IMemberProfileService profileSvc,
     IMemberChangeRequestService changeReq,
     IPhotoStorage photoStorage) : ControllerBase
@@ -79,6 +82,32 @@ public sealed class PortalMeProfileController(
     [HttpPost("education-work")]
     public Task<IActionResult> RequestEducationWork([FromBody] UpdateEducationWorkDto dto, CancellationToken ct) =>
         SubmitChange(MemberChangeRequestSection.EducationWork, dto, ct);
+
+    /// Notification preferences for the signed-in member. Returned shape mirrors
+    /// MemberNotificationPreferences. Null channels / unset kinds are treated as defaults.
+    [HttpGet("notification-prefs")]
+    public async Task<IActionResult> GetNotificationPrefs(CancellationToken ct)
+    {
+        var memberId = await ResolveCurrentMemberIdAsync(ct);
+        if (memberId is null) return NotFound(new { error = "no_member_link" });
+        var member = await db.Members.AsNoTracking().FirstOrDefaultAsync(m => m.Id == memberId.Value, ct);
+        if (member is null) return NotFound();
+        var prefs = MemberNotificationPreferences.FromJson(member.NotificationPreferencesJson);
+        return Ok(prefs);
+    }
+
+    [HttpPut("notification-prefs")]
+    public async Task<IActionResult> SetNotificationPrefs([FromBody] MemberNotificationPreferences dto, CancellationToken ct)
+    {
+        var memberId = await ResolveCurrentMemberIdAsync(ct);
+        if (memberId is null) return NotFound(new { error = "no_member_link" });
+        var member = await db.Members.FirstOrDefaultAsync(m => m.Id == memberId.Value, ct);
+        if (member is null) return NotFound();
+        member.SetNotificationPreferencesJson(dto.ToJson());
+        db.Members.Update(member);
+        await uow.SaveChangesAsync(ct);
+        return NoContent();
+    }
 
     /// Upload a new profile photo. Applied immediately (the photo storage layer has no pending
     /// state); admins can clear it via the existing member admin UI if it's inappropriate.

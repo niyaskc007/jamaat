@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Card, Form, Input, Button, Row, Col, Avatar, Upload, Typography, Tabs, Alert, Space, App as AntdApp,
-  Divider,
+  Divider, Switch, Select,
 } from 'antd';
-import { UserOutlined, UploadOutlined, MailOutlined, PhoneOutlined, GlobalOutlined } from '@ant-design/icons';
+import { UserOutlined, UploadOutlined, MailOutlined, PhoneOutlined, GlobalOutlined, BellOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  portalMeApi, type PortalProfile, type UpdateContactDto, type UpdateAddressDto,
+  portalMeApi, type PortalProfile, type UpdateContactDto, type UpdateAddressDto, type NotificationPrefs,
 } from './portalMeApi';
 import { extractProblem } from '../../../shared/api/client';
 
@@ -111,6 +111,11 @@ export function ProfileEditForm() {
             key: 'address',
             label: <span><GlobalOutlined /> Address</span>,
             children: <AddressTab profile={profile} blocked={pendingSections.has('Address')} />,
+          },
+          {
+            key: 'notifications',
+            label: <span><BellOutlined /> Notifications</span>,
+            children: <NotificationsTab />,
           },
         ]}
       />
@@ -245,6 +250,104 @@ function AddressTab({ profile, blocked }: { profile: PortalProfile; blocked: boo
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>Changes go live after committee approval.</Typography.Text>
         </Space>
       </Form>
+    </div>
+  );
+}
+
+const NOTIF_KINDS: { key: string; title: string; description: string }[] = [
+  { key: 'CommitmentInstallmentDue', title: 'Commitment installment due', description: 'Reminder 3 days before each installment due date.' },
+  { key: 'QhStateChanged',           title: 'Qarzan Hasana updates',       description: 'When your loan moves between approval / disbursement states.' },
+  { key: 'EventReminderT24h',        title: 'Event reminders',             description: '24 hours before each event you are confirmed for.' },
+];
+
+function NotificationsTab() {
+  const { message } = AntdApp.useApp();
+  const qc = useQueryClient();
+  const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
+  const [dirty, setDirty] = useState(false);
+
+  const prefsQ = useQuery({ queryKey: ['portal-notification-prefs'], queryFn: portalMeApi.getNotificationPrefs });
+
+  // Hydrate local state once data loads. Defaults: all kinds enabled, channel = auto (null).
+  useEffect(() => {
+    if (prefsQ.data) {
+      const enabled: Record<string, boolean> = {};
+      for (const k of NOTIF_KINDS) enabled[k.key] = prefsQ.data.enabledKinds?.[k.key] ?? true;
+      setPrefs({ enabledKinds: enabled, preferredChannel: prefsQ.data.preferredChannel ?? null });
+      setDirty(false);
+    }
+  }, [prefsQ.data]);
+
+  const saveMut = useMutation({
+    mutationFn: (p: NotificationPrefs) => portalMeApi.setNotificationPrefs(p),
+    onSuccess: () => {
+      message.success('Preferences saved.');
+      setDirty(false);
+      void qc.invalidateQueries({ queryKey: ['portal-notification-prefs'] });
+    },
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Save failed.'),
+  });
+
+  if (prefsQ.isLoading || !prefs) return <Card loading className="jm-card" />;
+
+  const toggle = (key: string, on: boolean) => {
+    setPrefs((p) => p && ({ ...p, enabledKinds: { ...p.enabledKinds, [key]: on } }));
+    setDirty(true);
+  };
+  const setChannel = (v: NotificationPrefs['preferredChannel']) => {
+    setPrefs((p) => p && ({ ...p, preferredChannel: v }));
+    setDirty(true);
+  };
+
+  return (
+    <div>
+      <Alert
+        type="info" showIcon style={{ marginBlockEnd: 16 }}
+        message="How notifications work"
+        description="The system picks the best channel available (WhatsApp > SMS > email) by default. Set a preferred channel below to override. Each notification type can be muted independently. Updates are written to a server-side audit log even when delivery is in log-only mode."
+      />
+
+      <Card size="small" className="jm-card" style={{ marginBlockEnd: 16 }}>
+        <Typography.Text type="secondary" className="jm-overline">Preferred channel</Typography.Text>
+        <div style={{ marginBlockStart: 8 }}>
+          <Select
+            value={prefs.preferredChannel ?? 'auto'}
+            onChange={(v) => setChannel(v === 'auto' ? null : (v as NotificationPrefs['preferredChannel']))}
+            style={{ inlineSize: 220 }}
+            options={[
+              { value: 'auto',     label: 'Auto (best available)' },
+              { value: 'Email',    label: 'Email' },
+              { value: 'Sms',      label: 'SMS' },
+              { value: 'WhatsApp', label: 'WhatsApp' },
+            ]}
+          />
+        </div>
+      </Card>
+
+      <Card size="small" className="jm-card">
+        <Typography.Text type="secondary" className="jm-overline">Notification types</Typography.Text>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBlockStart: 12 }}>
+          {NOTIF_KINDS.map((k) => (
+            <div key={k.key} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+              <div>
+                <div style={{ fontWeight: 500 }}>{k.title}</div>
+                <div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{k.description}</div>
+              </div>
+              <Switch
+                checked={prefs.enabledKinds[k.key] !== false}
+                onChange={(on) => toggle(k.key, on)}
+              />
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Space style={{ marginBlockStart: 16 }}>
+        <Button type="primary" disabled={!dirty} loading={saveMut.isPending} onClick={() => saveMut.mutate(prefs)}>
+          Save preferences
+        </Button>
+        {!dirty && <Typography.Text type="secondary" style={{ fontSize: 12 }}>No unsaved changes.</Typography.Text>}
+      </Space>
     </div>
   );
 }

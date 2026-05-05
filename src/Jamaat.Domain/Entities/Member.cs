@@ -66,6 +66,13 @@ public sealed class Member : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISo
     public string? WhatsAppNo { get; private set; }
     public string? Email { get; private set; }
 
+    /// <summary>JSON-serialised NotificationPreferences. Null until the member sets one;
+    /// portal/notification code treats null as the defaults (all enabled, channel=auto).
+    /// Stored as nvarchar(max) and parsed on demand. Single-column write keeps the
+    /// migration footprint tiny vs. a separate prefs table.</summary>
+    public string? NotificationPreferencesJson { get; private set; }
+    public void SetNotificationPreferencesJson(string? json) => NotificationPreferencesJson = json;
+
     // --- Social links (v2 additions) ---------------------------------------
     public string? LinkedInUrl { get; private set; }
     public string? FacebookUrl { get; private set; }

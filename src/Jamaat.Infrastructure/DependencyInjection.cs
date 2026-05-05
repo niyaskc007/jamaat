@@ -153,6 +153,9 @@ public static class DependencyInjection
         services.AddScoped<IEventPageDesignerService, EventPageDesignerService>();
         services.AddScoped<ITenantService, TenantService>();
         services.AddScoped<Application.Cms.ICmsService, Application.Cms.CmsService>();
+        services.AddScoped<Application.Notifications.IMemberNotifier, Application.Notifications.MemberNotifier>();
+        services.AddSingleton<Notifications.MemberNotificationsScanService>();
+        services.AddHostedService(sp => sp.GetRequiredService<Notifications.MemberNotificationsScanService>());
         services.AddScoped<ISystemService, SystemMonitor.SystemService>();
         // Singleton: in-memory user-activity + request-rate tracker. State must persist across
         // requests; the impl is internally thread-safe (ConcurrentDictionary + Interlocked).

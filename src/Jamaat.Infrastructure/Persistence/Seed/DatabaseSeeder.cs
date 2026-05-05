@@ -940,14 +940,14 @@ Accepted on {{today}}.
 
     private static async Task SeedCmsDefaultsAsync(JamaatDbContext db, ILogger logger, CancellationToken ct)
     {
-        // Only seed when there is no existing CMS content (admins editing the seeded copy
-        // should not have their changes reset by a redeploy). Both tables are checked
-        // independently so a partial seed in a previous run is still completed here.
-        var hasBlocks = await db.CmsBlocks.AnyAsync(ct);
-        var hasPages  = await db.CmsPages.AnyAsync(ct);
-        if (hasBlocks && hasPages) return;
+        // Idempotent + additive: enumerate every default key and only insert when missing.
+        // This way new keys added in later releases (e.g. notif.* in Phase C) flow into existing
+        // installs, while admin-edited values are never overwritten.
+        var hasPages = await db.CmsPages.AnyAsync(ct);
+        var existingBlockKeys = await db.CmsBlocks.AsNoTracking().Select(b => b.Key).ToListAsync(ct);
+        var existingSet = existingBlockKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        if (!hasBlocks)
+        if (true)
         {
             var blocks = new (string Key, string Value)[]
             {
@@ -958,10 +958,22 @@ Accepted on {{today}}.
                 ("login.feature.2", "Bilingual receipts (English, Arabic, Hindi, Urdu)"),
                 ("login.feature.3", "Automatic double-entry posting"),
                 ("footer.tagline",  "Jamaat - a product of Ubrixy Technologies."),
+
+                // Phase C - member notifications. {{ var }} placeholders are filled by
+                // MemberNotifier.Substitute. Editable from the CMS admin Blocks tab.
+                ("notif.commitment.due.subject", "Reminder: installment due in 3 days"),
+                ("notif.commitment.due.body",    "Salaam, your installment {{installmentNo}} for commitment {{commitmentCode}} ({{fundName}}) of {{amount}} {{currency}} is due on {{dueDate}}. You can pay at the counter or via the portal."),
+                ("notif.qh.state.subject",       "Qarzan Hasana update: {{loanCode}}"),
+                ("notif.qh.state.body",          "Salaam, your Qarzan Hasana loan {{loanCode}} is now {{status}}. Approved amount: {{amount}}. Sign in to the portal for details."),
+                ("notif.event.reminder.subject", "Reminder: {{eventTitle}} starts soon"),
+                ("notif.event.reminder.body",    "Salaam, this is a reminder that {{eventTitle}} starts on {{startsAt}} at {{venue}}. Your registration code is {{registrationCode}}."),
             };
             foreach (var (k, v) in blocks)
             {
-                db.CmsBlocks.Add(new CmsBlock(Guid.NewGuid(), k, v));
+                if (!existingSet.Contains(k))
+                {
+                    db.CmsBlocks.Add(new CmsBlock(Guid.NewGuid(), k, v));
+                }
             }
         }
 

@@ -2153,6 +2153,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("NotificationPreferencesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("NumAirConditioners")
                         .HasColumnType("int");
 

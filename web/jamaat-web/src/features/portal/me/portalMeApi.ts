@@ -74,6 +74,14 @@ export type UpdateAddressDto = {
   // address itself. The backend tolerates missing optional fields.
 };
 
+/// Mirrors MemberNotificationPreferences. enabledKinds keys: 'CommitmentInstallmentDue',
+/// 'QhStateChanged', 'EventReminderT24h'. preferredChannel: 'Email' / 'Sms' / 'WhatsApp'
+/// / null (null = auto - server picks the best available).
+export type NotificationPrefs = {
+  enabledKinds: Record<string, boolean>;
+  preferredChannel: 'Email' | 'Sms' | 'WhatsApp' | null;
+};
+
 export const portalMeApi = {
   me: () => api.get<Me>('/api/v1/portal/me').then((r) => r.data),
   contributions: () => api.get<ContributionRow[]>('/api/v1/portal/me/contributions').then((r) => r.data),
@@ -96,4 +104,10 @@ export const portalMeApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then((r) => r.data);
   },
+
+  // Phase C - notifications preferences
+  getNotificationPrefs: () =>
+    api.get<NotificationPrefs>('/api/v1/portal/me/profile/notification-prefs').then((r) => r.data),
+  setNotificationPrefs: (dto: NotificationPrefs) =>
+    api.put('/api/v1/portal/me/profile/notification-prefs', dto).then(() => undefined),
 };
