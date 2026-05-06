@@ -29,6 +29,13 @@ export function SetupWizardPage() {
   }>();
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [completionEmail, setCompletionEmail] = useState<string | null>(null);
+  // Tenant fields are captured on step 1 but the form is unmounted by the time the user
+  // finishes on step 2. AntD's `preserve` flag keeps values in the Form instance, but
+  // `validateFields()` against an unmounted form returns an empty object, so we mirror
+  // them in component state when leaving step 1.
+  const [tenantData, setTenantData] = useState<{
+    tenantName: string; tenantCode: string; baseCurrency: string; preferredLanguage: string;
+  } | null>(null);
 
   // Re-fetch status on mount + every time the user backs into Welcome. If setup is already
   // complete (someone refreshed the page after finishing) we send them straight to /login.
@@ -50,25 +57,41 @@ export function SetupWizardPage() {
       setCompletionEmail(r.loginEmail);
       setStep(3);
     },
-    onError: (err) => {
+    onError: (err: unknown) => {
       const p = extractProblem(err);
-      setSubmissionError(p.detail ?? p.title ?? 'Setup failed.');
+      // 409 already_initialized: a previous successful submission created the admin (likely
+      // a double-click on Finish). Treat as completion - hop to step 3 with the email the
+      // operator just typed so they can sign in.
+      if (p.status === 409 && (p.title === 'already_initialized' || /already.*initiali[sz]ed/i.test(p.detail ?? ''))) {
+        const email = adminForm.getFieldValue('adminEmail') as string | undefined;
+        setCompletionEmail((email ?? '').trim().toLowerCase() || null);
+        setSubmissionError(null);
+        setStep(3);
+        return;
+      }
+      setSubmissionError(p.detail ?? p.title ?? 'Setup failed. Please check the values and try again.');
     },
   });
 
   const finish = async () => {
+    if (initMut.isPending) return; // guard against rapid double-clicks
     setSubmissionError(null);
     try {
-      const tenant = await tenantForm.validateFields();
+      // Validate the admin form (currently mounted). Tenant data was captured into state
+      // when the user advanced past step 1, since the tenant Form is unmounted by now.
       const admin = await adminForm.validateFields();
+      if (!tenantData) {
+        setSubmissionError('Tenant details are missing. Go back to the previous step.');
+        return;
+      }
       initMut.mutate({
-        tenantName: tenant.tenantName,
-        tenantCode: tenant.tenantCode,
-        baseCurrency: tenant.baseCurrency,
+        tenantName: tenantData.tenantName,
+        tenantCode: tenantData.tenantCode,
+        baseCurrency: tenantData.baseCurrency,
         adminFullName: admin.adminFullName,
         adminEmail: admin.adminEmail,
         adminPassword: admin.adminPassword,
-        preferredLanguage: tenant.preferredLanguage,
+        preferredLanguage: tenantData.preferredLanguage,
       });
     } catch {
       // validateFields rejects when a required field is missing — let the user see the
@@ -145,7 +168,18 @@ export function SetupWizardPage() {
               </Form.Item>
             </Space>
             <FooterNav onBack={() => setStep(0)}
-              onNext={async () => { try { await tenantForm.validateFields(); setStep(2); } catch { /* fields show errors */ } }} />
+              onNext={async () => {
+                try {
+                  const v = await tenantForm.validateFields();
+                  setTenantData({
+                    tenantName: v.tenantName,
+                    tenantCode: v.tenantCode,
+                    baseCurrency: v.baseCurrency,
+                    preferredLanguage: v.preferredLanguage,
+                  });
+                  setStep(2);
+                } catch { /* fields show errors */ }
+              }} />
           </Form>
         )}
 

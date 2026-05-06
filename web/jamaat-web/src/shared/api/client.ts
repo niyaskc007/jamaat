@@ -106,12 +106,33 @@ async function reportClientError(input: {
 export const clientErrorReporter = { report: reportClientError };
 
 export function extractProblem(err: unknown): ApiProblem {
-  const axiosErr = err as AxiosError<ApiProblem>;
-  return (
-    axiosErr.response?.data ?? {
-      title: 'Network error',
-      detail: axiosErr.message,
-      status: 0,
+  const axiosErr = err as AxiosError<unknown>;
+  const data = axiosErr.response?.data as Record<string, unknown> | undefined;
+  if (!data) {
+    return { title: 'Network error', detail: axiosErr.message, status: 0 };
+  }
+  // ProblemDetails (RFC 7807) - what most controllers return.
+  if (typeof data.title === 'string' || typeof data.detail === 'string') {
+    const p = data as ApiProblem;
+    // ModelState validation: flatten the {fieldName: [msgs]} dict into a readable list
+    // so the SPA can show the real reasons instead of just "validation errors occurred".
+    if (!p.detail && p.errors && typeof p.errors === 'object') {
+      const flat = Object.values(p.errors as Record<string, string[]>)
+        .flat()
+        .filter((s) => typeof s === 'string');
+      if (flat.length > 0) {
+        return { ...p, detail: flat.join(' ') };
+      }
     }
-  );
+    return p;
+  }
+  // Bare `{error, message}` shape used by SetupController and a few legacy endpoints.
+  if (typeof data.error === 'string' || typeof data.message === 'string') {
+    return {
+      title: typeof data.error === 'string' ? data.error : undefined,
+      detail: typeof data.message === 'string' ? data.message : undefined,
+      status: axiosErr.response?.status,
+    };
+  }
+  return { title: 'Request failed', detail: axiosErr.message, status: axiosErr.response?.status };
 }
