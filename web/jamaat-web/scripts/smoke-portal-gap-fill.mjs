@@ -151,14 +151,14 @@ try {
   // ---- 3. Contributions list + detail -----------------------------------
   console.log('▶ /portal/me/contributions');
   await page.goto(`${SPA}/portal/me/contributions`);
-  await page.waitForSelector('text=My contributions', { timeout: 10_000 });
+  await page.waitForSelector('h2:has-text("Contributions")', { timeout: 10_000 });
   await expectNoAccessDenied('/portal/me/contributions');
   console.log('  ✓ contributions list ok');
 
   // ---- 4. Commitments list + NEW COMMITMENT (the bug we're fixing) -----
   console.log('▶ /portal/me/commitments + click "New commitment"');
   await page.goto(`${SPA}/portal/me/commitments`);
-  await page.waitForSelector('text=My commitments', { timeout: 10_000 });
+  await page.waitForSelector('h2:has-text("Commitments")', { timeout: 10_000 });
   await expectNoAccessDenied('/portal/me/commitments');
   // CRITICAL: the link must point to the portal route, not the operator route.
   const newCommitmentLink = page.locator('a[href="/portal/me/commitments/new"]').first();
@@ -189,7 +189,7 @@ try {
   // ---- 6. Patronages list + REQUEST ENROLLMENT --------------------------
   console.log('▶ /portal/me/fund-enrollments + click "Request enrollment"');
   await page.goto(`${SPA}/portal/me/fund-enrollments`);
-  await page.waitForSelector('h4:has-text("Patronages")', { timeout: 10_000 });
+  await page.waitForSelector('h2:has-text("Patronages")', { timeout: 10_000 });
   await expectNoAccessDenied('/portal/me/fund-enrollments');
   const enrollLink = page.locator('a[href="/portal/me/fund-enrollments/new"]').first();
   if (await enrollLink.count() === 0) {
@@ -198,8 +198,9 @@ try {
   await enrollLink.click();
   await page.waitForURL(/\/portal\/me\/fund-enrollments\/new/, { timeout: 10_000 });
   await expectNoAccessDenied('/portal/me/fund-enrollments/new');
-  await page.waitForSelector('text=Request enrollment', { timeout: 10_000 });
-  await page.waitForSelector('text=Recurrence', { timeout: 5_000 });
+  // The form was renamed "Request patronage enrolment" when we lifted the shared PageHeader.
+  // Wait for a button only the form has so the smoke doesn't race the list-page transition.
+  await page.waitForSelector('button:has-text("Submit request")', { timeout: 10_000 });
   console.log('  ✓ Request enrollment form renders');
 
   // Submit enrollment. Prefer the LAST option in the dropdown to dodge the "active enrollment
@@ -231,7 +232,7 @@ try {
   // ---- 7. QH list + "Request a loan" → portal-self route -----------------
   console.log('▶ /portal/me/qarzan-hasana + click "Request a loan"');
   await page.goto(`${SPA}/portal/me/qarzan-hasana`);
-  await page.waitForSelector('h4:has-text("Qarzan Hasana")', { timeout: 10_000 });
+  await page.waitForSelector('h2:has-text("Qarzan Hasana")', { timeout: 10_000 });
   await expectNoAccessDenied('/portal/me/qarzan-hasana');
   const qhLink = page.locator('a[href="/portal/me/qarzan-hasana/new"]').first();
   if (await qhLink.count() === 0) {

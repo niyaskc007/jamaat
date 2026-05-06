@@ -217,6 +217,67 @@
 .jm-num-strong { font-weight: 500; }
 .jm-alert-after-card { margin-block-start: var(--jm-space-4); }
 
+/* ----- Shared portal LIST page primitives -------------------------- */
+/* Used by every member-portal list page (Contributions, Commitments, Patronages, Qarzan
+   Hasana, Events, Guarantor inbox, Login history) to keep the visual language identical to
+   the operator AppLayout list pages without duplicating styling per file. RULES.md §10. */
+
+/* Toolbar row above the table: search input + filter pills + reload button. The search
+   input flexes to fill remaining width; right-side items hug the trailing edge. */
+.jm-portal-toolbar {
+  display: flex; gap: var(--jm-space-2); align-items: center;
+  padding: var(--jm-space-3) var(--jm-space-4);
+  border-block-end: 1px solid var(--jm-border);
+  flex-wrap: wrap;
+}
+.jm-portal-toolbar > :where(.ant-input-affix-wrapper, .ant-picker) { min-inline-size: 220px; }
+.jm-portal-toolbar-spacer { flex: 1; }
+
+/* Card wrapping a list table: removes inner padding so the table fills the card edge-to-edge,
+   and gives the head row + footer pagination a consistent 16px gutter. */
+.jm-portal-list-card :where(.ant-card-body) { padding: 0; }
+.jm-portal-list-card :where(.ant-table-pagination) { margin: var(--jm-space-3) var(--jm-space-4); }
+
+/* Status pill: same shape the operator ReceiptsPage uses for ReceiptStatusLabel. Background
+   + foreground are picked via data-tone so consumers can pick a tone declaratively
+   (`<Tag className="jm-portal-status" data-tone="success">`) instead of choosing a colour
+   token inline at the call site. */
+.jm-portal-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 10px; border-radius: 999px;
+  border: none; margin: 0;
+  font-size: 12px; font-weight: 500; line-height: 1.6;
+}
+.jm-portal-status[data-tone="default"] { background: var(--jm-gray-100, #E5E9EF); color: var(--jm-gray-700, #475569); }
+.jm-portal-status[data-tone="info"]    { background: #DBEAFE; color: #1E3A8A; }
+.jm-portal-status[data-tone="success"] { background: #D1FAE5; color: #065F46; }
+.jm-portal-status[data-tone="warning"] { background: #FEF3C7; color: #92400E; }
+.jm-portal-status[data-tone="danger"]  { background: #FEE2E2; color: #991B1B; }
+.jm-portal-status[data-tone="purple"]  { background: #EDE9FE; color: #5B21B6; }
+
+/* Empty-state inside a list card: same treatment the operator ReceiptsPage uses. */
+.jm-portal-list-empty { padding-block: var(--jm-space-4); text-align: center; }
+.jm-portal-list-empty-title { font-weight: 500; color: var(--jm-gray-700); margin-block-end: 4px; }
+.jm-portal-list-empty-sub   { font-size: 13px; color: var(--jm-gray-500); margin-block-end: var(--jm-space-3); }
+
+/* Generic monospaced cell wrapper for receipt numbers / loan codes. The link version
+   underlines on hover, matching the operator dashboard's anchor styling. */
+.jm-portal-mono-link {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 600; color: var(--jm-primary-500);
+}
+.jm-portal-mono-link:hover { text-decoration: underline; }
+
+/* Two-line meta cell (used in the contributions / events tables: primary value on top,
+   secondary label - date / ITS / fund name - underneath). */
+.jm-portal-cell-primary { font-weight: 500; color: var(--jm-gray-900); }
+.jm-portal-cell-meta    { font-size: 12px; color: var(--jm-gray-500); margin-block-start: 2px; }
+
+/* Form page wrapper - same vertical rhythm and Card chrome the operator NewReceiptPage uses,
+   so portal forms feel like a continuation of the admin look. */
+.jm-portal-form-card :where(.ant-card-body) { padding: var(--jm-space-5); }
+.jm-portal-form-divider :where(.ant-divider-inner-text) { font-size: 12px; color: var(--jm-gray-500); }
+
 /* ----- Member portal home: KPIs + dashboard ------------------------ */
 
 .jm-portal-dashboard-alert { margin-block-end: var(--jm-space-4); }

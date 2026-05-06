@@ -1,147 +1,257 @@
-import { Card, Table, Tag, Typography, Empty, Alert, Space, Button, Descriptions, Modal, Skeleton, App as AntdApp } from 'antd';
-import { GiftOutlined, HeartOutlined, BankOutlined, TeamOutlined, CalendarOutlined, UserOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { Card, Table, Tag, Typography, Empty, Alert, Space, Button, Descriptions, Modal, Skeleton, App as AntdApp, Input, Select } from 'antd';
+import { GiftOutlined, HeartOutlined, BankOutlined, TeamOutlined, CalendarOutlined, UserOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { portalMeApi, type ContributionRow, type CommitmentRow, type QhLoanRow, type GuarantorInboxRow, type EventRegistrationRow } from './portalMeApi';
 import { authStore } from '../../../shared/auth/authStore';
 import { ProfileEditForm } from './ProfileEditForm';
+import { PageHeader } from '../../../shared/ui/PageHeader';
 
-// All five "list" portal pages share identical layout (header + intro + table card),
-// captured by the SectionHeader / SectionLayout helpers below + the `.jm-card`/`.jm-page-*`
-// classes in app/portal.css. No inline colour/spacing in this file.
+// Every portal list page reuses three things: the shared <PageHeader>, the StatusTag /
+// PortalListCard helpers below, and the .jm-portal-toolbar / .jm-portal-list-card classes
+// from portal.css. No inline colour / spacing - per RULES.md §10 those live in the app-level
+// stylesheet so the visual language stays consistent and centrally controlled.
+
+type Tone = 'default' | 'info' | 'success' | 'warning' | 'danger' | 'purple';
+
+/// Status pill that uses portal.css tone tokens instead of AntD's per-call colour string.
+function StatusTag({ label, tone }: { label: string; tone: Tone }) {
+  return <Tag className="jm-portal-status" data-tone={tone}>{label}</Tag>;
+}
+
+/// Card that hosts a list page's filter toolbar + table. Body padding is removed so the
+/// table reaches the card edge; the toolbar gets its own border-bottom.
+function PortalListCard({ children }: { children: React.ReactNode }) {
+  return <Card className="jm-card jm-portal-list-card">{children}</Card>;
+}
+
+/// Two-tone "no data" empty state for list cards. Same visual weight as the operator
+/// ReceiptsPage empty state so the experience is consistent across the app.
+function ListEmpty({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE}
+      description={
+        <div className="jm-portal-list-empty">
+          <div className="jm-portal-list-empty-title">{title}</div>
+          {sub && <div className="jm-portal-list-empty-sub">{sub}</div>}
+        </div>
+      } />
+  );
+}
 
 // --- Phase B: Self-edit profile -------------------------------------------
 
 export function MemberProfilePage() {
   return (
-    <SectionLayout
-      title="My profile"
-      intro="Update your contact and address details. Submitted changes go through committee review before they go live. Name and identity changes are admin-only."
-    >
+    <div>
+      <PageHeader title="My profile"
+        subtitle="Update your contact and address details. Submitted changes go through committee review before they go live. Name and identity changes are admin-only." />
       <ProfileEditForm />
-    </SectionLayout>
+    </div>
   );
 }
 
 // --- Phase E3: Contributions ----------------------------------------------
 
-const RECEIPT_STATUS: Record<number, string> = { 1: 'Draft', 2: 'Confirmed', 3: 'Cancelled', 4: 'Reversed' };
+const RECEIPT_STATUS: Record<number, { label: string; tone: Tone }> = {
+  1: { label: 'Draft',     tone: 'warning' },
+  2: { label: 'Confirmed', tone: 'success' },
+  3: { label: 'Cancelled', tone: 'default' },
+  4: { label: 'Reversed',  tone: 'danger'  },
+  5: { label: 'Pending clearance', tone: 'warning' },
+};
 
 export function MemberContributionsPage() {
   const q = useQuery({ queryKey: ['portal-me-contributions'], queryFn: portalMeApi.contributions });
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
+
+  const rows = useMemo(() => {
+    let r = q.data ?? [];
+    if (statusFilter !== undefined) r = r.filter((x) => x.status === statusFilter);
+    if (search.trim()) {
+      const s = search.trim().toLowerCase();
+      r = r.filter((x) => (x.receiptNumber ?? '').toLowerCase().includes(s)
+        || (x.notes ?? '').toLowerCase().includes(s));
+    }
+    return r;
+  }, [q.data, search, statusFilter]);
+
   return (
-    <SectionLayout
-      icon={<GiftOutlined />} title="My contributions"
-      intro="Receipts issued in your name. Sorted newest first."
-    >
-      <Card className="jm-card" styles={{ body: { padding: 0 } }}>
+    <div>
+      <PageHeader title="Contributions"
+        subtitle="Receipts issued in your name. Click any row to view + download a duplicate copy." />
+      <PortalListCard>
+        <div className="jm-portal-toolbar">
+          <Input prefix={<SearchOutlined />} allowClear placeholder="Search receipt # or notes"
+            value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Select allowClear placeholder="Status" value={statusFilter}
+            onChange={(v) => setStatusFilter(v as number | undefined)}
+            options={Object.entries(RECEIPT_STATUS).map(([v, m]) => ({ value: Number(v), label: m.label }))} />
+          <span className="jm-portal-toolbar-spacer" />
+          <Button icon={<ReloadOutlined />} onClick={() => q.refetch()} loading={q.isFetching && !q.isLoading} />
+        </div>
         <Table<ContributionRow>
-          rowKey="id" loading={q.isLoading} dataSource={q.data ?? []}
-          pagination={{ pageSize: 20 }}
-          locale={{ emptyText: <Empty description="No contributions on record." /> }}
+          rowKey="id" size="middle" loading={q.isLoading} dataSource={rows}
+          pagination={{ pageSize: 20, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
+          locale={{ emptyText: <ListEmpty title="No contributions on record" sub="Receipts issued in your name will appear here." /> }}
+          onRow={(r) => ({ onClick: () => { window.location.href = `/portal/me/contributions/${r.id}`; } })}
           columns={[
             { title: 'Date', dataIndex: 'receiptDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
-            { title: 'Receipt #', dataIndex: 'receiptNumber', width: 140,
+            { title: 'Receipt #', dataIndex: 'receiptNumber', width: 160,
               render: (v: string | null, r: ContributionRow) => v
-                ? <Link to={`/portal/me/contributions/${r.id}`} className="jm-tnum">{v}</Link>
+                ? <Link to={`/portal/me/contributions/${r.id}`} className="jm-portal-mono-link">{v}</Link>
                 : <em className="jm-muted-em">pending</em> },
             { title: 'Amount', key: 'amt', align: 'end', width: 160,
               render: (_, r: ContributionRow) => <span className="jm-tnum jm-num-strong">{r.amount.toLocaleString()} {r.currency}</span> },
-            { title: 'Status', dataIndex: 'status', width: 130,
-              render: (s: number) => <Tag color={s === 2 ? 'green' : s === 1 ? 'gold' : 'default'}>{RECEIPT_STATUS[s] ?? s}</Tag> },
-            { title: 'Notes', dataIndex: 'notes', render: (v: string | null) => v ?? '-' },
-            { title: '', key: 'a', width: 60,
-              render: (_, r: ContributionRow) => <Link to={`/portal/me/contributions/${r.id}`}>Open</Link> },
+            { title: 'Status', dataIndex: 'status', width: 140,
+              render: (s: number) => {
+                const m = RECEIPT_STATUS[s] ?? { label: String(s), tone: 'default' as Tone };
+                return <StatusTag label={m.label} tone={m.tone} />;
+              } },
+            { title: 'Notes', dataIndex: 'notes', render: (v: string | null) => v ?? '—' },
           ]}
         />
-      </Card>
-    </SectionLayout>
+      </PortalListCard>
+    </div>
   );
 }
 
 // --- Phase E4: Commitments ------------------------------------------------
 
-const COMMIT_STATUS: Record<number, { label: string; color: string }> = {
-  1: { label: 'Draft', color: 'default' },
-  2: { label: 'Active', color: 'green' },
-  3: { label: 'Completed', color: 'blue' },
-  4: { label: 'Cancelled', color: 'red' },
-  5: { label: 'Waived', color: 'purple' },
+const COMMIT_STATUS: Record<number, { label: string; tone: Tone }> = {
+  1: { label: 'Draft',      tone: 'warning' },
+  2: { label: 'Active',     tone: 'success' },
+  3: { label: 'Completed',  tone: 'info' },
+  4: { label: 'Cancelled',  tone: 'danger' },
+  5: { label: 'Defaulted',  tone: 'danger' },
+  6: { label: 'Paused',     tone: 'warning' },
 };
 
 export function MemberCommitmentsPage() {
   const q = useQuery({ queryKey: ['portal-me-commitments'], queryFn: portalMeApi.commitments });
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
   const user = authStore.getUser();
   const canCreate = user?.permissions.includes('portal.commitments.create.own');
 
+  const rows = useMemo(() => {
+    let r = q.data ?? [];
+    if (statusFilter !== undefined) r = r.filter((x) => x.status === statusFilter);
+    if (search.trim()) {
+      const s = search.trim().toLowerCase();
+      r = r.filter((x) => x.code.toLowerCase().includes(s) || x.fundNameSnapshot.toLowerCase().includes(s));
+    }
+    return r;
+  }, [q.data, search, statusFilter]);
+
   return (
-    <SectionLayout
-      icon={<HeartOutlined />} title="My commitments"
-      intro={'Active and historical pledges. The "New commitment" button opens the standard commitment form scoped to your record.'}
-      action={canCreate ? <Link to="/portal/me/commitments/new"><Button type="primary" icon={<PlusOutlined />}>New commitment</Button></Link> : undefined}
-    >
-      <Card className="jm-card" styles={{ body: { padding: 0 } }}>
+    <div>
+      <PageHeader title="Commitments"
+        subtitle="Active and historical pledges. Click any row to see the schedule, payment history, and agreement."
+        actions={canCreate
+          ? <Link to="/portal/me/commitments/new">
+              <Button type="primary" icon={<PlusOutlined />}>New commitment</Button>
+            </Link>
+          : null} />
+      <PortalListCard>
+        <div className="jm-portal-toolbar">
+          <Input prefix={<SearchOutlined />} allowClear placeholder="Search code or fund"
+            value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Select allowClear placeholder="Status" value={statusFilter}
+            onChange={(v) => setStatusFilter(v as number | undefined)}
+            options={Object.entries(COMMIT_STATUS).map(([v, m]) => ({ value: Number(v), label: m.label }))} />
+          <span className="jm-portal-toolbar-spacer" />
+          <Button icon={<ReloadOutlined />} onClick={() => q.refetch()} loading={q.isFetching && !q.isLoading} />
+        </div>
         <Table<CommitmentRow>
-          rowKey="id" loading={q.isLoading} dataSource={q.data ?? []}
-          pagination={{ pageSize: 20 }}
-          locale={{ emptyText: <Empty description="No commitments yet." /> }}
+          rowKey="id" size="middle" loading={q.isLoading} dataSource={rows}
+          pagination={{ pageSize: 20, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
+          locale={{ emptyText: <ListEmpty title="No commitments yet" sub="Use the New commitment button to make a pledge." /> }}
+          onRow={(r) => ({ onClick: () => { window.location.href = `/portal/me/commitments/${r.id}`; } })}
           columns={[
             { title: 'Code', dataIndex: 'code', width: 140,
-              render: (v: string, r: CommitmentRow) => <Link to={`/portal/me/commitments/${r.id}`} className="jm-tnum">{v}</Link> },
+              render: (v: string, r: CommitmentRow) => <Link to={`/portal/me/commitments/${r.id}`} className="jm-portal-mono-link">{v}</Link> },
             { title: 'Fund', dataIndex: 'fundNameSnapshot' },
             { title: 'Total', key: 'total', align: 'end', width: 140,
               render: (_, r: CommitmentRow) => <span className="jm-tnum">{r.totalAmount.toLocaleString()} {r.currency}</span> },
             { title: 'Paid', key: 'paid', align: 'end', width: 140,
               render: (_, r: CommitmentRow) => <span className="jm-tnum">{r.paidAmount.toLocaleString()} {r.currency}</span> },
-            { title: 'Installments', dataIndex: 'installmentCount', width: 120 },
+            { title: 'Instalments', dataIndex: 'installmentCount', width: 120, align: 'end' },
             { title: 'Started', dataIndex: 'startDate', width: 130, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
-            { title: 'Status', dataIndex: 'status', width: 130,
-              render: (s: number) => <Tag color={COMMIT_STATUS[s]?.color}>{COMMIT_STATUS[s]?.label ?? s}</Tag> },
-            { title: '', key: 'a', width: 60,
-              render: (_, r: CommitmentRow) => <Link to={`/portal/me/commitments/${r.id}`}>Open</Link> },
+            { title: 'Status', dataIndex: 'status', width: 140,
+              render: (s: number) => {
+                const m = COMMIT_STATUS[s] ?? { label: String(s), tone: 'default' as Tone };
+                return <StatusTag label={m.label} tone={m.tone} />;
+              } },
           ]}
         />
-      </Card>
-    </SectionLayout>
+      </PortalListCard>
+    </div>
   );
 }
 
 // --- Phase E5: Qarzan Hasana ----------------------------------------------
 
-const QH_STATUS: Record<number, { label: string; color: string }> = {
-  1: { label: 'Requested', color: 'gold' },
-  2: { label: 'L1 Pending', color: 'gold' },
-  3: { label: 'L2 Pending', color: 'gold' },
-  4: { label: 'Approved', color: 'green' },
-  5: { label: 'Disbursed', color: 'blue' },
-  6: { label: 'Active', color: 'cyan' },
-  7: { label: 'Repaid', color: 'green' },
-  8: { label: 'Cancelled', color: 'red' },
-  9: { label: 'Defaulted', color: 'red' },
-  10: { label: 'Waived', color: 'purple' },
+const QH_STATUS: Record<number, { label: string; tone: Tone }> = {
+  1: { label: 'Draft',         tone: 'default' },
+  2: { label: 'L1 review',     tone: 'warning' },
+  3: { label: 'L2 review',     tone: 'warning' },
+  4: { label: 'Approved',      tone: 'success' },
+  5: { label: 'Disbursed',     tone: 'info'    },
+  6: { label: 'Active',        tone: 'info'    },
+  7: { label: 'Completed',     tone: 'success' },
+  8: { label: 'Defaulted',     tone: 'danger'  },
+  9: { label: 'Cancelled',     tone: 'default' },
+  10:{ label: 'Rejected',      tone: 'danger'  },
 };
 
 export function MemberQhPage() {
   const q = useQuery({ queryKey: ['portal-me-qh'], queryFn: portalMeApi.qarzanHasana });
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
   const user = authStore.getUser();
   const canRequest = user?.permissions.includes('portal.qh.request');
 
+  const rows = useMemo(() => {
+    let r = q.data ?? [];
+    if (statusFilter !== undefined) r = r.filter((x) => x.status === statusFilter);
+    if (search.trim()) {
+      const s = search.trim().toLowerCase();
+      r = r.filter((x) => x.code.toLowerCase().includes(s));
+    }
+    return r;
+  }, [q.data, search, statusFilter]);
+
   return (
-    <SectionLayout
-      icon={<BankOutlined />} title="Qarzan Hasana"
-      intro="Your existing Qarzan Hasana applications and loans. New requests go through the standard L1 + L2 approval workflow."
-      action={canRequest ? <Link to="/portal/me/qarzan-hasana/new"><Button type="primary" icon={<PlusOutlined />}>Request a loan</Button></Link> : undefined}
-    >
-      <Card className="jm-card" styles={{ body: { padding: 0 } }}>
+    <div>
+      <PageHeader title="Qarzan Hasana"
+        subtitle="Your benevolent loan applications + active loans. New requests go through L1 + L2 approval."
+        actions={canRequest
+          ? <Link to="/portal/me/qarzan-hasana/new">
+              <Button type="primary" icon={<PlusOutlined />}>Request a loan</Button>
+            </Link>
+          : null} />
+      <PortalListCard>
+        <div className="jm-portal-toolbar">
+          <Input prefix={<SearchOutlined />} allowClear placeholder="Search loan code"
+            value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Select allowClear placeholder="Status" value={statusFilter}
+            onChange={(v) => setStatusFilter(v as number | undefined)}
+            options={Object.entries(QH_STATUS).map(([v, m]) => ({ value: Number(v), label: m.label }))} />
+          <span className="jm-portal-toolbar-spacer" />
+          <Button icon={<ReloadOutlined />} onClick={() => q.refetch()} loading={q.isFetching && !q.isLoading} />
+        </div>
         <Table<QhLoanRow>
-          rowKey="id" loading={q.isLoading} dataSource={q.data ?? []}
-          pagination={{ pageSize: 20 }}
-          locale={{ emptyText: <Empty description="No QH applications yet." /> }}
+          rowKey="id" size="middle" loading={q.isLoading} dataSource={rows}
+          pagination={{ pageSize: 20, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
+          locale={{ emptyText: <ListEmpty title="No QH applications yet" sub="Use the Request a loan button to start one." /> }}
+          onRow={(r) => ({ onClick: () => { window.location.href = `/portal/me/qarzan-hasana/${r.id}`; } })}
           columns={[
             { title: 'Loan #', dataIndex: 'code', width: 140,
-              render: (v: string, r: QhLoanRow) => <Link to={`/portal/me/qarzan-hasana/${r.id}`} className="jm-tnum">{v}</Link> },
+              render: (v: string, r: QhLoanRow) => <Link to={`/portal/me/qarzan-hasana/${r.id}`} className="jm-portal-mono-link">{v}</Link> },
             { title: 'Started', dataIndex: 'startDate', width: 130, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
             { title: 'Requested', key: 'req', align: 'end', width: 140,
               render: (_, r: QhLoanRow) => <span className="jm-tnum">{r.amountRequested.toLocaleString()} {r.currency}</span> },
@@ -149,24 +259,25 @@ export function MemberQhPage() {
               render: (_, r: QhLoanRow) => <span className="jm-tnum">{r.amountApproved.toLocaleString()} {r.currency}</span> },
             { title: 'Repaid', key: 'rep', align: 'end', width: 140,
               render: (_, r: QhLoanRow) => <span className="jm-tnum">{r.amountRepaid.toLocaleString()} {r.currency}</span> },
-            { title: 'Installments', dataIndex: 'installmentCount', width: 120 },
-            { title: 'Status', dataIndex: 'status', width: 130,
-              render: (s: number) => <Tag color={QH_STATUS[s]?.color}>{QH_STATUS[s]?.label ?? s}</Tag> },
-            { title: '', key: 'a', width: 60,
-              render: (_, r: QhLoanRow) => <Link to={`/portal/me/qarzan-hasana/${r.id}`}>Open</Link> },
+            { title: 'Instalments', dataIndex: 'installmentCount', width: 120, align: 'end' },
+            { title: 'Status', dataIndex: 'status', width: 140,
+              render: (s: number) => {
+                const m = QH_STATUS[s] ?? { label: String(s), tone: 'default' as Tone };
+                return <StatusTag label={m.label} tone={m.tone} />;
+              } },
           ]}
         />
-      </Card>
-    </SectionLayout>
+      </PortalListCard>
+    </div>
   );
 }
 
 // --- Phase E6: Guarantor inbox --------------------------------------------
 
-const GUARANTOR_STATUS: Record<number, { label: string; color: string }> = {
-  1: { label: 'Pending response', color: 'gold' },
-  2: { label: 'Endorsed', color: 'green' },
-  3: { label: 'Declined', color: 'red' },
+const GUARANTOR_STATUS: Record<number, { label: string; tone: Tone }> = {
+  1: { label: 'Pending response', tone: 'warning' },
+  2: { label: 'Endorsed', tone: 'success' },
+  3: { label: 'Declined', tone: 'danger'  },
 };
 
 const QH_SCHEME_LABEL: Record<number, string> = {
@@ -213,13 +324,12 @@ export function MemberGuarantorInboxPage() {
 
   return (
     <div>
-      <SectionLayout
-        icon={<TeamOutlined />} title="Guarantor inbox"
-        intro="Qarzan Hasana applications where you've been listed as a kafil (guarantor). Review the borrower's case below and either endorse or decline — your decision is recorded against the loan and unlocks the next approval step once all guarantors have responded."
-      >
+      <PageHeader title="Guarantor inbox"
+        subtitle="Qarzan Hasana applications where you've been listed as a kafil (guarantor). Review the borrower's case and endorse or decline." />
+      <div>
         {q.isLoading ? <Skeleton active /> : data.length === 0 ? (
           <Card className="jm-card">
-            <Empty description="No guarantor requests addressed to you." />
+            <ListEmpty title="No guarantor requests addressed to you" sub="When a fellow member nominates you as kafil for a Qarzan Hasana application, it lands here." />
           </Card>
         ) : (
           <>
@@ -239,7 +349,7 @@ export function MemberGuarantorInboxPage() {
                             Loan {row.loan.code} · {QH_SCHEME_LABEL[row.loan.scheme] ?? 'Scheme'} · requested {dayjs(row.requestedAtUtc).fromNow()}
                           </div>
                         </div>
-                        <Tag color="gold">Pending your response</Tag>
+                        <StatusTag label="Pending your response" tone="warning" />
                       </div>
 
                       <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small" className="jm-portal-section-spaced">
@@ -296,27 +406,30 @@ export function MemberGuarantorInboxPage() {
             {past.length > 0 && (
               <div className="jm-portal-section-spaced">
                 <Typography.Title level={5} className="jm-portal-section-title">History</Typography.Title>
-                <Card className="jm-card" styles={{ body: { padding: 0 } }}>
+                <PortalListCard>
                   <Table<GuarantorInboxRow>
-                    rowKey="id" dataSource={past} pagination={{ pageSize: 20 }} size="small"
+                    rowKey="id" dataSource={past} pagination={{ pageSize: 20 }} size="middle"
                     columns={[
                       { title: 'Requested', dataIndex: 'requestedAtUtc', width: 200, render: (v: string) => dayjs(v).format('DD MMM YYYY HH:mm') },
                       { title: 'Borrower', key: 'b', render: (_, r) => `${r.loan.borrowerName} · ${r.loan.borrowerItsNumber}` },
-                      { title: 'Loan', key: 'l', width: 140, render: (_, r) => <span className="jm-tnum">{r.loan.code}</span> },
+                      { title: 'Loan', key: 'l', width: 140, render: (_, r) => <span className="jm-portal-mono-link">{r.loan.code}</span> },
                       { title: 'Amount', key: 'a', align: 'end', width: 160,
                         render: (_, r) => <span className="jm-tnum">{r.loan.amountRequested.toLocaleString()} {r.loan.currency}</span> },
                       { title: 'My decision', dataIndex: 'status', width: 160,
-                        render: (s: number) => <Tag color={GUARANTOR_STATUS[s]?.color}>{GUARANTOR_STATUS[s]?.label ?? s}</Tag> },
+                        render: (s: number) => {
+                          const m = GUARANTOR_STATUS[s] ?? { label: String(s), tone: 'default' as Tone };
+                          return <StatusTag label={m.label} tone={m.tone} />;
+                        } },
                       { title: 'On', dataIndex: 'respondedAtUtc', width: 200,
                         render: (v: string | null) => v ? dayjs(v).format('DD MMM YYYY HH:mm') : '—' },
                     ]}
                   />
-                </Card>
+                </PortalListCard>
               </div>
             )}
           </>
         )}
-      </SectionLayout>
+      </div>
 
       <Modal title={active ? `Loan ${active.loan.code}` : ''} open={!!active}
         onCancel={() => setActive(null)} width={720}
@@ -364,70 +477,64 @@ export function MemberGuarantorInboxPage() {
 
 // --- Phase E7: Events -----------------------------------------------------
 
-const REG_STATUS: Record<number, { label: string; color: string }> = {
-  1: { label: 'Pending', color: 'gold' },
-  2: { label: 'Confirmed', color: 'green' },
-  3: { label: 'Waitlisted', color: 'blue' },
-  4: { label: 'Cancelled', color: 'default' },
-  5: { label: 'Checked-in', color: 'cyan' },
-  6: { label: 'No-show', color: 'red' },
+const REG_STATUS: Record<number, { label: string; tone: Tone }> = {
+  1: { label: 'Pending',     tone: 'warning' },
+  2: { label: 'Confirmed',   tone: 'success' },
+  3: { label: 'Waitlisted',  tone: 'info'    },
+  4: { label: 'Cancelled',   tone: 'default' },
+  5: { label: 'Checked-in',  tone: 'success' },
+  6: { label: 'No-show',     tone: 'danger'  },
 };
 
 export function MemberEventsPage() {
   const q = useQuery({ queryKey: ['portal-me-events'], queryFn: portalMeApi.events });
+  const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
+
+  const rows = useMemo(() => {
+    let r = q.data ?? [];
+    if (statusFilter !== undefined) r = r.filter((x) => x.status === statusFilter);
+    return r;
+  }, [q.data, statusFilter]);
+
   return (
-    <SectionLayout
-      icon={<CalendarOutlined />} title="Events"
-      intro="Your event registrations. The Browse button opens the public event portal where you can register for new ones."
-      action={
-        // /portal/events is the public anonymous event portal - it has its own minimal chrome
-        // and NO member-portal sidebar. Open it in a new tab so the member doesn't lose their
-        // /portal/me navigation context when they go browsing.
-        <a href="/portal/events" target="_blank" rel="noopener noreferrer">
-          <Button type="primary" icon={<PlusOutlined />}>Browse upcoming events</Button>
-        </a>
-      }
-    >
-      <Card className="jm-card" styles={{ body: { padding: 0 } }}>
+    <div>
+      <PageHeader title="Events"
+        subtitle="Your event registrations. Browse upcoming events to register for new ones (opens in a new tab so you keep this page)."
+        actions={
+          // /portal/events is the public anonymous event portal - opens in new tab to keep the
+          // member-portal sidebar context.
+          <a href="/portal/events" target="_blank" rel="noopener noreferrer">
+            <Button type="primary" icon={<PlusOutlined />}>Browse upcoming events</Button>
+          </a>
+        } />
+      <PortalListCard>
+        <div className="jm-portal-toolbar">
+          <Select allowClear placeholder="Status" value={statusFilter}
+            onChange={(v) => setStatusFilter(v as number | undefined)}
+            options={Object.entries(REG_STATUS).map(([v, m]) => ({ value: Number(v), label: m.label }))} />
+          <span className="jm-portal-toolbar-spacer" />
+          <Button icon={<ReloadOutlined />} onClick={() => q.refetch()} loading={q.isFetching && !q.isLoading} />
+        </div>
         <Table<EventRegistrationRow>
-          rowKey="id" loading={q.isLoading} dataSource={q.data ?? []}
-          pagination={{ pageSize: 20 }}
-          locale={{ emptyText: <Empty description="No event registrations yet." /> }}
+          rowKey="id" size="middle" loading={q.isLoading} dataSource={rows}
+          pagination={{ pageSize: 20, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
+          locale={{ emptyText: <ListEmpty title="No event registrations yet" sub="Use Browse upcoming events to register." /> }}
           columns={[
             { title: 'Registered', dataIndex: 'registeredAtUtc', width: 200, render: (v: string) => dayjs(v).format('DD MMM YYYY HH:mm') },
-            { title: 'Code', dataIndex: 'registrationCode', width: 160, render: (v: string) => <span className="jm-tnum jm-num-strong">{v}</span> },
-            { title: 'Status', dataIndex: 'status', width: 130,
-              render: (s: number) => <Tag color={REG_STATUS[s]?.color}>{REG_STATUS[s]?.label ?? s}</Tag> },
+            { title: 'Code', dataIndex: 'registrationCode', width: 160,
+              render: (v: string) => <span className="jm-portal-mono-link">{v}</span> },
+            { title: 'Status', dataIndex: 'status', width: 140,
+              render: (s: number) => {
+                const m = REG_STATUS[s] ?? { label: String(s), tone: 'default' as Tone };
+                return <StatusTag label={m.label} tone={m.tone} />;
+              } },
             { title: 'Confirmed', dataIndex: 'confirmedAtUtc', width: 200,
               render: (v: string | null) => v ? dayjs(v).format('DD MMM YYYY HH:mm') : '—' },
             { title: 'Checked in', dataIndex: 'checkedInAtUtc', width: 200,
               render: (v: string | null) => v ? dayjs(v).format('DD MMM YYYY HH:mm') : '—' },
           ]}
         />
-      </Card>
-    </SectionLayout>
-  );
-}
-
-// --- Shared layout helpers ------------------------------------------------
-
-function SectionLayout({ icon, title, intro, action, children }: {
-  icon?: React.ReactNode;
-  title: string;
-  intro: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <div className="jm-section-head">
-        <Typography.Title level={4} className="jm-section-title">
-          {icon}{icon ? ' ' : ''}{title}
-        </Typography.Title>
-        {action}
-      </div>
-      <Typography.Paragraph type="secondary" className="jm-page-intro">{intro}</Typography.Paragraph>
-      {children}
+      </PortalListCard>
     </div>
   );
 }

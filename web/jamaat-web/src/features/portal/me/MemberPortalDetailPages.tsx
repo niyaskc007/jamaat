@@ -6,7 +6,7 @@ import {
 } from 'antd';
 import {
   GiftOutlined, HeartOutlined, BankOutlined, DownloadOutlined, ArrowLeftOutlined,
-  TeamOutlined, PlusOutlined,
+  TeamOutlined, PlusOutlined, SearchOutlined, ReloadOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -18,6 +18,7 @@ import {
 } from './portalMeApi';
 import { WorkflowStepper, qhWorkflow, commitmentWorkflow, patronageWorkflow } from './WorkflowStepper';
 import { MemberSearchSelect } from './MemberSearchSelect';
+import { PageHeader } from '../../../shared/ui/PageHeader';
 import ReactMarkdown from 'react-markdown';
 
 // --- Shared header --------------------------------------------------------
@@ -637,12 +638,12 @@ function QhPaymentsTab({ loanId, currency }: { loanId: string; currency: string 
 
 // --- Patronages list -----------------------------------------------------
 
-const FE_STATUS: Record<number, { label: string; color: string }> = {
-  1: { label: 'Draft', color: 'default' },
-  2: { label: 'Active', color: 'green' },
-  3: { label: 'Paused', color: 'orange' },
-  4: { label: 'Cancelled', color: 'red' },
-  5: { label: 'Expired', color: 'default' },
+const FE_STATUS: Record<number, { label: string; tone: 'default' | 'info' | 'success' | 'warning' | 'danger' }> = {
+  1: { label: 'Draft',     tone: 'warning' },
+  2: { label: 'Active',    tone: 'success' },
+  3: { label: 'Paused',    tone: 'warning' },
+  4: { label: 'Cancelled', tone: 'danger'  },
+  5: { label: 'Expired',   tone: 'default' },
 };
 
 const FE_RECURRENCE: Record<number, string> = {
@@ -651,34 +652,58 @@ const FE_RECURRENCE: Record<number, string> = {
 
 export function MemberPatronagesPage() {
   const q = useQuery({ queryKey: ['portal-me-patronages'], queryFn: portalMeApi.fundEnrollments });
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
+
+  const rows = useMemo(() => {
+    let r = q.data ?? [];
+    if (statusFilter !== undefined) r = r.filter((x) => x.status === statusFilter);
+    if (search.trim()) {
+      const s = search.trim().toLowerCase();
+      r = r.filter((x) => x.code.toLowerCase().includes(s) || x.fundTypeName.toLowerCase().includes(s));
+    }
+    return r;
+  }, [q.data, search, statusFilter]);
+
   return (
     <div>
-      <div className="jm-section-head">
-        <Typography.Title level={4} className="jm-section-title">
-          <GiftOutlined /> Patronages
-        </Typography.Title>
-        <Link to="/portal/me/fund-enrollments/new">
-          <Button type="primary" icon={<PlusOutlined />}>Request enrollment</Button>
-        </Link>
-      </div>
-      <Typography.Paragraph type="secondary" className="jm-page-intro">
-        Your fund enrollments — Sabil, Mutafariq, Niyaz, etc. Each row tracks how much has been collected against that fund and links to the underlying receipts.
-      </Typography.Paragraph>
-      <Card className="jm-card" styles={{ body: { padding: 0 } }}>
+      <PageHeader title="Patronages"
+        subtitle="Your fund enrolments — Sabil, Mutafariq, Niyaz, etc. Each row tracks how much has been collected against that fund."
+        actions={
+          <Link to="/portal/me/fund-enrollments/new">
+            <Button type="primary" icon={<PlusOutlined />}>Request enrollment</Button>
+          </Link>
+        } />
+      <Card className="jm-card jm-portal-list-card">
+        <div className="jm-portal-toolbar">
+          <Input prefix={<SearchOutlined />} allowClear placeholder="Search code or fund"
+            value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Select allowClear placeholder="Status" value={statusFilter}
+            onChange={(v) => setStatusFilter(v as number | undefined)}
+            options={Object.entries(FE_STATUS).map(([v, m]) => ({ value: Number(v), label: m.label }))} />
+          <span className="jm-portal-toolbar-spacer" />
+          <Button icon={<ReloadOutlined />} onClick={() => q.refetch()} loading={q.isFetching && !q.isLoading} />
+        </div>
         <Table<FundEnrollmentRow>
-          rowKey="id" loading={q.isLoading} dataSource={q.data ?? []}
-          pagination={{ pageSize: 20 }}
-          locale={{ emptyText: <Empty description="No patronages on record yet." /> }}
+          rowKey="id" size="middle" loading={q.isLoading} dataSource={rows}
+          pagination={{ pageSize: 20, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={<div className="jm-portal-list-empty">
+              <div className="jm-portal-list-empty-title">No patronages on record yet</div>
+              <div className="jm-portal-list-empty-sub">Use Request enrolment to subscribe to a recurring fund.</div>
+            </div>} /> }}
+          onRow={(r) => ({ onClick: () => { window.location.href = `/portal/me/fund-enrollments/${r.id}`; } })}
           columns={[
-            { title: 'Code', dataIndex: 'code', width: 140, render: (v, r) => <Link to={`/portal/me/fund-enrollments/${r.id}`} className="jm-tnum">{v}</Link> },
+            { title: 'Code', dataIndex: 'code', width: 140,
+              render: (v, r) => <Link to={`/portal/me/fund-enrollments/${r.id}`} className="jm-portal-mono-link">{v}</Link> },
             { title: 'Fund', dataIndex: 'fundTypeName' },
             { title: 'Sub-type', dataIndex: 'subType', render: (v: string | null) => v ?? '—' },
             { title: 'Recurrence', dataIndex: 'recurrence', width: 130, render: (v: number) => FE_RECURRENCE[v] ?? v },
             { title: 'Started', dataIndex: 'startDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
-            { title: 'Status', dataIndex: 'status', width: 130,
+            { title: 'Status', dataIndex: 'status', width: 140,
               render: (s: number) => {
-                const m = FE_STATUS[s] ?? { label: String(s), color: 'default' };
-                return <Tag color={m.color}>{m.label}</Tag>;
+                const m = FE_STATUS[s] ?? { label: String(s), tone: 'default' };
+                return <Tag className="jm-portal-status" data-tone={m.tone}>{m.label}</Tag>;
               } },
           ]}
         />
@@ -695,7 +720,7 @@ export function MemberPatronageDetailPage() {
   if (q.isError) return <Result status="error" title="Couldn't load patronage" subTitle={(q.error as Error)?.message} />;
   const d = q.data!;
   const e = d.enrollment;
-  const statusMeta = FE_STATUS[e.status] ?? { label: String(e.status), color: 'default' };
+  const statusMeta = FE_STATUS[e.status] ?? { label: String(e.status), tone: 'default' as const };
 
   return (
     <div>
@@ -707,7 +732,7 @@ export function MemberPatronageDetailPage() {
           <Card className="jm-card" size="small">
             <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered items={[
               { key: 'code',   label: 'Code',        children: <span className="jm-tnum">{e.code}</span> },
-              { key: 'status', label: 'Status',      children: <Tag color={statusMeta.color}>{statusMeta.label}</Tag> },
+              { key: 'status', label: 'Status',      children: <Tag className="jm-portal-status" data-tone={statusMeta.tone}>{statusMeta.label}</Tag> },
               { key: 'fund',   label: 'Fund',        children: e.fundTypeName },
               { key: 'sub',    label: 'Sub-type',    children: e.subType ?? '—' },
               { key: 'rec',    label: 'Recurrence',  children: FE_RECURRENCE[e.recurrence] ?? e.recurrence },
@@ -726,7 +751,7 @@ export function MemberPatronageDetailPage() {
             </div>
             <div className="jm-portal-progress-card-stats">
               <div><Statistic title="Receipts" value={e.receiptCount} /></div>
-              <div><Statistic title="Status" valueRender={() => <Tag color={statusMeta.color}>{statusMeta.label}</Tag>} value="" /></div>
+              <div><Statistic title="Status" valueRender={() => <Tag className="jm-portal-status" data-tone={statusMeta.tone}>{statusMeta.label}</Tag>} value="" /></div>
             </div>
           </Card>
         </Col>
@@ -820,11 +845,17 @@ export function MemberQhSubmitPage() {
 
   return (
     <div>
-      <DetailHeader icon={<BankOutlined />} title="New Qarzan Hasana request" backTo="/portal/me/qarzan-hasana" />
+      <PageHeader title="New Qarzan Hasana request"
+        subtitle="Two members must agree to act as your kafil (guarantors) before this loan can be approved."
+        actions={
+          <Button onClick={() => navigate('/portal/me/qarzan-hasana')}>
+            <ArrowLeftOutlined /> Back to loans
+          </Button>
+        } />
       <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-        message="Two members must agree to act as your kafil (guarantors) before this loan can be approved."
-        description="Search for them by name or ITS number. After you submit, both kafil will be notified and asked to endorse from their own portal." />
-      <Card className="jm-card">
+        message="Search for your kafil by name or ITS number."
+        description="After you submit, both kafil will be notified and asked to endorse from their own portal." />
+      <Card className="jm-card jm-portal-form-card">
         <Form<QhFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish}>
           <Divider orientation="left" plain>Loan details</Divider>
           <Row gutter={16}>
@@ -1009,11 +1040,14 @@ export function MemberCommitmentSubmitPage() {
 
   return (
     <div>
-      <DetailHeader icon={<HeartOutlined />} title="New commitment" backTo="/portal/me/commitments" />
-      <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-        message="Submit a pledge to one of the funds you wish to support."
-        description="The commitment lands in Draft. An administrator will accept the agreement on your behalf, after which the schedule becomes active." />
-      <Card className="jm-card">
+      <PageHeader title="New commitment"
+        subtitle="Pledge to one of the funds. The commitment lands in Draft until you accept the agreement."
+        actions={
+          <Button onClick={() => navigate('/portal/me/commitments')}>
+            <ArrowLeftOutlined /> Back to commitments
+          </Button>
+        } />
+      <Card className="jm-card jm-portal-form-card">
         <Form<CommitmentFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish}>
           <Row gutter={16}>
             <Col xs={24} md={12}>
@@ -1117,11 +1151,14 @@ export function MemberPatronageSubmitPage() {
 
   return (
     <div>
-      <DetailHeader icon={<GiftOutlined />} title="Request enrollment" backTo="/portal/me/fund-enrollments" />
-      <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-        message="Subscribe to one of the recurring donation funds (Sabil, Mutafariq, Niyaz, etc.)."
-        description="Your enrollment lands as a request. Once approved, every receipt issued to you against this fund will be tracked here." />
-      <Card className="jm-card">
+      <PageHeader title="Request patronage enrolment"
+        subtitle="Subscribe to one of the recurring donation funds (Sabil, Mutafariq, Niyaz, etc.). Your request lands as a draft until an administrator approves it."
+        actions={
+          <Button onClick={() => navigate('/portal/me/fund-enrollments')}>
+            <ArrowLeftOutlined /> Back to patronages
+          </Button>
+        } />
+      <Card className="jm-card jm-portal-form-card">
         <Form<PatronageFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish}>
           <Row gutter={16}>
             <Col xs={24} md={12}>
