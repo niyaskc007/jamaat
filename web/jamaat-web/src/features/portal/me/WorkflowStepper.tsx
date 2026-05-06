@@ -161,7 +161,10 @@ export function patronageWorkflow(status: number, audit?: { createdAtUtc?: strin
     return s;
   });
   switch (status) {
-    case 1:  return { steps, currentIndex: 1, note: 'An administrator will review and approve your enrollment request. Once approved, every receipt issued to you against this fund is automatically tracked here.' };
+    // Status=1 in the backend is "Draft" but a member-submitted patronage is really
+    // "submitted, pending admin review" - the status pill in the portal says
+    // "Pending review" to match this stepper's "Admin review" step.
+    case 1:  return { steps, currentIndex: 1, note: 'Your enrollment request is submitted. An administrator will review and approve it shortly. Once approved, every receipt issued against this fund is automatically tracked here.' };
     case 2:  return { steps, currentIndex: 2, note: 'Receipts that mention this fund accrue against your patronage automatically.' };
     case 3:  return { steps, currentIndex: 2, terminal: { type: 'info', message: 'Paused', description: 'No receipts will accrue until it is resumed.' } as const };
     case 4:  return { steps, currentIndex: 0, terminal: { type: 'error', message: 'Cancelled' } as const };

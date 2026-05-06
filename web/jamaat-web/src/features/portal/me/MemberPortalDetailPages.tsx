@@ -133,8 +133,12 @@ export function MemberContributionDetailPage() {
 
 // --- Commitment detail ---------------------------------------------------
 
+// "Draft" backend status (=1) means the agreement hasn't been accepted yet. For a member
+// looking at their own commitment, the actionable label is "Awaiting agreement" - matches
+// the workflow stepper's "Agreement" step at the same index, and it telegraphs the action
+// the member needs to take.
 const COMMIT_STATUS: Record<number, { label: string; color: string }> = {
-  1: { label: 'Draft', color: 'default' }, 2: { label: 'Active', color: 'green' },
+  1: { label: 'Awaiting agreement', color: 'gold' }, 2: { label: 'Active', color: 'green' },
   3: { label: 'Completed', color: 'blue' }, 4: { label: 'Cancelled', color: 'red' },
   5: { label: 'Defaulted', color: 'red' }, 6: { label: 'Paused', color: 'orange' },
 };
@@ -722,12 +726,17 @@ function QhPaymentsTab({ loanId, currency }: { loanId: string; currency: string 
 
 // --- Patronages list -----------------------------------------------------
 
+// Note on the "Draft" label: backend stores enrolment status=1 as `Draft` because the
+// admin-create flow lets ops save a half-baked enrolment before approving it. From the
+// member's point of view though, status=1 means "I've submitted, an admin is reviewing"
+// - so the portal pill says "Pending review" instead of "Draft" (matches the
+// patronageWorkflow stepper's "Admin review" step at the same index).
 const FE_STATUS: Record<number, { label: string; tone: 'default' | 'info' | 'success' | 'warning' | 'danger' }> = {
-  1: { label: 'Draft',     tone: 'warning' },
-  2: { label: 'Active',    tone: 'success' },
-  3: { label: 'Paused',    tone: 'warning' },
-  4: { label: 'Cancelled', tone: 'danger'  },
-  5: { label: 'Expired',   tone: 'default' },
+  1: { label: 'Pending review', tone: 'warning' },
+  2: { label: 'Active',         tone: 'success' },
+  3: { label: 'Paused',         tone: 'warning' },
+  4: { label: 'Cancelled',      tone: 'danger'  },
+  5: { label: 'Expired',        tone: 'default' },
 };
 
 const FE_RECURRENCE: Record<number, string> = {

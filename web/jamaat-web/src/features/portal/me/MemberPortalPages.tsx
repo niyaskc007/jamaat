@@ -121,13 +121,16 @@ export function MemberContributionsPage() {
 
 // --- Phase E4: Commitments ------------------------------------------------
 
+// "Draft" backend state means the agreement has not been accepted yet. The member-facing
+// label is "Awaiting agreement" because that telegraphs the action the member needs to
+// take + matches the workflow stepper's "Agreement" step.
 const COMMIT_STATUS: Record<number, { label: string; tone: Tone }> = {
-  1: { label: 'Draft',      tone: 'warning' },
-  2: { label: 'Active',     tone: 'success' },
-  3: { label: 'Completed',  tone: 'info' },
-  4: { label: 'Cancelled',  tone: 'danger' },
-  5: { label: 'Defaulted',  tone: 'danger' },
-  6: { label: 'Paused',     tone: 'warning' },
+  1: { label: 'Awaiting agreement', tone: 'warning' },
+  2: { label: 'Active',             tone: 'success' },
+  3: { label: 'Completed',          tone: 'info'    },
+  4: { label: 'Cancelled',          tone: 'danger'  },
+  5: { label: 'Defaulted',          tone: 'danger'  },
+  6: { label: 'Paused',             tone: 'warning' },
 };
 
 export function MemberCommitmentsPage() {
