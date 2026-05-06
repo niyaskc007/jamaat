@@ -7,6 +7,7 @@ import {
 import {
   GiftOutlined, HeartOutlined, BankOutlined, DownloadOutlined, ArrowLeftOutlined,
   TeamOutlined, PlusOutlined, SearchOutlined, ReloadOutlined,
+  FileTextOutlined, ProfileOutlined, GoldOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -21,6 +22,8 @@ import { MemberSearchSelect } from './MemberSearchSelect';
 import { PageHeader } from '../../../shared/ui/PageHeader';
 import { CommitmentProgressCard } from '../../../shared/ui/CommitmentProgressCard';
 import { QhRepaymentChart } from '../../../shared/ui/QhRepaymentChart';
+import { LabelWithHelp } from '../../../shared/ui/LabelWithHelp';
+import { QhProcessDocCard } from '../../../shared/ui/QhProcessDocCard';
 import ReactMarkdown from 'react-markdown';
 
 // --- Shared header --------------------------------------------------------
@@ -871,9 +874,28 @@ type QhFormShape = {
   guarantor1MemberId: string; guarantor2MemberId: string;
   purpose: string; repaymentPlan: string;
   sourceOfIncome?: string; otherObligations?: string;
+  incomeSources?: string[];
   monthlyIncome?: number; monthlyExpenses?: number; monthlyExistingEmis?: number;
   goldAmount?: number; goldWeightGrams?: number; goldPurityKarat?: number; goldHeldAt?: string;
 };
+
+/// Same income-source codes the operator NewQarzanHasanaPage uses (kept in sync with
+/// qarzanHasanaApi.IncomeSourceOptions). Duplicated here only because the operator file
+/// pulls the operator-only qarzanHasanaApi which the portal can't reach (admin.masterdata
+/// gate); the shape + values are identical.
+const PORTAL_INCOME_SOURCES = [
+  { value: 'SALARY',       label: 'Salary / Employment' },
+  { value: 'BUSINESS',     label: 'Business / Self-employed' },
+  { value: 'INVESTMENT',   label: 'Investment returns' },
+  { value: 'SHARE_MARKET', label: 'Share market / Stocks' },
+  { value: 'REAL_ESTATE',  label: 'Real estate' },
+  { value: 'RENTAL',       label: 'Rental income' },
+  { value: 'PENSION',      label: 'Pension / Retirement' },
+  { value: 'FAMILY',       label: 'Family support' },
+  { value: 'AGRICULTURE',  label: 'Agriculture' },
+  { value: 'FREELANCE',    label: 'Freelance / Consulting' },
+  { value: 'OTHER',        label: 'Other' },
+];
 
 export function MemberQhSubmitPage() {
   const navigate = useNavigate();
@@ -914,10 +936,14 @@ export function MemberQhSubmitPage() {
       guarantor2MemberId: v.guarantor2MemberId,
       scheme: v.scheme,
       goldAmount: v.scheme === 1 ? v.goldAmount ?? null : null,
+      goldWeightGrams: v.scheme === 1 ? v.goldWeightGrams ?? null : null,
+      goldPurityKarat: v.scheme === 1 ? v.goldPurityKarat ?? null : null,
+      goldHeldAt: v.scheme === 1 ? v.goldHeldAt ?? null : null,
       purpose: v.purpose,
       repaymentPlan: v.repaymentPlan,
       sourceOfIncome: v.sourceOfIncome ?? null,
       otherObligations: v.otherObligations ?? null,
+      incomeSources: (v.incomeSources ?? []).join(',') || null,
       monthlyIncome: v.monthlyIncome ?? null,
       monthlyExpenses: v.monthlyExpenses ?? null,
       monthlyExistingEmis: v.monthlyExistingEmis ?? null,
@@ -928,39 +954,43 @@ export function MemberQhSubmitPage() {
   return (
     <div>
       <PageHeader title="New Qarzan Hasana request"
-        subtitle="Two members must agree to act as your kafil (guarantors) before this loan can be approved."
+        subtitle="Interest-free loan request. Drafted here, then routed for two-level approval."
         actions={
           <Button onClick={() => navigate('/portal/me/qarzan-hasana')}>
             <ArrowLeftOutlined /> Back to loans
           </Button>
         } />
-      <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-        message="Search for your kafil by name or ITS number."
-        description="After you submit, both kafil will be notified and asked to endorse from their own portal." />
+
+      {/* Educational panel - same shared component the operator new-loan form uses. */}
+      <QhProcessDocCard />
+
       <Card className="jm-card jm-portal-form-card">
-        <Form<QhFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish}>
-          <Divider orientation="left" plain>Loan details</Divider>
+        <Form<QhFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish} requiredMark={false}>
+          <h5 className="jm-form-section-title"><BankOutlined /> Loan terms</h5>
           <Row gutter={16}>
             <Col xs={24} md={8}>
-              <Form.Item label="Amount requested" name="amountRequested"
+              <Form.Item label={<LabelWithHelp help="Total amount you're requesting. The L1 approver may approve a different amount based on need + guarantor capacity.">Amount requested</LabelWithHelp>}
+                name="amountRequested"
                 rules={[{ required: true, message: 'Enter the amount you need.' }, { type: 'number', min: 1 }]}>
                 <InputNumber<number> className="jm-full-width" min={1} />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item label="Currency" name="currency" rules={[{ required: true }]}>
+              <Form.Item label={<LabelWithHelp help="Default is the jamaat's base currency.">Currency</LabelWithHelp>}
+                name="currency" rules={[{ required: true }]}>
                 <Select options={[{ value: 'INR', label: 'INR' }, { value: 'AED', label: 'AED' }, { value: 'USD', label: 'USD' }]} />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item label="Number of instalments" name="instalmentsRequested"
+              <Form.Item label={<LabelWithHelp help="How many monthly payments you'd like to spread the repayment over.">Instalments</LabelWithHelp>}
+                name="instalmentsRequested"
                 rules={[{ required: true }, { type: 'number', min: 1, max: 60 }]}>
                 <InputNumber<number> className="jm-full-width" min={1} max={60} />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label="Scheme" name="scheme" rules={[{ required: true }]}
-                tooltip="Mohammadi: against gold collateral. Hussain: against guarantors only.">
+              <Form.Item label={<LabelWithHelp help="Mohammadi: against gold collateral. Hussain: against guarantors only. Pick the closest match - the approver can adjust.">Scheme</LabelWithHelp>}
+                name="scheme" rules={[{ required: true }]}>
                 <Select options={[
                   { value: 1, label: 'Mohammadi (against gold)' },
                   { value: 2, label: 'Hussain (against kafil)' },
@@ -969,96 +999,123 @@ export function MemberQhSubmitPage() {
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label="Start date" name="startDate" rules={[{ required: true }]}>
+              <Form.Item label={<LabelWithHelp help="The first repayment will be due about a month after this date. Default: a week from today.">Start date</LabelWithHelp>}
+                name="startDate" rules={[{ required: true }]}>
                 <DatePicker className="jm-full-width" />
               </Form.Item>
             </Col>
           </Row>
 
-          <Divider orientation="left" plain>Guarantors (Kafil)</Divider>
+          <h5 className="jm-form-section-title"><TeamOutlined /> Kafil (guarantors)</h5>
           {sameGuarantor && (
             <Alert type="error" showIcon className="jm-portal-dashboard-alert"
               message="Guarantor 1 and Guarantor 2 cannot be the same person." />
           )}
+          <Alert type="info" showIcon className="jm-portal-dashboard-alert"
+            message="Two members must endorse your application before it goes to L2 approval."
+            description="After you submit, both kafil will be notified through the portal and asked to accept or decline the kafalah." />
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item label="Guarantor 1 (Kafil)" name="guarantor1MemberId"
+              <Form.Item label={<LabelWithHelp help="The first member you've asked to act as kafil. They must be in good standing and not the borrower.">Guarantor 1 (Kafil)</LabelWithHelp>}
+                name="guarantor1MemberId"
                 rules={[{ required: true, message: 'Pick a member.' }]}>
                 <MemberSearchSelect placeholder="Search by name or ITS" excludeId={guarantor2 ?? null} />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label="Guarantor 2 (Kafil)" name="guarantor2MemberId"
+              <Form.Item label={<LabelWithHelp help="The second member you've asked to act as kafil. They must be different from Guarantor 1.">Guarantor 2 (Kafil)</LabelWithHelp>}
+                name="guarantor2MemberId"
                 rules={[{ required: true, message: 'Pick a member.' }]}>
                 <MemberSearchSelect placeholder="Search by name or ITS" excludeId={guarantor1 ?? null} />
               </Form.Item>
             </Col>
           </Row>
 
-          <Divider orientation="left" plain>Borrower's case</Divider>
+          <h5 className="jm-form-section-title"><FileTextOutlined /> Borrower's case</h5>
           <Row gutter={16}>
             <Col xs={24}>
-              <Form.Item label="Purpose" name="purpose" rules={[{ required: true, min: 5 }]}>
-                <Input.TextArea rows={2} placeholder="What is the loan for? (school fees, medical, business expansion…)" />
+              <Form.Item label={<LabelWithHelp help="The clearer the purpose, the faster the approval.">Purpose of the loan</LabelWithHelp>}
+                name="purpose" rules={[{ required: true, min: 5 }]}>
+                <Input.TextArea rows={3} placeholder="e.g. Tuition fees for daughter's medical school for 2026 academic year." showCount maxLength={1000} />
               </Form.Item>
             </Col>
             <Col xs={24}>
-              <Form.Item label="Repayment plan" name="repaymentPlan" rules={[{ required: true, min: 5 }]}>
-                <Input.TextArea rows={2} placeholder="How will you repay each instalment? (salary, business income, family support…)" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item label="Source of income (optional)" name="sourceOfIncome">
-                <Input placeholder="Salary, business, freelance, rental…" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item label="Other obligations (optional)" name="otherObligations">
-                <Input placeholder="Other loans, EMIs, family commitments…" />
+              <Form.Item label={<LabelWithHelp help="Be concrete about how you'll pay each instalment - salary, business income, bonus etc.">Repayment plan</LabelWithHelp>}
+                name="repaymentPlan" rules={[{ required: true, min: 5 }]}>
+                <Input.TextArea rows={3} placeholder="e.g. Monthly salary deduction of 8,000 INR from confirmed employer ABC Corp, starting next month." showCount maxLength={1000} />
               </Form.Item>
             </Col>
           </Row>
 
-          <Divider orientation="left" plain>Cashflow (helps the approver)</Divider>
+          <h5 className="jm-form-section-title"><ProfileOutlined /> Income &amp; cashflow</h5>
           <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item label={<LabelWithHelp help="Tick every category that applies. Helps the approver understand your stability.">Income sources</LabelWithHelp>}
+                name="incomeSources">
+                <Select mode="multiple" placeholder="Select all that apply"
+                  options={PORTAL_INCOME_SOURCES} className="jm-full-width" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label={<LabelWithHelp help="Optional - elaborate (employer name, business type, monthly net income).">Income details</LabelWithHelp>}
+                name="sourceOfIncome">
+                <Input.TextArea rows={2} placeholder="e.g. Salaried at ABC Co. since 2018, monthly net 12,000 INR." showCount maxLength={500} />
+              </Form.Item>
+            </Col>
             <Col xs={24} md={8}>
-              <Form.Item label="Monthly income" name="monthlyIncome">
+              <Form.Item label={<LabelWithHelp help="Approximate take-home per month after tax.">Monthly income</LabelWithHelp>}
+                name="monthlyIncome">
                 <InputNumber<number> className="jm-full-width" min={0} />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item label="Monthly expenses" name="monthlyExpenses">
+              <Form.Item label={<LabelWithHelp help="Rent, utilities, groceries, school fees - the recurring outflows.">Monthly expenses</LabelWithHelp>}
+                name="monthlyExpenses">
                 <InputNumber<number> className="jm-full-width" min={0} />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item label="Existing EMIs" name="monthlyExistingEmis">
+              <Form.Item label={<LabelWithHelp help="Other ongoing loan instalments (banks, family, etc.) - so the approver can size the new loan correctly.">Existing EMIs</LabelWithHelp>}
+                name="monthlyExistingEmis">
                 <InputNumber<number> className="jm-full-width" min={0} />
+              </Form.Item>
+            </Col>
+            <Col xs={24}>
+              <Form.Item label={<LabelWithHelp help="Anything else the approver should know - large family obligations, upcoming expenses, irregular income.">Other obligations (optional)</LabelWithHelp>}
+                name="otherObligations">
+                <Input.TextArea rows={2} placeholder="Other loans, EMIs, family commitments…" showCount maxLength={500} />
               </Form.Item>
             </Col>
           </Row>
 
           {scheme === 1 && (
             <>
-              <Divider orientation="left" plain>Gold collateral (Mohammadi only)</Divider>
+              <h5 className="jm-form-section-title"><GoldOutlined /> Gold collateral (Mohammadi)</h5>
+              <Alert type="info" showIcon className="jm-portal-dashboard-alert"
+                message="Mohammadi loans are secured against gold."
+                description="Bring the gold + the assessor's slip to the counter. The cashier will weigh + verify before disbursement." />
               <Row gutter={16}>
                 <Col xs={24} md={6}>
-                  <Form.Item label="Gold value" name="goldAmount">
+                  <Form.Item label={<LabelWithHelp help="Estimated market value of the gold pledged.">Gold value</LabelWithHelp>}
+                    name="goldAmount">
                     <InputNumber<number> className="jm-full-width" min={0} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={6}>
-                  <Form.Item label="Gold weight (g)" name="goldWeightGrams">
+                  <Form.Item label={<LabelWithHelp help="Total weight in grams - net of stones / non-gold parts.">Gold weight (g)</LabelWithHelp>}
+                    name="goldWeightGrams">
                     <InputNumber<number> className="jm-full-width" min={0} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={6}>
-                  <Form.Item label="Purity (karat)" name="goldPurityKarat">
+                  <Form.Item label={<LabelWithHelp help="22-karat is the most common; an assessor's slip will confirm.">Purity (karat)</LabelWithHelp>}
+                    name="goldPurityKarat">
                     <InputNumber<number> className="jm-full-width" min={0} max={24} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={6}>
-                  <Form.Item label="Held at" name="goldHeldAt">
+                  <Form.Item label={<LabelWithHelp help="Where the gold will be held while the loan is outstanding (e.g. jamaat locker, bank vault).">Held at</LabelWithHelp>}
+                    name="goldHeldAt">
                     <Input placeholder="Locker / safe" />
                   </Form.Item>
                 </Col>

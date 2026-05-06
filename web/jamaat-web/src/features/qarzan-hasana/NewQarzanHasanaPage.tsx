@@ -13,6 +13,8 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
+import { LabelWithHelp } from '../../shared/ui/LabelWithHelp';
+import { QhProcessDocCard } from '../../shared/ui/QhProcessDocCard';
 import { MemberPicker } from '../families/FamilyFormDrawer';
 import { extractProblem } from '../../shared/api/client';
 import {
@@ -22,16 +24,7 @@ import {
 
 /// Tooltip-rendered label. Pulls a label string + a help string into one component so the
 /// new-loan form stays scannable.
-function LabelWithHelp({ children, help }: { children: React.ReactNode; help: string }) {
-  return (
-    <span>
-      {children}
-      <Tooltip title={help}>
-        <InfoCircleOutlined style={{ color: 'var(--jm-gray-400)', marginInlineStart: 6, fontSize: 12 }} />
-      </Tooltip>
-    </span>
-  );
-}
+// LabelWithHelp moved to shared/ui/LabelWithHelp - one impl for operator + portal forms.
 
 /// Inline panel that fires the eligibility probe when a guarantor is picked. Hard failures
 /// turn the panel red and feed back to the parent via `onEligibilityChange` so submit can
@@ -212,7 +205,7 @@ export function NewQarzanHasanaPage() {
         subtitle="Interest-free loan request. Drafted at the counter, then routed for two-level approval."
         actions={<Button onClick={() => navigate('/qarzan-hasana')}>Cancel</Button>} />
 
-      <ProcessDocCard />
+      <QhProcessDocCard />
 
       <Card className="jm-card">
         <Form layout="vertical" requiredMark={false}>
@@ -478,73 +471,4 @@ export function NewQarzanHasanaPage() {
   );
 }
 
-function ProcessDocCard() {
-  return (
-    <Collapse defaultActiveKey={['about']} ghost
-      items={[
-        {
-          key: 'about',
-          label: (
-            <span style={{ fontWeight: 600, fontSize: 14 }}>
-              <InfoCircleOutlined style={{ marginInlineEnd: 8 }} />
-              About Qarzan Hasana - read this before submitting
-            </span>
-          ),
-          children: (
-            <Card size="small" style={{ background: 'var(--jm-surface-muted)', border: '1px solid var(--jm-border)' }}>
-              <Row gutter={[24, 16]}>
-                <Col xs={24} md={12}>
-                  <Typography.Title level={5} style={{ margin: 0 }}>
-                    <BankOutlined /> What is Qarzan Hasana?
-                  </Typography.Title>
-                  <Typography.Paragraph style={{ marginBlock: 8, fontSize: 13 }}>
-                    An interest-free loan from the jamaat's QH fund. The borrower repays the
-                    principal in monthly instalments. No interest, no fees - the money you
-                    repay goes back into the fund to help the next borrower.
-                  </Typography.Paragraph>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Typography.Title level={5} style={{ margin: 0 }}>
-                    <TeamOutlined /> Eligibility
-                  </Typography.Title>
-                  <ul style={{ paddingInlineStart: 18, marginBlockStart: 8, marginBlockEnd: 0, fontSize: 13, lineHeight: 1.7 }}>
-                    <li>Active member in good standing</li>
-                    <li>Two guarantors (kafil) - members, not the borrower</li>
-                    <li>Neither guarantor in default on another QH loan</li>
-                    <li>A clear purpose and a believable repayment plan</li>
-                  </ul>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Typography.Title level={5} style={{ margin: 0 }}>
-                    <ArrowRightOutlined /> The process
-                  </Typography.Title>
-                  <ol style={{ paddingInlineStart: 18, marginBlockStart: 8, marginBlockEnd: 0, fontSize: 13, lineHeight: 1.7 }}>
-                    <li><strong>Draft</strong> - this form. Borrower + guarantors at the counter.</li>
-                    <li><strong>L1 approval</strong> - first approver reviews the case + reliability profile.</li>
-                    <li><strong>L2 approval</strong> - second approver gives final sign-off.</li>
-                    <li><strong>Disbursement</strong> - voucher issued; funds go out to the borrower.</li>
-                    <li><strong>Repayment</strong> - monthly instalments collected via Receipts.</li>
-                  </ol>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Typography.Title level={5} style={{ margin: 0 }}>
-                    <FileTextOutlined /> Bring with you
-                  </Typography.Title>
-                  <ul style={{ paddingInlineStart: 18, marginBlockStart: 8, marginBlockEnd: 0, fontSize: 13, lineHeight: 1.7 }}>
-                    <li>ITS card / ID for borrower + both guarantors</li>
-                    <li>Cashflow document (last 3 months income/expenses) - optional but speeds approval</li>
-                    <li>Gold assessor's slip - only if pledging gold</li>
-                    <li>Both guarantors physically present to acknowledge their kafalah</li>
-                  </ul>
-                </Col>
-              </Row>
-              <div style={{ marginBlockStart: 12, paddingBlockStart: 12, borderBlockStart: '1px solid var(--jm-border)', fontSize: 12, color: 'var(--jm-gray-600)' }}>
-                Typical timeline: same-day submission, 1-3 working days for L1+L2 approval, disbursement same day as L2 approval. Reach out if your need is urgent and we'll prioritise.
-              </div>
-            </Card>
-          ),
-        },
-      ]}
-    />
-  );
-}
+// ProcessDocCard moved to shared/ui/QhProcessDocCard - one impl for operator + portal forms.

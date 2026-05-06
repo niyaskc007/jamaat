@@ -293,6 +293,45 @@
   font-size: 10px; color: var(--jm-gray-500); margin-block-start: 6px;
 }
 
+/* LabelWithHelp - tooltip icon next to a form label. Used by operator + portal forms. */
+.jm-label-with-help { display: inline-flex; align-items: center; gap: 6px; }
+.jm-label-with-help-icon { color: var(--jm-gray-400); font-size: 12px; }
+
+/* QhProcessDocCard - educational panel at the top of the new-QH form (operator + portal). */
+.jm-qh-doc-collapse { margin-block-end: var(--jm-space-4); }
+.jm-qh-doc-label { font-weight: 600; font-size: 14px; }
+.jm-qh-doc-label .anticon { margin-inline-end: 8px; }
+.jm-qh-doc-card {
+  background: var(--jm-surface-muted, #F5F8F5);
+  border: 1px solid var(--jm-border);
+}
+.jm-qh-doc-section-title { margin: 0 !important; }
+.jm-qh-doc-section-title .anticon { margin-inline-end: 6px; }
+.jm-qh-doc-paragraph { margin-block: 8px 0; font-size: 13px; line-height: 1.65; }
+.jm-qh-doc-list {
+  padding-inline-start: 18px;
+  margin-block: 8px 0;
+  font-size: 13px; line-height: 1.7;
+}
+.jm-qh-doc-foot {
+  margin-block-start: 12px; padding-block-start: 12px;
+  border-block-start: 1px solid var(--jm-border);
+  font-size: 12px; color: var(--jm-gray-600);
+}
+
+/* Form section heading inside a long form (operator + portal QH form, etc.) */
+.jm-form-section-title {
+  display: flex; align-items: center; gap: 8px;
+  margin: var(--jm-space-2) 0 var(--jm-space-3);
+  font-size: 14px; font-weight: 600; color: var(--jm-gray-900);
+}
+.jm-form-section-title .anticon {
+  inline-size: 28px; block-size: 28px; border-radius: 8px;
+  display: inline-grid; place-items: center;
+  background: color-mix(in srgb, var(--jm-primary-500) 12%, transparent);
+  color: var(--jm-primary-500); font-size: 14px; flex-shrink: 0;
+}
+
 /* Cheque bounce reason - red, italic, sits under the status pill. */
 .jm-portal-cheque-bounce { color: var(--jm-danger, #DC2626); font-style: italic; }
 

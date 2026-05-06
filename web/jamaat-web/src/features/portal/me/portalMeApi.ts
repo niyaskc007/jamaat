@@ -209,6 +209,11 @@ export type CreateQhPayload = {
   monthlyIncome?: number | null;
   monthlyExpenses?: number | null;
   monthlyExistingEmis?: number | null;
+  goldWeightGrams?: number | null;
+  goldPurityKarat?: number | null;
+  goldHeldAt?: string | null;
+  /// Comma-separated codes from IncomeSourceOptions ('SALARY,BUSINESS' etc.)
+  incomeSources?: string | null;
   guarantorsAcknowledged?: boolean;
 };
 
