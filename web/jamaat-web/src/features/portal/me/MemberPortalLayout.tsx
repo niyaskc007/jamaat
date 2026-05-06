@@ -79,13 +79,14 @@ export function MemberPortalLayout() {
     <Layout className="jm-portal-shell">
       <Layout.Sider
         collapsible collapsed={collapsed} onCollapse={setCollapsed}
-        theme="light" width={232}
+        theme="dark" width={232}
         className="jm-portal-sider"
       >
         <div className={`jm-portal-sider-brand ${collapsed ? 'jm-portal-sider-brand--collapsed' : ''}`}>
-          <Logo size={28} variant={collapsed ? 'icon' : 'dark'} />
+          <Logo size={28} variant="light" />
         </div>
         <Menu
+          theme="dark"
           mode="inline"
           defaultOpenKeys={['activity', 'engagement', 'account']}
           selectedKeys={[matchKey(flatKeys, location.pathname)]}

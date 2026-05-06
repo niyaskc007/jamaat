@@ -130,10 +130,11 @@
 /* ----- Member portal layout chrome -------------------------------- */
 
 .jm-portal-shell { min-block-size: 100dvh; }
-.jm-portal-sider { border-inline-end: 1px solid var(--jm-border); }
+.jm-portal-sider { border-inline-end: 1px solid rgba(0, 0, 0, 0.85); }
 .jm-portal-sider-brand {
   padding: var(--jm-space-4) var(--jm-space-5);
   display: flex; align-items: center; gap: 10px;
+  background: rgba(255, 255, 255, 0.04);
 }
 .jm-portal-sider-brand--collapsed { padding: var(--jm-space-4) var(--jm-space-2); }
 
@@ -264,18 +265,33 @@
   border-block-start: 1px solid var(--jm-border);
 }
 
-/* Agreement preview modal: pre-formatted text block with comfortable reading width. */
+/* Agreement preview modal: rendered markdown with comfortable reading width. The body is
+   parsed by ReactMarkdown so the user sees properly formatted h1/h2/h3, lists, bold text -
+   never raw {{tokens}}. */
 .jm-portal-agreement-text {
   background: var(--jm-surface-muted, #f9fafb);
   border: 1px solid var(--jm-border);
   border-radius: var(--jm-radius-md, 8px);
-  padding: var(--jm-space-4);
+  padding: var(--jm-space-4) var(--jm-space-5);
   margin-block: var(--jm-space-3);
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 14px; line-height: 1.6; color: var(--jm-gray-800, #1f2937);
-  white-space: pre-wrap;
+  font-size: 14px; line-height: 1.65; color: var(--jm-gray-800, #1f2937);
   max-block-size: 50vh; overflow: auto;
 }
+.jm-portal-agreement-text h1,
+.jm-portal-agreement-text h2,
+.jm-portal-agreement-text h3 {
+  margin-block: var(--jm-space-3) var(--jm-space-2);
+  color: var(--jm-gray-900);
+}
+.jm-portal-agreement-text h1 { font-size: 18px; font-weight: 600; }
+.jm-portal-agreement-text h2 { font-size: 16px; font-weight: 600; }
+.jm-portal-agreement-text h3 { font-size: 14px; font-weight: 600; }
+.jm-portal-agreement-text p, .jm-portal-agreement-text ul, .jm-portal-agreement-text ol {
+  margin-block: var(--jm-space-2);
+}
+.jm-portal-agreement-text ul, .jm-portal-agreement-text ol { padding-inline-start: 1.4em; }
+.jm-portal-agreement-text li { margin-block: 4px; }
+.jm-portal-agreement-text strong { color: var(--jm-gray-900); }
 
 /* ----- Polished member-portal home -------------------------------- */
 
@@ -316,6 +332,30 @@
 /* KPI tile polish: hover lift, smoother transition, slightly stronger icon-bg. */
 .jm-portal-kpi { transition: transform 160ms ease, box-shadow 160ms ease; }
 .jm-tile-link:hover .jm-portal-kpi { transform: translateY(-2px); box-shadow: var(--jm-shadow-2); }
+
+/* Donut chart wrapper for the active-commitments paid/outstanding split. The chart sits
+   centred inside its column with a "% paid" label drawn over the donut hole via absolute
+   positioning, and a small two-row legend underneath. */
+.jm-portal-donut-wrap { position: relative; }
+.jm-portal-donut-center {
+  position: absolute; inset: 0;
+  display: grid; place-items: center; pointer-events: none; text-align: center;
+}
+.jm-portal-donut-pct {
+  font-size: 28px; font-weight: 700; color: var(--jm-gray-900); line-height: 1;
+}
+.jm-portal-donut-label { font-size: 12px; color: var(--jm-gray-500); margin-block-start: 2px; }
+.jm-portal-donut-legend {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-block-start: var(--jm-space-2);
+  font-size: 12px; color: var(--jm-gray-700);
+}
+.jm-portal-donut-dot {
+  display: inline-block; inline-size: 10px; block-size: 10px;
+  border-radius: 999px; margin-inline-end: 8px; vertical-align: middle;
+}
+.jm-portal-donut-dot--paid { background: var(--jm-success-fg-strong, #16a34a); }
+.jm-portal-donut-dot--out  { background: var(--jm-warning, #f59e0b); }
 
 /* Workflow stepper card wrapping AntD Steps - nice background + spacing. */
 .jm-portal-stepper-card {

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using Jamaat.Application.Commitments;
 using Jamaat.Application.FundEnrollments;
@@ -137,19 +138,13 @@ public sealed class PortalMeFinanceController(
         var c = await db.Commitments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
         if (c is null || c.MemberId != memberId.Value) return NotFound();
 
-        var tpl = await db.CommitmentAgreementTemplates.AsNoTracking()
-            .Where(t => t.IsActive)
-            .OrderByDescending(t => t.Version)
-            .FirstOrDefaultAsync(ct);
-        var rendered = tpl is null
-            ? $"I, {c.PartyNameSnapshot}, accept the commitment {c.Code} for {c.FundNameSnapshot} totalling {c.TotalAmount:N2} {c.Currency} over {c.NumberOfInstallments} installments starting {c.StartDate:dd MMM yyyy}."
-            : RenderTemplate(tpl.BodyMarkdown, c);
+        var rendered = await RenderAgreementForCommitmentAsync(c, ct);
         return Ok(new
         {
-            templateId = tpl?.Id,
-            templateVersion = tpl?.Version,
-            templateName = tpl?.Name,
-            renderedText = rendered,
+            templateId = rendered.TemplateId,
+            templateVersion = rendered.TemplateVersion,
+            templateName = rendered.TemplateName,
+            renderedText = rendered.Text,
             isAlreadyAccepted = c.Status != Domain.Enums.CommitmentStatus.Draft,
         });
     }
@@ -167,36 +162,73 @@ public sealed class PortalMeFinanceController(
         var c = await db.Commitments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
         if (c is null || c.MemberId != memberId.Value) return NotFound();
 
-        // Fall back to a self-rendered text if no template is configured for this fund - never
-        // block the member because master-data wasn't seeded. The text becomes part of the audit
-        // record on the commitment.
-        var tpl = await db.CommitmentAgreementTemplates.AsNoTracking()
-            .Where(t => t.IsActive)
-            .OrderByDescending(t => t.Version)
-            .FirstOrDefaultAsync(ct);
-        var rendered = tpl is null
-            ? $"I, the signed-in member, accept the commitment {c.Code} for {c.FundNameSnapshot} totalling {c.TotalAmount:N2} {c.Currency} over {c.NumberOfInstallments} installments starting {c.StartDate:dd MMM yyyy}."
-            : RenderTemplate(tpl.BodyMarkdown, c);
-
-        var dto = new AcceptAgreementDto(tpl?.Id, rendered, AcceptedByAdmin: false);
+        var rendered = await RenderAgreementForCommitmentAsync(c, ct);
+        var dto = new AcceptAgreementDto(rendered.TemplateId, rendered.Text, AcceptedByAdmin: false);
         var r = await commitmentSvc.AcceptAgreementAsync(id, dto, ct);
         return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }
 
-    private static string RenderTemplate(string body, Domain.Entities.Commitment c)
+    /// Resolves the active agreement template + builds the values dictionary the operator
+    /// path uses (party_name / fund_name / total_amount / installment_amount / start_date /
+    /// jamaat_name / etc.) and runs them through the shared <see cref="AgreementRenderer"/>.
+    /// Falls back to a self-composed sentence only when no template is seeded - members must
+    /// never be blocked from accepting just because master-data is missing.
+    private async Task<(Guid? TemplateId, int? TemplateVersion, string? TemplateName, string Text)>
+        RenderAgreementForCommitmentAsync(Domain.Entities.Commitment c, CancellationToken ct)
     {
-        // Lightweight token replacement; matches the public template variables documented in
-        // the operator agreement-template editor. Keeps this endpoint independent of any template
-        // engine so agreement content stays auditable + identical to what the member sees.
-        return body
-            .Replace("{Code}", c.Code, StringComparison.Ordinal)
-            .Replace("{FundName}", c.FundNameSnapshot, StringComparison.Ordinal)
-            .Replace("{TotalAmount}", c.TotalAmount.ToString("N2"), StringComparison.Ordinal)
-            .Replace("{Currency}", c.Currency, StringComparison.Ordinal)
-            .Replace("{NumberOfInstallments}", c.NumberOfInstallments.ToString(), StringComparison.Ordinal)
-            .Replace("{StartDate}", c.StartDate.ToString("dd MMM yyyy"), StringComparison.Ordinal)
-            .Replace("{PartyName}", c.PartyNameSnapshot, StringComparison.Ordinal);
+        var tpl = await db.CommitmentAgreementTemplates.AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderByDescending(t => t.Version)
+            .FirstOrDefaultAsync(ct);
+
+        var fund = await db.FundTypes.AsNoTracking()
+            .Where(f => f.Id == c.FundTypeId)
+            .Select(f => new { f.Code, f.NameEnglish })
+            .FirstOrDefaultAsync(ct);
+
+        var jamaatName = await db.Tenants.AsNoTracking()
+            .Where(t => t.Id == c.TenantId)
+            .Select(t => t.JamiaatName ?? t.Name)
+            .FirstOrDefaultAsync(ct) ?? "Jamaat";
+
+        var installmentAmount = c.NumberOfInstallments > 0
+            ? c.TotalAmount / c.NumberOfInstallments
+            : c.TotalAmount;
+
+        var values = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["party_name"]         = c.PartyNameSnapshot ?? "",
+            ["party_type"]         = c.PartyType == CommitmentPartyType.Member ? "Member" : "Family",
+            ["fund_name"]          = fund?.NameEnglish ?? c.FundNameSnapshot ?? "",
+            ["fund_code"]          = fund?.Code ?? "",
+            ["total_amount"]       = c.TotalAmount.ToString("N2", CultureInfo.InvariantCulture),
+            ["currency"]           = c.Currency ?? "",
+            ["installments"]       = c.NumberOfInstallments.ToString(CultureInfo.InvariantCulture),
+            ["frequency"]          = FrequencyLabel(c.Frequency),
+            ["installment_amount"] = installmentAmount.ToString("N2", CultureInfo.InvariantCulture),
+            ["start_date"]         = c.StartDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture),
+            ["end_date"]           = c.EndDate?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "—",
+            ["today"]              = DateTime.UtcNow.ToString("dd MMM yyyy", CultureInfo.InvariantCulture),
+            ["jamaat_name"]        = jamaatName,
+        };
+
+        var text = tpl is null
+            ? $"I, **{values["party_name"]}**, accept commitment {c.Code} for **{values["fund_name"]}** totalling {values["total_amount"]} {values["currency"]} over {values["installments"]} {values["frequency"]} installments starting {values["start_date"]}."
+            : AgreementRenderer.Render(tpl.BodyMarkdown, values);
+        return (tpl?.Id, tpl?.Version, tpl?.Name, text);
     }
+
+    private static string FrequencyLabel(CommitmentFrequency f) => f switch
+    {
+        CommitmentFrequency.OneTime    => "one-time",
+        CommitmentFrequency.Weekly     => "weekly",
+        CommitmentFrequency.BiWeekly   => "bi-weekly",
+        CommitmentFrequency.Monthly    => "monthly",
+        CommitmentFrequency.Quarterly  => "quarterly",
+        CommitmentFrequency.HalfYearly => "half-yearly",
+        CommitmentFrequency.Yearly     => "yearly",
+        _                              => "custom",
+    };
 
     // ----- Qarzan Hasana ------------------------------------------------------
 

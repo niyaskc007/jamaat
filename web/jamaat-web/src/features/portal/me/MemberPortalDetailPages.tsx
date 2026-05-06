@@ -18,6 +18,7 @@ import {
 } from './portalMeApi';
 import { WorkflowStepper, qhWorkflow, commitmentWorkflow, patronageWorkflow } from './WorkflowStepper';
 import { MemberSearchSelect } from './MemberSearchSelect';
+import ReactMarkdown from 'react-markdown';
 
 // --- Shared header --------------------------------------------------------
 
@@ -209,7 +210,9 @@ export function MemberCommitmentDetailPage() {
                 Template: {previewQ.data.templateName}{previewQ.data.templateVersion ? ` v${previewQ.data.templateVersion}` : ''}
               </Typography.Text>
             )}
-            <pre className="jm-portal-agreement-text">{previewQ.data.renderedText}</pre>
+            <div className="jm-portal-agreement-text">
+              <ReactMarkdown>{previewQ.data.renderedText}</ReactMarkdown>
+            </div>
             <Alert type="info" showIcon
               message="By clicking I agree and accept, you confirm the schedule below and bind yourself to this agreement."
               description="A timestamped audit record (you, your IP, your browser, and this acceptance) is written to the commitment." />

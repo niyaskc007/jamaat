@@ -1,4 +1,4 @@
-import { Card, Row, Col, Typography, Space, Statistic, Tag, Empty, Skeleton, Alert, Button, Avatar } from 'antd';
+import { Card, Row, Col, Typography, Space, Statistic, Tag, Empty, Skeleton, Alert, Button, Avatar, Progress } from 'antd';
 import {
   GiftOutlined, HeartOutlined, BankOutlined, TeamOutlined, CalendarOutlined,
   HistoryOutlined, UserOutlined, DollarOutlined, ClockCircleOutlined,
@@ -7,6 +7,7 @@ import {
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip } from 'recharts';
 import { authStore } from '../../../shared/auth/authStore';
 import { portalMeApi } from './portalMeApi';
 
@@ -193,32 +194,73 @@ export function MemberHomePage() {
         </Col>
       </Row>
 
-      {/* --- Active commitments quick view ------------------------------- */}
-      {data && data.activeCommitmentsList.length > 0 && (
-        <Card className="jm-card jm-portal-section-spaced"
-          title={<Space><HeartOutlined /> Active commitments</Space>}
-          extra={<Link to="/portal/me/commitments">Manage all</Link>}>
-          <Row gutter={[16, 16]}>
-            {data.activeCommitmentsList.map((c) => (
-              <Col xs={24} md={12} lg={8} key={c.id}>
-                <Link to={`/portal/me/commitments/${c.id}`} className="jm-tile-link">
-                  <Card hoverable size="small" className="jm-card jm-tile">
-                    <div className="jm-tile-title">{c.code}</div>
-                    <div className="jm-tile-desc">{c.fundName}</div>
-                    <div className="jm-portal-commit-progress">
-                      <span className="jm-tnum jm-num-strong">{formatCur(c.paidAmount)}</span>
-                      <span className="jm-muted"> / {formatCur(c.totalAmount)} {c.currency}</span>
-                    </div>
-                    <div className="jm-portal-commit-outstanding">
-                      Outstanding {formatCur(c.remainingAmount)} {c.currency}
-                    </div>
-                  </Card>
-                </Link>
+      {/* --- Active commitments donut + per-card progress ----------------- */}
+      {data && data.activeCommitmentsList.length > 0 && (() => {
+        const totalPaid = data.activeCommitmentsList.reduce((s, c) => s + c.paidAmount, 0);
+        const totalOutstanding = data.activeCommitmentsList.reduce((s, c) => s + c.remainingAmount, 0);
+        const chartData = [
+          { name: 'Paid',        value: Math.max(0, totalPaid),        fill: 'var(--jm-success-fg-strong, #16a34a)' },
+          { name: 'Outstanding', value: Math.max(0, totalOutstanding), fill: 'var(--jm-warning, #f59e0b)' },
+        ];
+        const total = totalPaid + totalOutstanding;
+        const paidPct = total > 0 ? Math.round((totalPaid / total) * 100) : 0;
+        return (
+          <Card className="jm-card jm-portal-section-spaced"
+            title={<Space><HeartOutlined /> Active commitments</Space>}
+            extra={<Link to="/portal/me/commitments">Manage all</Link>}>
+            <Row gutter={[16, 16]} align="middle">
+              <Col xs={24} md={8}>
+                <div className="jm-portal-donut-wrap">
+                  <ResponsiveContainer width="100%" height={180}>
+                    <PieChart>
+                      <Pie data={chartData} dataKey="value" nameKey="name"
+                        innerRadius={50} outerRadius={75} paddingAngle={2}
+                        startAngle={90} endAngle={-270}>
+                        {chartData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                      </Pie>
+                      <ReTooltip formatter={(v: number, n: string) => [`${formatCur(v)} ${cur}`, n]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="jm-portal-donut-center">
+                    <div className="jm-portal-donut-pct">{paidPct}%</div>
+                    <div className="jm-portal-donut-label">paid</div>
+                  </div>
+                </div>
+                <div className="jm-portal-donut-legend">
+                  <span><span className="jm-portal-donut-dot jm-portal-donut-dot--paid" />Paid {formatCur(totalPaid)} {cur}</span>
+                  <span><span className="jm-portal-donut-dot jm-portal-donut-dot--out" />Outstanding {formatCur(totalOutstanding)} {cur}</span>
+                </div>
               </Col>
-            ))}
-          </Row>
-        </Card>
-      )}
+              <Col xs={24} md={16}>
+                <Row gutter={[16, 16]}>
+                  {data.activeCommitmentsList.map((c) => {
+                    const pct = c.totalAmount > 0 ? Math.round((c.paidAmount / c.totalAmount) * 100) : 0;
+                    return (
+                      <Col xs={24} md={12} key={c.id}>
+                        <Link to={`/portal/me/commitments/${c.id}`} className="jm-tile-link">
+                          <Card hoverable size="small" className="jm-card jm-tile">
+                            <div className="jm-tile-title">{c.code}</div>
+                            <div className="jm-tile-desc">{c.fundName}</div>
+                            <div className="jm-portal-commit-progress">
+                              <span className="jm-tnum jm-num-strong">{formatCur(c.paidAmount)}</span>
+                              <span className="jm-muted"> / {formatCur(c.totalAmount)} {c.currency}</span>
+                            </div>
+                            <Progress percent={pct} showInfo={false} size="small"
+                              strokeColor={{ from: 'var(--jm-primary-500)', to: 'var(--jm-accent-600)' }} />
+                            <div className="jm-portal-commit-outstanding">
+                              {formatCur(c.remainingAmount)} {c.currency} outstanding · {pct}% paid
+                            </div>
+                          </Card>
+                        </Link>
+                      </Col>
+                    );
+                  })}
+                </Row>
+              </Col>
+            </Row>
+          </Card>
+        );
+      })()}
 
       {/* --- Quick-link tiles (full nav) --------------------------------- */}
       <Typography.Title level={5} className="jm-portal-browse-title">Browse</Typography.Title>
