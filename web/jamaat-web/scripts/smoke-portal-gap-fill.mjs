@@ -135,16 +135,16 @@ try {
   if (!page.url().includes('/portal/me')) {
     await page.goto(`${SPA}/portal/me`);
   }
-  // Hero greeting uses a time-of-day phrase (Sabah / Marhaban / Masa el-khair) so don't
-  // anchor the assertion on a single string. Wait for the avatar block to render instead.
-  await page.waitForSelector('.jm-portal-hero-avatar', { timeout: 10_000 });
+  // Home page now uses the shared PageHeader from the admin dashboard. Wait for the page
+  // wrapper class instead of any specific greeting text (which is time-of-day variable).
+  await page.waitForSelector('.jm-portal-home', { timeout: 10_000 });
 
   // ---- 2. Home dashboard renders + KPI labels --------------------------
   console.log('▶ /portal/me - KPI dashboard');
   await page.waitForSelector('text=YTD contributions', { timeout: 10_000 });
   await page.waitForSelector('text=Active commitments', { timeout: 5_000 });
-  await page.waitForSelector('text=Active QH loans', { timeout: 5_000 });
-  await page.waitForSelector('text=Pending guarantor requests', { timeout: 5_000 });
+  await page.waitForSelector('text=QH loans', { timeout: 5_000 });
+  await page.waitForSelector('text=Pending guarantor', { timeout: 5_000 });
   await expectNoAccessDenied('/portal/me');
   console.log('  ✓ dashboard rendered as Member');
 

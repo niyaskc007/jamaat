@@ -1,341 +1,360 @@
-import { Card, Row, Col, Typography, Space, Statistic, Tag, Empty, Skeleton, Alert, Button, Avatar, Progress } from 'antd';
+import { Card, Row, Col, Button, Typography, Empty, Space, Alert, Progress } from 'antd';
 import {
-  GiftOutlined, HeartOutlined, BankOutlined, TeamOutlined, CalendarOutlined,
-  HistoryOutlined, UserOutlined, DollarOutlined, ClockCircleOutlined,
-  WarningOutlined, ArrowRightOutlined,
+  WalletOutlined, FileTextOutlined, HeartOutlined, RiseOutlined, BankOutlined,
+  PlusOutlined, SearchOutlined, ClockCircleOutlined, GiftOutlined,
+  TeamOutlined, CalendarOutlined, UserOutlined, CheckCircleOutlined, HistoryOutlined,
 } from '@ant-design/icons';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip } from 'recharts';
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area,
+  PieChart, Pie, Cell, Legend,
+} from 'recharts';
 import { authStore } from '../../../shared/auth/authStore';
-import { portalMeApi } from './portalMeApi';
+import { KpiCard } from '../../../shared/ui/KpiCard';
+import { PageHeader } from '../../../shared/ui/PageHeader';
+import { money, compactMoney } from '../../../shared/format/format';
+import { portalMeApi, type MemberDashboard } from './portalMeApi';
 
-/// Time-of-day-aware greeting line + the same in Arabic. Keeps tone respectful for the
-/// community context.
-function greetingFor(now: Date): string {
-  const h = now.getHours();
-  if (h < 5) return 'As-salamu alaykum';
-  if (h < 12) return 'Sabah el-khair';
-  if (h < 17) return 'Marhaban';
-  return 'Masa el-khair';
-}
-
-/// Hijri (Umm al-Qura) calendar via the platform Intl API - no extra plugin required, all
-/// modern browsers support the calendar key. Falls back to '' if the runtime can't render it.
-function formatHijri(d: Date): string {
-  try {
-    return new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
-      day: 'numeric', month: 'long', year: 'numeric',
-    }).format(d);
-  } catch { return ''; }
-}
-
-/// Member portal home. Real KPI dashboard sourced from /api/v1/portal/me/dashboard +
-/// quick-link tiles below for navigation discoverability. All numbers come from the API; nothing
-/// is hard-coded. Visual styling lives in app/portal.css under the .jm-portal-* / .jm-kpi-* classes.
-type Tone = 'primary' | 'success' | 'info' | 'warning' | 'danger' | 'accent' | 'neutral';
-
+/// Member portal home. Uses the SAME shared KpiCard + PageHeader + chart patterns as the
+/// operator DashboardPage, just sourced from /portal/me/dashboard with member-scoped data.
+/// Lifts the look-and-feel one-to-one rather than rolling a parallel component set.
 export function MemberHomePage() {
   const user = authStore.getUser();
+  const navigate = useNavigate();
   const dq = useQuery({ queryKey: ['portal-me-dashboard'], queryFn: portalMeApi.dashboard });
   const data = dq.data;
   const cur = data?.currency ?? 'INR';
 
-  const now = new Date();
-  const hijri = formatHijri(now);
-  const firstName = user?.fullName?.split(' ')[0] ?? 'Member';
-  const initial = (user?.fullName ?? '?').slice(0, 1).toUpperCase();
+  const greeting = getGreeting();
+  const firstName = (user?.fullName ?? '').split(' ')[0];
+
+  const trend = (data?.collectionTrend ?? []).map((p) => ({
+    label: dayjs(p.month).format('MMM'),
+    month: p.month,
+    amount: p.amount,
+  }));
+  const trendTotal = trend.reduce((s, p) => s + p.amount, 0);
+  const trendAvg = trend.length > 0 ? trendTotal / trend.length : 0;
+  const fundShare = (data?.fundShare ?? []).slice(0, 8);
+
+  // Same accent palette as the operator DashboardInsights donut.
+  const FUND_COLORS = ['#0B6E63', '#1E40AF', '#7C3AED', '#D97706', '#0E7490', '#DC2626', '#0E5C40', '#9333EA'];
 
   return (
-    <div>
-      {/* Hero greeting card: gradient background + avatar + dual date stack + primary CTA
-          when there's something actionable. Replaces the bare H3 + intro paragraph. */}
-      <div className="jm-portal-hero">
-        <Avatar size={72} className="jm-portal-hero-avatar">{initial}</Avatar>
-        <div>
-          <div className="jm-portal-hero-greeting">
-            {greetingFor(now)}, <span className="jm-portal-hero-name">{firstName}</span>
-          </div>
-          <div className="jm-portal-hero-meta">
-            <span>{dayjs(now).format('dddd, DD MMM YYYY')}</span>
-            {hijri && <span className="jm-portal-hero-meta-hijri">{hijri}</span>}
-          </div>
-        </div>
-        {data?.pendingGuarantorRequests ? (
-          <div className="jm-portal-hero-cta">
-            <Link to="/portal/me/guarantor-inbox">
-              <Button type="primary">{data.pendingGuarantorRequests} action{data.pendingGuarantorRequests === 1 ? '' : 's'} pending</Button>
-            </Link>
-          </div>
-        ) : null}
+    <div className="jm-stack jm-portal-home">
+      <div>
+        <Typography.Paragraph className="jm-portal-home-date">
+          {dayjs().format('dddd, DD MMMM YYYY')}
+        </Typography.Paragraph>
+        <PageHeader
+          title={`${greeting}${firstName ? ', ' + firstName : ''}`}
+          subtitle="Your contributions, commitments, loans and pending tasks - at a glance."
+          actions={
+            <Space>
+              <Link to="/portal/me/profile">
+                <Button icon={<UserOutlined />}>My profile</Button>
+              </Link>
+              <Link to="/portal/me/commitments/new">
+                <Button type="primary" icon={<PlusOutlined />}>New commitment</Button>
+              </Link>
+            </Space>
+          }
+        />
       </div>
 
       {dq.isError && (
-        <Alert type="error" showIcon className="jm-portal-dashboard-alert"
+        <Alert type="error" showIcon
           message="Couldn't load your dashboard."
           description={(dq.error as Error)?.message ?? 'Please retry.'} />
       )}
 
-      {/* --- Active-invite banners (only render when there's something to do) -- */}
       {data && data.pendingGuarantorRequests > 0 && (
-        <Alert type="warning" showIcon className="jm-portal-dashboard-alert"
+        <Alert type="warning" showIcon
           message={`You have ${data.pendingGuarantorRequests} pending guarantor request${data.pendingGuarantorRequests === 1 ? '' : 's'}.`}
-          description="A fellow member has asked you to act as a kafil for their Qarzan Hasana application. Endorse or decline from your inbox."
+          description="A fellow member has asked you to act as kafil. Endorse or decline from your inbox."
           action={<Link to="/portal/me/guarantor-inbox"><Button type="primary" size="small">Open inbox</Button></Link>} />
       )}
       {data && data.nextInstallment && dayjs(data.nextInstallment.dueDate).diff(dayjs(), 'day') <= 7 && (
-        <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-          message={`Installment #${data.nextInstallment.installmentNo} of ${data.nextInstallment.commitmentCode} is due ${dayjs(data.nextInstallment.dueDate).fromNow()}.`}
-          description={`${formatCur(data.nextInstallment.amountDue)} ${data.nextInstallment.currency} for ${data.nextInstallment.fundName}.`}
+        <Alert type="info" showIcon
+          message={`Instalment #${data.nextInstallment.installmentNo} of ${data.nextInstallment.commitmentCode} is due ${dayjs(data.nextInstallment.dueDate).fromNow()}.`}
+          description={`${money(data.nextInstallment.amountDue, data.nextInstallment.currency)} for ${data.nextInstallment.fundName}.`}
           action={<Link to={`/portal/me/commitments/${data.nextInstallment.commitmentId}`}><Button type="primary" size="small">View commitment</Button></Link>} />
       )}
-      {data && data.pendingChangeRequests > 0 && (
-        <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-          message={`${data.pendingChangeRequests} profile change${data.pendingChangeRequests === 1 ? '' : 's'} awaiting administrator review.`}
-          description="No further action required from you - you'll be notified once the change has been reviewed."
-          action={<Link to="/portal/me/profile"><Button size="small">View profile</Button></Link>} />
+
+      {/* 4 headline KPIs, one-to-one with the operator dashboard's KpiCard. */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={12} lg={6}>
+          <KpiCard icon={<WalletOutlined />} label="YTD contributions"
+            value={data?.ytdContributions ?? null} format="money" currency={cur}
+            deltaPercent={data?.monthDelta ?? null}
+            caption={`${data?.ytdReceiptCount ?? 0} receipt${(data?.ytdReceiptCount ?? 0) === 1 ? '' : 's'} this year`}
+            accent="var(--jm-primary-500)" />
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <KpiCard icon={<HeartOutlined />} label="Active commitments"
+            value={data?.activeCommitments ?? null} format="number"
+            deltaPercent={null}
+            caption={data ? `${compactMoney(data.commitmentOutstanding, cur)} outstanding` : undefined}
+            accent="#C9A34B" />
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <KpiCard icon={<BankOutlined />} label="QH loans"
+            value={data?.activeQhLoans ?? null} format="number"
+            deltaPercent={null}
+            caption={data ? `${compactMoney(data.qhOutstanding, cur)} outstanding` : undefined}
+            accent="#2563EB" />
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <KpiCard icon={<TeamOutlined />} label="Pending guarantor"
+            value={data?.pendingGuarantorRequests ?? null} format="number"
+            deltaPercent={null}
+            caption={(data?.pendingGuarantorRequests ?? 0) > 0 ? 'Action required' : 'All caught up'}
+            accent="#0A8754" />
+        </Col>
+      </Row>
+
+      {/* Chart row: contribution trend (last 12 months) + fund share donut. Same shapes as
+          the operator DashboardInsights so the visual language is identical. */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={16}>
+          <Card title="Your contributions - last 12 months" size="small" className="jm-card jm-portal-chart-card"
+            extra={<span className="jm-portal-chart-extra">Avg <span className="jm-tnum">{money(trendAvg, cur)}</span> · Total <span className="jm-tnum">{money(trendTotal, cur)}</span></span>}>
+            {trend.length === 0 || trendTotal === 0 ? (
+              <Empty description="No contribution history yet." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="memberTrendFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#0B6E63" stopOpacity={0.25} />
+                      <stop offset="100%" stopColor="#0B6E63" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#E5E9EF" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748B' }} interval="preserveStartEnd" axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} width={70}
+                    tickFormatter={(v: number) => compactMoney(v, cur)} />
+                  <Tooltip
+                    formatter={(v: number) => money(v, cur)}
+                    labelFormatter={(_l, p) => p[0]?.payload?.month ? dayjs(p[0].payload.month).format('MMMM YYYY') : ''}
+                    contentStyle={{ fontSize: 12, borderRadius: 6, border: '1px solid var(--jm-border)' }} />
+                  <Area type="monotone" dataKey="amount" stroke="none" fill="url(#memberTrendFill)" />
+                  <Line type="monotone" dataKey="amount" stroke="#0B6E63" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+        </Col>
+        <Col xs={24} lg={8}>
+          <Card title="Fund share" size="small" className="jm-card jm-portal-chart-card">
+            {fundShare.length === 0 ? (
+              <Empty description="No fund-attributed receipts yet." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie data={fundShare} dataKey="amount" nameKey="name" innerRadius={50} outerRadius={90} paddingAngle={2}>
+                    {fundShare.map((_, i) => <Cell key={i} fill={FUND_COLORS[i % FUND_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => money(v, cur)} contentStyle={{ fontSize: 12, borderRadius: 6, border: '1px solid var(--jm-border)' }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} iconSize={10} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Quick actions card - mirrors the operator dashboard pattern exactly. */}
+      <Card title="Quick actions" className="jm-card jm-portal-quick-card">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={12} md={8} lg={6}>
+            <QuickAction icon={<HeartOutlined />} title="New commitment"
+              description="Make a new pledge to a fund" accent="var(--jm-primary-500)"
+              onClick={() => navigate('/portal/me/commitments/new')} />
+          </Col>
+          <Col xs={24} sm={12} md={8} lg={6}>
+            <QuickAction icon={<BankOutlined />} title="Apply for QH"
+              description="Request a Qarzan Hasana loan" accent="#2563EB"
+              onClick={() => navigate('/portal/me/qarzan-hasana/new')} />
+          </Col>
+          <Col xs={24} sm={12} md={8} lg={6}>
+            <QuickAction icon={<GiftOutlined />} title="Subscribe to a fund"
+              description="Sabil, Mutafariq, Niyaz enrolment" accent="#C9A34B"
+              onClick={() => navigate('/portal/me/fund-enrollments/new')} />
+          </Col>
+          <Col xs={24} sm={12} md={8} lg={6}>
+            <QuickAction icon={<SearchOutlined />} title="Find a receipt"
+              description="Browse + download duplicate copies" accent="#0A8754"
+              onClick={() => navigate('/portal/me/contributions')} />
+          </Col>
+        </Row>
+      </Card>
+
+      {/* Recent activity (left) + Active commitments (right) row. Same 14/10 split + same
+          card chrome as the operator dashboard's bottom row. */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={14}>
+          <Card title="Recent contributions"
+            extra={<Link to="/portal/me/contributions"><Button type="link" size="small">View all</Button></Link>}
+            className="jm-card jm-portal-activity-card"
+            styles={{ body: { padding: 0 } }}>
+            {dq.isLoading ? null : (data?.recentContributions.length ?? 0) > 0 ? (
+              <div>
+                {data!.recentContributions.map((r) => (
+                  <Link key={r.id} to={`/portal/me/contributions/${r.id}`} className="jm-portal-activity-row">
+                    <span className="jm-portal-activity-icon jm-portal-activity-icon--receipt">
+                      <FileTextOutlined />
+                    </span>
+                    <div className="jm-portal-activity-body">
+                      <div className="jm-portal-activity-headline">
+                        <span className="jm-tnum jm-portal-activity-ref">{r.receiptNumber ?? '—'}</span>
+                        <span className="jm-portal-activity-title">Contribution receipt</span>
+                      </div>
+                      <span className="jm-portal-activity-meta">{dayjs(r.receiptDate).fromNow()} · {dayjs(r.receiptDate).format('DD MMM YYYY')}</span>
+                    </div>
+                    <span className="jm-tnum jm-portal-activity-amt">{money(r.amount, r.currency)}</span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <Empty image={<ClockCircleOutlined className="jm-portal-empty-icon" />}
+                description={<div className="jm-portal-empty-body">
+                  <div className="jm-portal-empty-title">No contributions yet</div>
+                  <div className="jm-portal-empty-sub">Receipts issued in your name appear here in real time.</div>
+                </div>} />
+            )}
+          </Card>
+        </Col>
+        <Col xs={24} lg={10}>
+          <Card title="Active commitments" className="jm-card jm-portal-active-card"
+            extra={<Link to="/portal/me/commitments"><Button type="link" size="small">Manage all</Button></Link>}>
+            {(data?.activeCommitmentsList.length ?? 0) === 0 ? (
+              <Empty description="No active commitments." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            ) : (
+              <Space direction="vertical" size={12} className="jm-full-width">
+                {data!.activeCommitmentsList.map((c) => {
+                  const pct = c.totalAmount > 0 ? Math.round((c.paidAmount / c.totalAmount) * 100) : 0;
+                  return (
+                    <Link key={c.id} to={`/portal/me/commitments/${c.id}`} className="jm-portal-mini-commitment">
+                      <div className="jm-portal-mini-commitment-head">
+                        <strong>{c.code}</strong>
+                        <span className="jm-tnum">{compactMoney(c.paidAmount, c.currency)} / {compactMoney(c.totalAmount, c.currency)}</span>
+                      </div>
+                      <div className="jm-portal-mini-commitment-fund">{c.fundName}</div>
+                      <Progress percent={pct} showInfo={false} size="small"
+                        strokeColor={{ from: 'var(--jm-primary-500)', to: 'var(--jm-success-fg-strong)' }} />
+                      <div className="jm-portal-mini-commitment-foot">
+                        <span className="jm-portal-mini-commitment-pct">{pct}% paid</span>
+                        <span>{compactMoney(c.remainingAmount, c.currency)} outstanding</span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </Space>
+            )}
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Status strip + browse tiles. Replaces the previous "tiny tag list" with bordered
+          summary cards (clickable through to the relevant sections). */}
+      {data && (data.pendingChangeRequests > 0 || data.upcomingEventCount > 0) && (
+        <Row gutter={[12, 12]}>
+          {data.pendingChangeRequests > 0 && (
+            <Col xs={12} md={6}>
+              <SmallCard accent="#D97706" icon={<CheckCircleOutlined />}
+                label="Profile changes awaiting review" value={data.pendingChangeRequests}
+                onClick={() => navigate('/portal/me/profile')} />
+            </Col>
+          )}
+          {data.upcomingEventCount > 0 && (
+            <Col xs={12} md={6}>
+              <SmallCard accent="#2563EB" icon={<CalendarOutlined />}
+                label="Upcoming event registrations" value={data.upcomingEventCount}
+                onClick={() => navigate('/portal/me/events')} />
+            </Col>
+          )}
+        </Row>
       )}
 
-      {/* --- KPI strip ----------------------------------------------------- */}
-      <Row gutter={[16, 16]}>
-        <KpiCol><KpiCard
-          loading={dq.isLoading} icon={<DollarOutlined />} tone="success"
-          label="YTD contributions" suffix={cur}
-          value={data?.ytdContributions}
-          hint={`${data?.ytdReceiptCount ?? 0} receipt${(data?.ytdReceiptCount ?? 0) === 1 ? '' : 's'} this year`}
-          to="/portal/me/contributions"
-        /></KpiCol>
-        <KpiCol><KpiCard
-          loading={dq.isLoading} icon={<HeartOutlined />} tone="accent"
-          label="Active commitments" value={data?.activeCommitments}
-          hint={data ? `${formatCur(data.commitmentOutstanding)} ${cur} outstanding` : ''}
-          to="/portal/me/commitments"
-        /></KpiCol>
-        <KpiCol><KpiCard
-          loading={dq.isLoading} icon={<BankOutlined />} tone="info"
-          label="Active QH loans" value={data?.activeQhLoans}
-          hint={data ? `${formatCur(data.qhOutstanding)} ${cur} outstanding` : ''}
-          to="/portal/me/qarzan-hasana"
-        /></KpiCol>
-        <KpiCol><KpiCard
-          loading={dq.isLoading} icon={<TeamOutlined />} tone="warning"
-          label="Pending guarantor requests" value={data?.pendingGuarantorRequests}
-          hint={(data?.pendingGuarantorRequests ?? 0) > 0 ? 'Action required' : 'All caught up'}
-          to="/portal/me/guarantor-inbox"
-        /></KpiCol>
-      </Row>
-
-      {/* --- Up next + recent activity ------------------------------------ */}
-      <Row gutter={[16, 16]} className="jm-portal-section-spaced">
-        <Col xs={24} md={12}>
-          <Card className="jm-card" title={<Space><ClockCircleOutlined /> Up next</Space>}>
-            {dq.isLoading ? <Skeleton active /> : (
-              <>
-                {data?.nextInstallment ? (
-                  <div>
-                    <Typography.Paragraph className="jm-portal-upnext-text">
-                      Installment <strong>#{data.nextInstallment.installmentNo}</strong> of <strong>{data.nextInstallment.commitmentCode}</strong> ({data.nextInstallment.fundName}) is due on{' '}
-                      <strong>{dayjs(data.nextInstallment.dueDate).format('DD MMM YYYY')}</strong>.
-                    </Typography.Paragraph>
-                    <Statistic className="jm-portal-upnext-amt"
-                      value={data.nextInstallment.amountDue}
-                      suffix={data.nextInstallment.currency}
-                      precision={2}
-                    />
-                    <div className="jm-portal-upnext-cta">
-                      <Link to={`/portal/me/commitments/${data.nextInstallment.commitmentId}`}>
-                        <Button type="primary" size="small">View commitment <ArrowRightOutlined /></Button>
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No upcoming installments." />
-                )}
-                {data && (data.pendingChangeRequests > 0 || data.upcomingEventCount > 0) && (
-                  <Space wrap className="jm-portal-upnext-tags">
-                    {data.pendingChangeRequests > 0 && (
-                      <Tag icon={<WarningOutlined />} color="gold">
-                        {data.pendingChangeRequests} profile change{data.pendingChangeRequests === 1 ? '' : 's'} awaiting review
-                      </Tag>
-                    )}
-                    {data.upcomingEventCount > 0 && (
-                      <Tag icon={<CalendarOutlined />} color="blue">
-                        {data.upcomingEventCount} event registration{data.upcomingEventCount === 1 ? '' : 's'}
-                      </Tag>
-                    )}
-                  </Space>
-                )}
-              </>
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} md={12}>
-          <Card className="jm-card" title={<Space><GiftOutlined /> Recent contributions</Space>}
-            extra={<Link to="/portal/me/contributions">View all</Link>}>
-            {dq.isLoading ? <Skeleton active /> : (
-              data && data.recentContributions.length > 0 ? (
-                <ul className="jm-portal-mini-list">
-                  {data.recentContributions.map((r) => (
-                    <li key={r.id}>
-                      <Link to={`/portal/me/contributions/${r.id}`}>
-                        <span className="jm-tnum">{r.receiptNumber ?? '—'}</span>
-                        <span className="jm-portal-mini-meta">{dayjs(r.receiptDate).format('DD MMM YYYY')}</span>
-                        <span className="jm-portal-mini-amt">{formatCur(r.amount)} {r.currency}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No contributions yet." />
-              )
-            )}
-          </Card>
-        </Col>
-      </Row>
-
-      {/* --- Active commitments donut + per-card progress ----------------- */}
-      {data && data.activeCommitmentsList.length > 0 && (() => {
-        const totalPaid = data.activeCommitmentsList.reduce((s, c) => s + c.paidAmount, 0);
-        const totalOutstanding = data.activeCommitmentsList.reduce((s, c) => s + c.remainingAmount, 0);
-        const chartData = [
-          { name: 'Paid',        value: Math.max(0, totalPaid),        fill: 'var(--jm-success-fg-strong, #16a34a)' },
-          { name: 'Outstanding', value: Math.max(0, totalOutstanding), fill: 'var(--jm-warning, #f59e0b)' },
-        ];
-        const total = totalPaid + totalOutstanding;
-        const paidPct = total > 0 ? Math.round((totalPaid / total) * 100) : 0;
-        return (
-          <Card className="jm-card jm-portal-section-spaced"
-            title={<Space><HeartOutlined /> Active commitments</Space>}
-            extra={<Link to="/portal/me/commitments">Manage all</Link>}>
-            <Row gutter={[16, 16]} align="middle">
-              <Col xs={24} md={8}>
-                <div className="jm-portal-donut-wrap">
-                  <ResponsiveContainer width="100%" height={180}>
-                    <PieChart>
-                      <Pie data={chartData} dataKey="value" nameKey="name"
-                        innerRadius={50} outerRadius={75} paddingAngle={2}
-                        startAngle={90} endAngle={-270}>
-                        {chartData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                      </Pie>
-                      <ReTooltip formatter={(v: number, n: string) => [`${formatCur(v)} ${cur}`, n]} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="jm-portal-donut-center">
-                    <div className="jm-portal-donut-pct">{paidPct}%</div>
-                    <div className="jm-portal-donut-label">paid</div>
-                  </div>
-                </div>
-                <div className="jm-portal-donut-legend">
-                  <span><span className="jm-portal-donut-dot jm-portal-donut-dot--paid" />Paid {formatCur(totalPaid)} {cur}</span>
-                  <span><span className="jm-portal-donut-dot jm-portal-donut-dot--out" />Outstanding {formatCur(totalOutstanding)} {cur}</span>
-                </div>
-              </Col>
-              <Col xs={24} md={16}>
-                <Row gutter={[16, 16]}>
-                  {data.activeCommitmentsList.map((c) => {
-                    const pct = c.totalAmount > 0 ? Math.round((c.paidAmount / c.totalAmount) * 100) : 0;
-                    return (
-                      <Col xs={24} md={12} key={c.id}>
-                        <Link to={`/portal/me/commitments/${c.id}`} className="jm-tile-link">
-                          <Card hoverable size="small" className="jm-card jm-tile">
-                            <div className="jm-tile-title">{c.code}</div>
-                            <div className="jm-tile-desc">{c.fundName}</div>
-                            <div className="jm-portal-commit-progress">
-                              <span className="jm-tnum jm-num-strong">{formatCur(c.paidAmount)}</span>
-                              <span className="jm-muted"> / {formatCur(c.totalAmount)} {c.currency}</span>
-                            </div>
-                            <Progress percent={pct} showInfo={false} size="small"
-                              strokeColor={{ from: 'var(--jm-primary-500)', to: 'var(--jm-accent-600)' }} />
-                            <div className="jm-portal-commit-outstanding">
-                              {formatCur(c.remainingAmount)} {c.currency} outstanding · {pct}% paid
-                            </div>
-                          </Card>
-                        </Link>
-                      </Col>
-                    );
-                  })}
-                </Row>
-              </Col>
-            </Row>
-          </Card>
-        );
-      })()}
-
-      {/* --- Quick-link tiles (full nav) --------------------------------- */}
-      <Typography.Title level={5} className="jm-portal-browse-title">Browse</Typography.Title>
-      <Row gutter={[16, 16]}>
-        <Tile to="/portal/me/profile" tone="primary" icon={<UserOutlined />}
-          title="My profile" desc="Update contact, address, family, photo." />
-        <Tile to="/portal/me/contributions" tone="success" icon={<GiftOutlined />}
-          title="Contributions" desc="All receipts. Download duplicate copies." />
-        <Tile to="/portal/me/commitments" tone="accent" icon={<HeartOutlined />}
-          title="Commitments" desc="Pledges + installment schedule." />
-        <Tile to="/portal/me/fund-enrollments" tone="success" icon={<GiftOutlined />}
-          title="Patronages" desc="Sabil, Mutafariq, Niyaz enrollments." />
-        <Tile to="/portal/me/qarzan-hasana" tone="info" icon={<BankOutlined />}
-          title="Qarzan Hasana" desc="Existing loans, new applications." />
-        <Tile to="/portal/me/guarantor-inbox" tone="warning" icon={<TeamOutlined />}
-          title="Guarantor inbox" desc="Endorse / decline kafil requests." />
-        <Tile to="/portal/me/events" tone="danger" icon={<CalendarOutlined />}
-          title="Events" desc="Your registrations + upcoming events." />
-        <Tile to="/portal/me/login-history" tone="neutral" icon={<HistoryOutlined />}
-          title="Login history" desc="Where + when this account was used." />
-      </Row>
+      <BrowseTiles />
     </div>
   );
 }
 
-function KpiCol({ children }: { children: React.ReactNode }) {
-  return <Col xs={24} sm={12} lg={6}>{children}</Col>;
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 5) return 'Good night';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  if (h < 21) return 'Good evening';
+  return 'Good night';
 }
 
-function KpiCard({ loading, icon, tone, label, value, suffix, hint, to }: {
-  loading: boolean; icon: React.ReactNode; tone: Tone;
-  label: string; value: number | undefined; suffix?: string; hint: string; to: string;
+function QuickAction({ icon, title, description, onClick, accent }: {
+  icon: React.ReactNode; title: string; description: string; onClick: () => void; accent: string;
 }) {
+  // Class-based version of the operator dashboard's QuickAction button (no inline styles).
   return (
-    <Link to={to} className="jm-tile-link">
-      <Card hoverable className="jm-card jm-tile jm-portal-kpi">
-        <Space align="start" size={12}>
-          <span className={`jm-tile-icon jm-tile-icon-${tone}`}>{icon}</span>
-          <div>
-            <div className="jm-kpi-label">{label}</div>
-            {loading ? <Skeleton.Input active size="small" /> : (
-              <Statistic className="jm-kpi-value"
-                value={value ?? 0}
-                suffix={suffix}
-                precision={typeof value === 'number' && !Number.isInteger(value) ? 2 : 0}
-              />
-            )}
-            {hint && <div className="jm-kpi-hint">{hint}</div>}
-          </div>
-        </Space>
-      </Card>
-    </Link>
+    <button type="button" onClick={onClick} className="jm-portal-quick-action">
+      <span className="jm-portal-quick-action-icon" data-accent={accent}>{icon}</span>
+      <span className="jm-portal-quick-action-body">
+        <span className="jm-portal-quick-action-title">{title}</span>
+        <span className="jm-portal-quick-action-desc">{description}</span>
+      </span>
+    </button>
   );
 }
 
-function Tile({ to, tone, icon, title, desc }: {
-  to: string; tone: Tone; icon: React.ReactNode; title: string; desc: string;
+function SmallCard({ accent, icon, label, value, onClick }: {
+  accent: string; icon: React.ReactNode; label: string; value: number; onClick?: () => void;
 }) {
   return (
-    <Col xs={24} sm={12} lg={6}>
-      <Link to={to} className="jm-tile-link">
-        <Card hoverable className="jm-card jm-tile">
-          <Space align="start" size={12}>
-            <span className={`jm-tile-icon jm-tile-icon-${tone}`}>{icon}</span>
-            <div>
-              <div className="jm-tile-title">{title}</div>
-              <div className="jm-tile-desc">{desc}</div>
-            </div>
-          </Space>
-        </Card>
+    <Card hoverable size="small" className="jm-card jm-portal-small-card" onClick={onClick}
+      data-accent={accent}>
+      <div className="jm-portal-small-card-row">
+        <span className="jm-portal-small-card-icon">{icon}</span>
+        <div>
+          <div className="jm-portal-small-card-label">{label}</div>
+          <div className="jm-tnum jm-portal-small-card-value">{value}</div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function BrowseTiles() {
+  return (
+    <Card title="Browse" className="jm-card">
+      <Row gutter={[12, 12]}>
+        <BrowseTile to="/portal/me/contributions" icon={<GiftOutlined />} title="Contributions" hint="Receipts + duplicate copies" />
+        <BrowseTile to="/portal/me/commitments" icon={<HeartOutlined />} title="Commitments" hint="Pledges + schedule" />
+        <BrowseTile to="/portal/me/fund-enrollments" icon={<GiftOutlined />} title="Patronages" hint="Sabil / Mutafariq / Niyaz" />
+        <BrowseTile to="/portal/me/qarzan-hasana" icon={<BankOutlined />} title="Qarzan Hasana" hint="Loans + applications" />
+        <BrowseTile to="/portal/me/guarantor-inbox" icon={<TeamOutlined />} title="Guarantor inbox" hint="Endorse / decline kafil" />
+        <BrowseTile to="/portal/me/events" icon={<CalendarOutlined />} title="Events" hint="Registrations" />
+        <BrowseTile to="/portal/me/profile" icon={<UserOutlined />} title="My profile" hint="Contact + address" />
+        <BrowseTile to="/portal/me/login-history" icon={<HistoryOutlined />} title="Login history" hint="Session audit" />
+      </Row>
+    </Card>
+  );
+}
+
+function BrowseTile({ to, icon, title, hint }: { to: string; icon: React.ReactNode; title: string; hint: string }) {
+  return (
+    <Col xs={12} sm={8} md={6} lg={6}>
+      <Link to={to} className="jm-portal-browse-tile">
+        <span className="jm-portal-browse-tile-icon">{icon}</span>
+        <div>
+          <div className="jm-portal-browse-tile-title">{title}</div>
+          <div className="jm-portal-browse-tile-hint">{hint}</div>
+        </div>
       </Link>
     </Col>
   );
 }
 
-function formatCur(n: number): string {
-  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-}
+// Keep the export so existing routing keeps working.
+export type { MemberDashboard };

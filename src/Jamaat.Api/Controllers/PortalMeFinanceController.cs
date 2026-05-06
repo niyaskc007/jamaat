@@ -397,9 +397,13 @@ public sealed class PortalMeFinanceController(
                 ActiveQhLoans: 0, QhOutstanding: 0,
                 PendingGuarantorRequests: 0, PendingChangeRequests: 0,
                 UpcomingEventCount: 0,
+                MonthDelta: null,
+                ThisMonthContributions: 0,
                 NextInstallment: null,
                 RecentContributions: Array.Empty<DashboardContributionDto>(),
-                ActiveCommitmentsList: Array.Empty<DashboardCommitmentDto>()));
+                ActiveCommitmentsList: Array.Empty<DashboardCommitmentDto>(),
+                CollectionTrend: Array.Empty<DashboardTrendPointDto>(),
+                FundShare: Array.Empty<DashboardFundShareDto>()));
         }
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
@@ -491,6 +495,56 @@ public sealed class PortalMeFinanceController(
                 c.TotalAmount, c.PaidAmount, c.TotalAmount - c.PaidAmount, c.Currency))
             .ToList();
 
+        // 12-month contribution trend, grouped by year-month so the line chart on the home
+        // page shows seasonality. We pull confirmed receipts in the window and aggregate in
+        // memory (small set per member) instead of relying on EF for date-trunc behaviour.
+        var trendStart = today.AddMonths(-11);
+        trendStart = new DateOnly(trendStart.Year, trendStart.Month, 1);
+        var trendRows = await db.Receipts.AsNoTracking()
+            .Where(r => r.MemberId == memberId.Value
+                && r.Status == ReceiptStatus.Confirmed
+                && r.ReceiptDate >= trendStart)
+            .Select(r => new { r.ReceiptDate, r.AmountTotal })
+            .ToListAsync(ct);
+        var trend = new List<DashboardTrendPointDto>(12);
+        for (var m = 0; m < 12; m++)
+        {
+            var anchor = trendStart.AddMonths(m);
+            var bucket = new DateOnly(anchor.Year, anchor.Month, 1);
+            var sum = trendRows
+                .Where(r => r.ReceiptDate.Year == bucket.Year && r.ReceiptDate.Month == bucket.Month)
+                .Sum(r => r.AmountTotal);
+            trend.Add(new DashboardTrendPointDto(bucket, sum));
+        }
+
+        // This month vs last month - a simple delta indicator for the YTD KPI tile.
+        var thisMonth = trend[^1].Amount;
+        var lastMonth = trend.Count >= 2 ? trend[^2].Amount : 0m;
+        decimal? monthDelta = lastMonth > 0
+            ? Math.Round(((thisMonth - lastMonth) / lastMonth) * 100m, 1)
+            : (thisMonth > 0 ? 100m : (decimal?)null);
+
+        // Fund share for the last 12 months - donut chart on the home page.
+        var fundSharePairs = await db.Receipts.AsNoTracking()
+            .Where(r => r.MemberId == memberId.Value
+                && r.Status == ReceiptStatus.Confirmed
+                && r.ReceiptDate >= trendStart)
+            .SelectMany(r => r.Lines, (r, l) => new { l.FundTypeId, l.Amount })
+            .GroupBy(x => x.FundTypeId)
+            .Select(g => new { FundTypeId = g.Key, Amount = g.Sum(x => x.Amount) })
+            .ToListAsync(ct);
+        var fundIds = fundSharePairs.Select(x => x.FundTypeId).ToList();
+        var fundNameById = fundIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.FundTypes.AsNoTracking()
+                .Where(f => fundIds.Contains(f.Id))
+                .ToDictionaryAsync(f => f.Id, f => f.NameEnglish, ct);
+        var fundShare = fundSharePairs
+            .Select(x => new DashboardFundShareDto(x.FundTypeId, fundNameById.GetValueOrDefault(x.FundTypeId, "Other"), x.Amount))
+            .OrderByDescending(x => x.Amount)
+            .Take(8)
+            .ToList();
+
         var dto = new MemberDashboardDto(
             YtdContributions: ytdAgg?.Total ?? 0m,
             YtdReceiptCount: ytdAgg?.Count ?? 0,
@@ -502,9 +556,13 @@ public sealed class PortalMeFinanceController(
             PendingGuarantorRequests: pendingGuarantor,
             PendingChangeRequests: pendingChange,
             UpcomingEventCount: upcomingEvents,
+            MonthDelta: monthDelta,
+            ThisMonthContributions: thisMonth,
             NextInstallment: next,
             RecentContributions: recent,
-            ActiveCommitmentsList: activeCommitmentDtos);
+            ActiveCommitmentsList: activeCommitmentDtos,
+            CollectionTrend: trend,
+            FundShare: fundShare);
         return Ok(dto);
     }
 
@@ -540,9 +598,16 @@ public sealed record MemberDashboardDto(
     int PendingGuarantorRequests,
     int PendingChangeRequests,
     int UpcomingEventCount,
+    decimal? MonthDelta,
+    decimal ThisMonthContributions,
     DashboardInstallmentDto? NextInstallment,
     IReadOnlyList<DashboardContributionDto> RecentContributions,
-    IReadOnlyList<DashboardCommitmentDto> ActiveCommitmentsList);
+    IReadOnlyList<DashboardCommitmentDto> ActiveCommitmentsList,
+    IReadOnlyList<DashboardTrendPointDto> CollectionTrend,
+    IReadOnlyList<DashboardFundShareDto> FundShare);
+
+public sealed record DashboardTrendPointDto(DateOnly Month, decimal Amount);
+public sealed record DashboardFundShareDto(Guid FundTypeId, string Name, decimal Amount);
 
 public sealed record DashboardInstallmentDto(
     Guid CommitmentId, string CommitmentCode, string FundName,

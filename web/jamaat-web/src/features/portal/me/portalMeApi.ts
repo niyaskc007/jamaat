@@ -280,12 +280,19 @@ export type MemberDashboard = {
   activeQhLoans: number; qhOutstanding: number;
   pendingGuarantorRequests: number; pendingChangeRequests: number;
   upcomingEventCount: number;
+  /// % change of THIS MONTH contributions vs LAST MONTH. null when there's no prior data.
+  monthDelta: number | null;
+  thisMonthContributions: number;
   nextInstallment: null | {
     commitmentId: string; commitmentCode: string; fundName: string;
     installmentNo: number; dueDate: string; amountDue: number; currency: string;
   };
   recentContributions: Array<{ id: string; receiptNumber: string | null; receiptDate: string; amount: number; currency: string }>;
   activeCommitmentsList: Array<{ id: string; code: string; fundName: string; totalAmount: number; paidAmount: number; remainingAmount: number; currency: string }>;
+  /// 12 entries (one per calendar month, oldest first) - feeds the LineChart on the home page.
+  collectionTrend: Array<{ month: string; amount: number }>;
+  /// Top funds the member has contributed to over the trend window - feeds the donut.
+  fundShare: Array<{ fundTypeId: string; name: string; amount: number }>;
 };
 
 export type PortalFundType = {
