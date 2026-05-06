@@ -24,6 +24,7 @@ import { CommitmentProgressCard } from '../../../shared/ui/CommitmentProgressCar
 import { QhRepaymentChart } from '../../../shared/ui/QhRepaymentChart';
 import { LabelWithHelp } from '../../../shared/ui/LabelWithHelp';
 import { QhProcessDocCard } from '../../../shared/ui/QhProcessDocCard';
+import { FormSection, FormStickyFooter } from '../../../shared/ui/FormSection';
 import ReactMarkdown from 'react-markdown';
 
 // --- Shared header --------------------------------------------------------
@@ -925,6 +926,10 @@ export function MemberQhSubmitPage() {
   const guarantor2 = Form.useWatch('guarantor2MemberId', form);
   // Same person can't kafil both slots.
   const sameGuarantor = !!guarantor1 && guarantor1 === guarantor2;
+  // Live-summary fields used by the sticky footer.
+  const watchAmount   = Form.useWatch('amountRequested',     form);
+  const watchCurrency = Form.useWatch('currency',            form);
+  const watchInstal   = Form.useWatch('instalmentsRequested', form);
 
   function onFinish(v: QhFormShape) {
     submit.mutate({
@@ -964,9 +969,9 @@ export function MemberQhSubmitPage() {
       {/* Educational panel - same shared component the operator new-loan form uses. */}
       <QhProcessDocCard />
 
-      <Card className="jm-card jm-portal-form-card">
-        <Form<QhFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish} requiredMark={false}>
-          <h5 className="jm-form-section-title"><BankOutlined /> Loan terms</h5>
+      <Form<QhFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish} requiredMark={false}>
+        <FormSection icon={<BankOutlined />} title="Loan terms"
+          help="How much you need, in what currency, and how you'd like to repay it.">
           <Row gutter={16}>
             <Col xs={24} md={8}>
               <Form.Item label={<LabelWithHelp help="Total amount you're requesting. The L1 approver may approve a different amount based on need + guarantor capacity.">Amount requested</LabelWithHelp>}
@@ -1006,14 +1011,14 @@ export function MemberQhSubmitPage() {
             </Col>
           </Row>
 
-          <h5 className="jm-form-section-title"><TeamOutlined /> Kafil (guarantors)</h5>
+        </FormSection>
+
+        <FormSection icon={<TeamOutlined />} title="Kafil (guarantors)"
+          help="Two members must endorse your application. They'll be notified via the portal once you submit.">
           {sameGuarantor && (
             <Alert type="error" showIcon className="jm-portal-dashboard-alert"
               message="Guarantor 1 and Guarantor 2 cannot be the same person." />
           )}
-          <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-            message="Two members must endorse your application before it goes to L2 approval."
-            description="After you submit, both kafil will be notified through the portal and asked to accept or decline the kafalah." />
           <Row gutter={16}>
             <Col xs={24} md={12}>
               <Form.Item label={<LabelWithHelp help="The first member you've asked to act as kafil. They must be in good standing and not the borrower.">Guarantor 1 (Kafil)</LabelWithHelp>}
@@ -1031,7 +1036,10 @@ export function MemberQhSubmitPage() {
             </Col>
           </Row>
 
-          <h5 className="jm-form-section-title"><FileTextOutlined /> Borrower's case</h5>
+        </FormSection>
+
+        <FormSection icon={<FileTextOutlined />} title="Borrower's case"
+          help="A clear purpose + a believable repayment plan moves the application through approval faster.">
           <Row gutter={16}>
             <Col xs={24}>
               <Form.Item label={<LabelWithHelp help="The clearer the purpose, the faster the approval.">Purpose of the loan</LabelWithHelp>}
@@ -1047,7 +1055,10 @@ export function MemberQhSubmitPage() {
             </Col>
           </Row>
 
-          <h5 className="jm-form-section-title"><ProfileOutlined /> Income &amp; cashflow</h5>
+        </FormSection>
+
+        <FormSection icon={<ProfileOutlined />} title="Income & cashflow"
+          help="Helps the approver understand your repayment capacity. Optional but speeds review.">
           <Row gutter={16}>
             <Col xs={24} md={12}>
               <Form.Item label={<LabelWithHelp help="Tick every category that applies. Helps the approver understand your stability.">Income sources</LabelWithHelp>}
@@ -1088,12 +1099,11 @@ export function MemberQhSubmitPage() {
             </Col>
           </Row>
 
-          {scheme === 1 && (
-            <>
-              <h5 className="jm-form-section-title"><GoldOutlined /> Gold collateral (Mohammadi)</h5>
-              <Alert type="info" showIcon className="jm-portal-dashboard-alert"
-                message="Mohammadi loans are secured against gold."
-                description="Bring the gold + the assessor's slip to the counter. The cashier will weigh + verify before disbursement." />
+        </FormSection>
+
+        {scheme === 1 && (
+          <FormSection icon={<GoldOutlined />} title="Gold collateral (Mohammadi)"
+            help="Mohammadi loans are secured against gold. Bring the gold + assessor's slip to the counter; the cashier will weigh + verify before disbursement.">
               <Row gutter={16}>
                 <Col xs={24} md={6}>
                   <Form.Item label={<LabelWithHelp help="Estimated market value of the gold pledged.">Gold value</LabelWithHelp>}
@@ -1120,17 +1130,19 @@ export function MemberQhSubmitPage() {
                   </Form.Item>
                 </Col>
               </Row>
-            </>
-          )}
-          <Form.Item>
+          </FormSection>
+        )}
+
+        <FormStickyFooter
+          summary={<>Submitting <strong className="jm-tnum">{(watchAmount ?? 0).toLocaleString()} {watchCurrency ?? ''}</strong> over <strong>{watchInstal ?? 0}</strong> instalments</>}
+          actions={
             <Space>
+              <Button onClick={() => navigate('/portal/me/qarzan-hasana')}>Cancel</Button>
               <Button type="primary" icon={<PlusOutlined />} htmlType="submit"
                 loading={submit.isPending} disabled={sameGuarantor}>Submit application</Button>
-              <Button onClick={() => navigate('/portal/me/qarzan-hasana')}>Cancel</Button>
             </Space>
-          </Form.Item>
-        </Form>
-      </Card>
+          } />
+      </Form>
     </div>
   );
 }
@@ -1165,6 +1177,12 @@ export function MemberCommitmentSubmitPage() {
     startDate: dayjs().add(7, 'day'),
   }), []);
 
+  // Live-summary watches for the sticky footer.
+  const commitWatchTotal     = Form.useWatch('totalAmount',          form);
+  const commitWatchCurrency  = Form.useWatch('currency',             form);
+  const commitWatchInstal    = Form.useWatch('numberOfInstallments', form);
+  const commitWatchFrequency = Form.useWatch('frequency',            form);
+
   function onFinish(v: CommitmentFormShape) {
     submit.mutate({
       fundTypeId: v.fundTypeId,
@@ -1186,29 +1204,34 @@ export function MemberCommitmentSubmitPage() {
             <ArrowLeftOutlined /> Back to commitments
           </Button>
         } />
-      <Card className="jm-card jm-portal-form-card">
-        <Form<CommitmentFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish}>
+      <Form<CommitmentFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish} requiredMark={false}>
+        <FormSection icon={<HeartOutlined />} title="Pledge details"
+          help="Pick the fund, set the total, and choose how many instalments you want to spread the payments over.">
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item label="Fund" name="fundTypeId" rules={[{ required: true, message: 'Choose a fund.' }]}>
+              <Form.Item label={<LabelWithHelp help="The fund your pledge will support. Each fund has a different purpose - tap the dropdown to see them all.">Fund</LabelWithHelp>}
+                name="fundTypeId" rules={[{ required: true, message: 'Choose a fund.' }]}>
                 <Select loading={fundsQ.isLoading}
                   placeholder="Select fund"
                   options={(fundsQ.data ?? []).map((f) => ({ value: f.id, label: `${f.code} — ${f.name}` }))} />
               </Form.Item>
             </Col>
             <Col xs={24} md={6}>
-              <Form.Item label="Currency" name="currency" rules={[{ required: true }]}>
+              <Form.Item label={<LabelWithHelp help="Currency of the pledge. Default is the jamaat's base currency.">Currency</LabelWithHelp>}
+                name="currency" rules={[{ required: true }]}>
                 <Select options={[{ value: 'INR', label: 'INR' }, { value: 'AED', label: 'AED' }, { value: 'USD', label: 'USD' }]} />
               </Form.Item>
             </Col>
             <Col xs={24} md={6}>
-              <Form.Item label="Total amount" name="totalAmount"
+              <Form.Item label={<LabelWithHelp help="The full amount you're pledging across all instalments.">Total amount</LabelWithHelp>}
+                name="totalAmount"
                 rules={[{ required: true, message: 'Enter a total.' }, { type: 'number', min: 1 }]}>
                 <InputNumber<number> className="jm-full-width" min={1} />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item label="Frequency" name="frequency" rules={[{ required: true }]}>
+              <Form.Item label={<LabelWithHelp help="How often each instalment is due.">Frequency</LabelWithHelp>}
+                name="frequency" rules={[{ required: true }]}>
                 <Select options={[
                   { value: 1, label: 'Weekly' },
                   { value: 2, label: 'Monthly' },
@@ -1219,33 +1242,43 @@ export function MemberCommitmentSubmitPage() {
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item label="Number of installments" name="numberOfInstallments"
+              <Form.Item label={<LabelWithHelp help="Total instalments. Per-instalment = Total ÷ N. Up to 240.">Number of instalments</LabelWithHelp>}
+                name="numberOfInstallments"
                 rules={[{ required: true }, { type: 'number', min: 1, max: 240 }]}>
                 <InputNumber<number> className="jm-full-width" min={1} max={240} />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item label="Start date" name="startDate" rules={[{ required: true }]}>
+              <Form.Item label={<LabelWithHelp help="The first instalment falls due on this date.">Start date</LabelWithHelp>}
+                name="startDate" rules={[{ required: true }]}>
                 <DatePicker className="jm-full-width" />
               </Form.Item>
             </Col>
             <Col xs={24}>
-              <Form.Item label="Notes" name="notes">
-                <Input.TextArea rows={2} placeholder="Anything the administrator should know about this commitment." />
+              <Form.Item label={<LabelWithHelp help="Optional - context the administrator should know (e.g. the niyat behind the pledge).">Notes</LabelWithHelp>}
+                name="notes">
+                <Input.TextArea rows={2} placeholder="Anything the administrator should know about this commitment." showCount maxLength={500} />
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item>
+        </FormSection>
+
+        <FormStickyFooter
+          summary={<>Pledging <strong className="jm-tnum">{(commitWatchTotal ?? 0).toLocaleString()} {commitWatchCurrency ?? ''}</strong> over <strong>{commitWatchInstal ?? 0}</strong> {COMMIT_FREQUENCY_LABEL[commitWatchFrequency ?? 0] ?? ''} instalments</>}
+          actions={
             <Space>
-              <Button type="primary" icon={<PlusOutlined />} htmlType="submit" loading={submit.isPending}>Submit commitment</Button>
               <Button onClick={() => navigate('/portal/me/commitments')}>Cancel</Button>
+              <Button type="primary" icon={<PlusOutlined />} htmlType="submit" loading={submit.isPending}>Submit commitment</Button>
             </Space>
-          </Form.Item>
-        </Form>
-      </Card>
+          } />
+      </Form>
     </div>
   );
 }
+
+const COMMIT_FREQUENCY_LABEL: Record<number, string> = {
+  1: 'weekly', 2: 'monthly', 3: 'quarterly', 4: 'half-yearly', 5: 'yearly',
+};
 
 // --- Patronage / fund-enrollment request form --------------------------
 
@@ -1277,6 +1310,8 @@ export function MemberPatronageSubmitPage() {
     recurrence: 2, startDate: dayjs(),
   }), []);
 
+  const patWatchRec = Form.useWatch('recurrence', form);
+
   function onFinish(v: PatronageFormShape) {
     submit.mutate({
       fundTypeId: v.fundTypeId,
@@ -1297,23 +1332,27 @@ export function MemberPatronageSubmitPage() {
             <ArrowLeftOutlined /> Back to patronages
           </Button>
         } />
-      <Card className="jm-card jm-portal-form-card">
-        <Form<PatronageFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish}>
+      <Form<PatronageFormShape> form={form} layout="vertical" initialValues={initial} onFinish={onFinish} requiredMark={false}>
+        <FormSection icon={<GiftOutlined />} title="Patronage details"
+          help="Subscribe to a recurring donation fund. Once approved, every receipt issued to you against this fund accrues automatically.">
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item label="Fund" name="fundTypeId" rules={[{ required: true, message: 'Choose a fund.' }]}>
+              <Form.Item label={<LabelWithHelp help="The fund you want to subscribe to (Sabil, Mutafariq, Niyaz, etc.).">Fund</LabelWithHelp>}
+                name="fundTypeId" rules={[{ required: true, message: 'Choose a fund.' }]}>
                 <Select loading={fundsQ.isLoading}
                   placeholder="Select fund"
                   options={(fundsQ.data ?? []).map((f) => ({ value: f.id, label: `${f.code} — ${f.name}` }))} />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label="Sub-type (optional)" name="subType">
+              <Form.Item label={<LabelWithHelp help="Optional sub-classification within the fund (e.g. Individual / Establishment for Sabil).">Sub-type</LabelWithHelp>}
+                name="subType">
                 <Input placeholder="e.g. Individual / Establishment" />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item label="Recurrence" name="recurrence" rules={[{ required: true }]}>
+              <Form.Item label={<LabelWithHelp help="How often you intend to contribute against this enrolment.">Recurrence</LabelWithHelp>}
+                name="recurrence" rules={[{ required: true }]}>
                 <Select options={[
                   { value: 1, label: 'One-time' },
                   { value: 2, label: 'Monthly' },
@@ -1324,29 +1363,39 @@ export function MemberPatronageSubmitPage() {
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item label="Start date" name="startDate" rules={[{ required: true }]}>
+              <Form.Item label={<LabelWithHelp help="When the patronage goes into effect.">Start date</LabelWithHelp>}
+                name="startDate" rules={[{ required: true }]}>
                 <DatePicker className="jm-full-width" />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item label="End date (optional)" name="endDate">
+              <Form.Item label={<LabelWithHelp help="Optional - leave blank for an open-ended subscription.">End date</LabelWithHelp>}
+                name="endDate">
                 <DatePicker className="jm-full-width" />
               </Form.Item>
             </Col>
             <Col xs={24}>
-              <Form.Item label="Notes" name="notes">
-                <Input.TextArea rows={2} placeholder="Anything the administrator should know about this enrollment." />
+              <Form.Item label={<LabelWithHelp help="Optional - any context the administrator should know.">Notes</LabelWithHelp>}
+                name="notes">
+                <Input.TextArea rows={2} placeholder="Anything the administrator should know about this enrollment." showCount maxLength={500} />
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item>
+        </FormSection>
+
+        <FormStickyFooter
+          summary={<>Subscribing to a <strong>{PATRONAGE_RECURRENCE_LABEL[patWatchRec ?? 0] ?? ''}</strong> fund</>}
+          actions={
             <Space>
-              <Button type="primary" icon={<PlusOutlined />} htmlType="submit" loading={submit.isPending}>Submit request</Button>
               <Button onClick={() => navigate('/portal/me/fund-enrollments')}>Cancel</Button>
+              <Button type="primary" icon={<PlusOutlined />} htmlType="submit" loading={submit.isPending}>Submit request</Button>
             </Space>
-          </Form.Item>
-        </Form>
-      </Card>
+          } />
+      </Form>
     </div>
   );
 }
+
+const PATRONAGE_RECURRENCE_LABEL: Record<number, string> = {
+  1: 'one-time', 2: 'monthly', 3: 'quarterly', 4: 'half-yearly', 5: 'yearly',
+};

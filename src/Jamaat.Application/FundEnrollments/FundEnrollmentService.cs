@@ -196,7 +196,12 @@ public sealed class FundEnrollmentService(
         return $"FE-{(count + 1):D5}";
     }
 
-    /// <summary>Projection helper - called from EF queries (so it must be statically resolvable).</summary>
+    /// <summary>Projection helper - called from EF queries (so it must be statically resolvable).
+    /// TotalCollected + ReceiptCount mirror the same direct-FK + legacy member+fund fallback
+    /// that <see cref="ListReceiptsAsync"/> uses, so the dashboard / detail "Total collected"
+    /// number always agrees with the receipt list shown directly underneath. Without the
+    /// fallback, receipts issued before the FundEnrollmentId line link was wired up don't
+    /// count even though they show up in the receipt history (the bug we just fixed).</summary>
     private static FundEnrollmentDto Project(JamaatDbContextFacade db, FundEnrollment x) =>
         new(x.Id, x.Code,
             x.MemberId,
@@ -212,8 +217,19 @@ public sealed class FundEnrollmentService(
             x.Status,
             x.ApprovedByUserId, x.ApprovedByUserName, x.ApprovedAtUtc,
             x.Notes,
-            db.Receipts.SelectMany(r => r.Lines).Where(l => l.FundEnrollmentId == x.Id).Sum(l => (decimal?)l.Amount) ?? 0m,
-            db.Receipts.Count(r => r.Lines.Any(l => l.FundEnrollmentId == x.Id)),
+            // Sum only Confirmed-receipt lines that are either FK-linked to this enrollment OR
+            // (legacy fallback) belong to the same member + same fund-type. Same predicate used
+            // by ListReceiptsAsync, kept in sync so the detail page numbers are consistent.
+            db.Receipts
+                .Where(r => r.Status == ReceiptStatus.Confirmed
+                    && (r.Lines.Any(l => l.FundEnrollmentId == x.Id)
+                        || (r.MemberId == x.MemberId && r.Lines.Any(l => l.FundTypeId == x.FundTypeId))))
+                .SelectMany(r => r.Lines)
+                .Where(l => l.FundEnrollmentId == x.Id || l.FundTypeId == x.FundTypeId)
+                .Sum(l => (decimal?)l.Amount) ?? 0m,
+            db.Receipts.Count(r => r.Status == ReceiptStatus.Confirmed
+                && (r.Lines.Any(l => l.FundEnrollmentId == x.Id)
+                    || (r.MemberId == x.MemberId && r.Lines.Any(l => l.FundTypeId == x.FundTypeId)))),
             x.CreatedAtUtc);
 }
 

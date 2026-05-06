@@ -319,7 +319,93 @@
   font-size: 12px; color: var(--jm-gray-600);
 }
 
-/* Form section heading inside a long form (operator + portal QH form, etc.) */
+/* ========================================================================
+   FORM UPLIFT - Section card pattern (operator + portal forms)
+   ========================================================================
+   A long form is laid out as a vertical stack of <section> cards instead of
+   a single Card with Dividers. Each section has:
+     - left accent rail (4px, primary colour)
+     - rounded corners + subtle shadow
+     - icon-led header with title + optional helper line
+     - form fields below in their own pad
+
+   Wrap the form in `<section class="jm-form-section">`, drop a header with
+   `.jm-form-section-head` containing an icon + `.jm-form-section-title-x` /
+   `.jm-form-section-help`, then the body in `.jm-form-section-body`.
+   ------------------------------------------------------------------------ */
+
+.jm-form-section {
+  background: var(--jm-surface, #FFFFFF);
+  border: 1px solid var(--jm-border);
+  border-inline-start: 4px solid var(--jm-primary-500);
+  border-radius: var(--jm-radius-lg, 10px);
+  margin-block-end: var(--jm-space-4);
+  box-shadow: var(--jm-shadow-1);
+  overflow: hidden;
+  transition: box-shadow 160ms ease, border-color 160ms ease;
+}
+.jm-form-section:focus-within {
+  box-shadow: var(--jm-shadow-2);
+  border-inline-start-color: var(--jm-accent-600, #C9A34B);
+}
+
+.jm-form-section-head {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: var(--jm-space-4) var(--jm-space-5);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--jm-primary-500) 4%, transparent) 0%, transparent 100%);
+  border-block-end: 1px solid var(--jm-border);
+}
+.jm-form-section-head-icon {
+  inline-size: 40px; block-size: 40px; border-radius: 10px;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--jm-primary-500) 12%, transparent);
+  color: var(--jm-primary-500); font-size: 18px; flex-shrink: 0;
+}
+.jm-form-section-head-text { min-inline-size: 0; flex: 1; }
+.jm-form-section-title-x {
+  font-size: 15px; font-weight: 600; color: var(--jm-gray-900);
+  line-height: 1.3;
+}
+.jm-form-section-help {
+  font-size: 12px; color: var(--jm-gray-500);
+  margin-block-start: 2px;
+}
+.jm-form-section-body {
+  padding: var(--jm-space-5);
+}
+
+/* Sticky submit footer at the bottom of a long form. Summarises the key value
+   ("submitting <amount> over <N> instalments") and parks the primary action so
+   the user doesn't have to scroll back to the bottom every time. */
+.jm-form-sticky-footer {
+  position: sticky; inset-block-end: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--jm-space-3); flex-wrap: wrap;
+  padding: var(--jm-space-3) var(--jm-space-4);
+  background: var(--jm-surface, #FFFFFF);
+  border: 1px solid var(--jm-border);
+  border-radius: var(--jm-radius-lg, 10px);
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.04);
+  margin-block-start: var(--jm-space-4);
+  z-index: 5;
+}
+.jm-form-sticky-footer-summary {
+  font-size: 13px; color: var(--jm-gray-700);
+}
+.jm-form-sticky-footer-summary strong { color: var(--jm-gray-900); }
+
+/* Improved AntD form-field focus: a subtle ring instead of the default blue line. */
+.jm-form-section-body :where(.ant-input:focus, .ant-input-focused),
+.jm-form-section-body :where(.ant-input-number-focused),
+.jm-form-section-body :where(.ant-input-affix-wrapper-focused),
+.jm-form-section-body :where(.ant-picker-focused),
+.jm-form-section-body :where(.ant-select-focused) :where(.ant-select-selector) {
+  border-color: var(--jm-primary-500) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--jm-primary-500) 18%, transparent) !important;
+}
+
+/* Form section heading - lightweight inline variant for cases where a full
+   section card is overkill (e.g. inside a modal or a sub-group). */
 .jm-form-section-title {
   display: flex; align-items: center; gap: 8px;
   margin: var(--jm-space-2) 0 var(--jm-space-3);
