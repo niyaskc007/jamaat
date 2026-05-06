@@ -127,6 +127,20 @@ public sealed class PortalMeFinanceController(
         return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }
 
+    /// Receipts that contributed to this commitment - one row per receipt-line tied to it.
+    /// Same shape the operator's payments panel uses; ownership verified before delegating.
+    [HttpGet("commitments/{id:guid}/payments")]
+    public async Task<IActionResult> CommitmentPayments(Guid id, CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return NotFound();
+        var owns = await db.Commitments.AsNoTracking()
+            .AnyAsync(c => c.Id == id && c.MemberId == memberId.Value, ct);
+        if (!owns) return NotFound();
+        var r = await commitmentSvc.ListPaymentsAsync(id, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
     /// Render the agreement text for a Draft commitment WITHOUT accepting it. The portal
     /// shows this text in a modal so the member can read what they're agreeing to before
     /// they click Accept. Same template-resolution path as <see cref="CommitmentAcceptAgreement"/>.
@@ -242,6 +256,49 @@ public sealed class PortalMeFinanceController(
         if (!owns) return NotFound();
         var r = await qhSvc.GetAsync(id, ct);
         return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
+    /// Per-guarantor consent rows for the borrower's loan: who, ITS, status, decided-at.
+    /// Lets the borrower see "Kafil 1: pending; Kafil 2: endorsed at ..." on the QH detail page.
+    [HttpGet("qarzan-hasana/{id:guid}/guarantor-consents")]
+    public async Task<IActionResult> QhGuarantorConsents(Guid id, CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return NotFound();
+        var owns = await db.QarzanHasanaLoans.AsNoTracking()
+            .AnyAsync(l => l.Id == id && l.MemberId == memberId.Value, ct);
+        if (!owns) return NotFound();
+        var r = await qhSvc.ListGuarantorConsentsAsync(id, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
+    /// Receipts that contributed to this loan's repayments - one row per receipt-line tied
+    /// to the loan, mirroring the commitment-payments shape so the portal can re-use the same
+    /// table component.
+    [HttpGet("qarzan-hasana/{id:guid}/payments")]
+    public async Task<IActionResult> QhPayments(Guid id, CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return NotFound();
+        var owns = await db.QarzanHasanaLoans.AsNoTracking()
+            .AnyAsync(l => l.Id == id && l.MemberId == memberId.Value, ct);
+        if (!owns) return NotFound();
+        // No dedicated service method - assemble from receipts where any line points at this loan.
+        var rows = await db.Receipts.AsNoTracking()
+            .Where(r => r.MemberId == memberId.Value
+                && r.Lines.Any(l => l.QarzanHasanaLoanId == id))
+            .OrderByDescending(r => r.ReceiptDate)
+            .Select(r => new
+            {
+                r.Id, r.ReceiptNumber, r.ReceiptDate,
+                Status = (int)r.Status,
+                Amount = r.Lines.Where(l => l.QarzanHasanaLoanId == id).Sum(l => l.Amount),
+                r.Currency,
+                PaymentMode = (int)r.PaymentMode,
+                r.ChequeNumber, r.ChequeDate, r.PaymentReference, r.Remarks,
+            })
+            .ToListAsync(ct);
+        return Ok(rows);
     }
 
     /// Self-submit a Qarzan Hasana application from the member portal. The body is the same

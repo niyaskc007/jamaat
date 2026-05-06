@@ -152,7 +152,9 @@ export type PortalCommitmentDetail = {
     frequency: number; numberOfInstallments: number;
     startDate: string; endDate: string | null;
     status: number; notes: string | null;
-    hasAcceptedAgreement: boolean; agreementAcceptedAtUtc: string | null;
+    hasAcceptedAgreement: boolean;
+    agreementAcceptedAtUtc: string | null;
+    agreementAcceptedByName: string | null;
   };
   installments: CommitmentInstallment[];
   agreementText: string | null;
@@ -239,6 +241,39 @@ export type FundEnrollmentDetail = {
   receipts: PatronageReceipt[];
 };
 
+export type CommitmentPaymentRow = {
+  receiptId: string; receiptNumber: string | null;
+  receiptDate: string;
+  receiptStatus: number;
+  commitmentInstallmentId: string | null;
+  installmentNo: number | null;
+  amount: number; currency: string;
+  paymentMode: number;
+  chequeNumber: string | null; chequeDate: string | null;
+  bankAccountId: string | null; bankAccountName: string | null;
+  paymentReference: string | null; remarks: string | null;
+  confirmedAtUtc: string | null; confirmedByUserId: string | null; confirmedByUserName: string | null;
+};
+
+export type QhGuarantorConsent = {
+  id: string;
+  guarantorMemberId: string; guarantorName: string; guarantorItsNumber: string;
+  token: string;
+  status: number;             // 1 Pending / 2 Accepted / 3 Declined
+  respondedAtUtc: string | null;
+  responderIpAddress: string | null;
+  notificationSentAtUtc: string | null;
+};
+
+export type QhPaymentRow = {
+  id: string; receiptNumber: string | null; receiptDate: string;
+  status: number;
+  amount: number; currency: string;
+  paymentMode: number;
+  chequeNumber: string | null; chequeDate: string | null;
+  paymentReference: string | null; remarks: string | null;
+};
+
 export type MemberDashboard = {
   ytdContributions: number; ytdReceiptCount: number; currency: string;
   activeCommitments: number; commitmentOutstanding: number;
@@ -287,6 +322,12 @@ export const portalMeApi = {
     api.get<{ templateId: string | null; templateVersion: number | null; templateName: string | null; renderedText: string; isAlreadyAccepted: boolean }>(
       `/api/v1/portal/me/commitments/${id}/agreement-preview`,
     ).then((r) => r.data),
+  commitmentPayments: (id: string) =>
+    api.get<Array<CommitmentPaymentRow>>(`/api/v1/portal/me/commitments/${id}/payments`).then((r) => r.data),
+  qhGuarantorConsents: (id: string) =>
+    api.get<Array<QhGuarantorConsent>>(`/api/v1/portal/me/qarzan-hasana/${id}/guarantor-consents`).then((r) => r.data),
+  qhPayments: (id: string) =>
+    api.get<Array<QhPaymentRow>>(`/api/v1/portal/me/qarzan-hasana/${id}/payments`).then((r) => r.data),
   fundTypes: (category: 'donation' | 'loan' = 'donation') =>
     api.get<PortalFundType[]>(`/api/v1/portal/me/fund-types`, { params: { category } }).then((r) => r.data),
   qarzanHasana: () => api.get<QhLoanRow[]>('/api/v1/portal/me/qarzan-hasana').then((r) => r.data),

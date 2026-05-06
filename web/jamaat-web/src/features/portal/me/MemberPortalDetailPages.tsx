@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   Card, Descriptions, Table, Tag, Typography, Empty, Alert, Button, Space, Skeleton,
   Form, Input, InputNumber, Select, DatePicker, Row, Col, message, Result, Progress,
-  Modal, Divider,
+  Modal, Divider, Tabs, Statistic,
 } from 'antd';
 import {
   GiftOutlined, HeartOutlined, BankOutlined, DownloadOutlined, ArrowLeftOutlined,
@@ -220,48 +220,172 @@ export function MemberCommitmentDetailPage() {
         ) : null}
       </Modal>
 
-      <Card className="jm-card">
-        <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small">
-          <Descriptions.Item label="Fund">{c.fundTypeName}</Descriptions.Item>
-          <Descriptions.Item label="Status"><Tag color={statusMeta.color}>{statusMeta.label}</Tag></Descriptions.Item>
-          <Descriptions.Item label="Started">{dayjs(c.startDate).format('DD MMM YYYY')}</Descriptions.Item>
-          <Descriptions.Item label="Ends">{c.endDate ? dayjs(c.endDate).format('DD MMM YYYY') : '—'}</Descriptions.Item>
-          <Descriptions.Item label="Total">
-            <span className="jm-tnum jm-num-strong">{c.totalAmount.toLocaleString()} {c.currency}</span>
-          </Descriptions.Item>
-          <Descriptions.Item label="Paid">
-            <span className="jm-tnum">{c.paidAmount.toLocaleString()} {c.currency}</span>
-          </Descriptions.Item>
-          <Descriptions.Item label="Outstanding" span={3}>
-            <Progress percent={Math.round(c.progressPercent)} format={() => `${c.remainingAmount.toLocaleString()} ${c.currency} left`} />
-          </Descriptions.Item>
-          {c.notes && <Descriptions.Item label="Notes" span={3}>{c.notes}</Descriptions.Item>}
-        </Descriptions>
-      </Card>
+      {/* --- Top metrics strip + comprehensive Descriptions, two-column ----- */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={16}>
+          <Card className="jm-card" size="small">
+            <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered
+              items={[
+                { key: 'code',     label: 'Code',          children: <span className="jm-tnum">{c.code}</span> },
+                { key: 'status',   label: 'Status',        children: <Tag color={statusMeta.color}>{statusMeta.label}</Tag> },
+                { key: 'fund',     label: 'Fund',          children: c.fundTypeName },
+                { key: 'freq',     label: 'Frequency',     children: COMMIT_FREQUENCY[c.frequency] ?? `Code ${c.frequency}` },
+                { key: 'count',    label: 'Instalments',   children: <span className="jm-tnum">{c.numberOfInstallments}</span> },
+                { key: 'perInst',  label: 'Per instalment',
+                  children: <span className="jm-tnum">{(c.totalAmount / Math.max(1, c.numberOfInstallments)).toLocaleString()} {c.currency}</span> },
+                { key: 'total',    label: 'Total pledge',
+                  children: <span className="jm-tnum jm-num-strong">{c.totalAmount.toLocaleString()} {c.currency}</span> },
+                { key: 'paid',     label: 'Paid',
+                  children: <span className="jm-tnum">{c.paidAmount.toLocaleString()} {c.currency}</span> },
+                { key: 'start',    label: 'Start',         children: dayjs(c.startDate).format('DD MMM YYYY') },
+                { key: 'end',      label: 'End',           children: c.endDate ? dayjs(c.endDate).format('DD MMM YYYY') : '—' },
+                { key: 'agree',    label: 'Agreement', span: 2,
+                  children: c.hasAcceptedAgreement
+                    ? <span><Tag color="green">Accepted</Tag>{c.agreementAcceptedAtUtc ? ` on ${dayjs(c.agreementAcceptedAtUtc).format('DD MMM YYYY HH:mm')}` : ''}</span>
+                    : <Tag color="gold">Pending acceptance</Tag> },
+                ...(c.notes ? [{ key: 'notes', label: 'Notes', span: 2, children: c.notes }] : []),
+              ]} />
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card className="jm-card jm-portal-progress-card" size="small">
+            <div className="jm-portal-progress-card-label">Progress</div>
+            <div className="jm-portal-progress-card-pct">{Math.round(c.progressPercent)}%</div>
+            <Progress percent={Math.round(c.progressPercent)} showInfo={false}
+              strokeColor={{ from: 'var(--jm-primary-500)', to: 'var(--jm-success-fg-strong)' }} />
+            <div className="jm-portal-progress-card-stats">
+              <div><Statistic title="Paid" value={c.paidAmount} suffix={c.currency} precision={0} /></div>
+              <div><Statistic title="Outstanding" value={c.remainingAmount} suffix={c.currency} precision={0}
+                valueStyle={{ color: c.remainingAmount > 0 ? 'var(--jm-warning, #f59e0b)' : 'var(--jm-success-fg-strong)' }} /></div>
+            </div>
+          </Card>
+        </Col>
+      </Row>
 
-      <Card className="jm-card jm-portal-section-spaced" title="Installment schedule" styles={{ body: { padding: 0 } }}>
-        <Table
-          rowKey="id" dataSource={d.installments} pagination={false} size="small"
-          locale={{ emptyText: <Empty description="No installments." /> }}
-          columns={[
-            { title: '#', dataIndex: 'installmentNo', width: 60 },
-            { title: 'Due date', dataIndex: 'dueDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
-            { title: 'Scheduled', dataIndex: 'scheduledAmount', align: 'end', width: 140,
-              render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {c.currency}</span> },
-            { title: 'Paid', dataIndex: 'paidAmount', align: 'end', width: 140,
-              render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {c.currency}</span> },
-            { title: 'Remaining', dataIndex: 'remainingAmount', align: 'end', width: 140,
-              render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {c.currency}</span> },
-            { title: 'Last payment', dataIndex: 'lastPaymentDate', width: 140,
-              render: (v: string | null) => v ? dayjs(v).format('DD MMM YYYY') : '—' },
-            { title: 'Status', dataIndex: 'status', width: 130,
-              render: (s: number) => {
-                const m = INSTALLMENT_STATUS[s] ?? { label: String(s), color: 'default' };
-                return <Tag color={m.color}>{m.label}</Tag>;
-              } },
-          ]}
-        />
+      {/* --- Tabs: Schedule / Payments / Agreement ----------------------- */}
+      <Card className="jm-card jm-portal-section-spaced">
+        <Tabs defaultActiveKey="schedule" items={[
+          {
+            key: 'schedule', label: 'Schedule',
+            children: (
+              <Table
+                rowKey="id" dataSource={d.installments} pagination={false} size="small"
+                locale={{ emptyText: <Empty description="No instalments." /> }}
+                columns={[
+                  { title: '#', dataIndex: 'installmentNo', width: 60 },
+                  { title: 'Due date', dataIndex: 'dueDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
+                  { title: 'Scheduled', dataIndex: 'scheduledAmount', align: 'end', width: 140,
+                    render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {c.currency}</span> },
+                  { title: 'Paid', dataIndex: 'paidAmount', align: 'end', width: 140,
+                    render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {c.currency}</span> },
+                  { title: 'Remaining', dataIndex: 'remainingAmount', align: 'end', width: 140,
+                    render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {c.currency}</span> },
+                  { title: 'Last payment', key: 'last', width: 200,
+                    render: (_, r) => r.lastPaymentReceiptNumber
+                      ? <Link to={`/portal/me/contributions/${r.lastPaymentReceiptId}`} className="jm-tnum">
+                          {r.lastPaymentReceiptNumber}
+                          {r.lastPaymentDate && <span className="jm-muted"> · {dayjs(r.lastPaymentDate).format('DD MMM YYYY')}</span>}
+                        </Link>
+                      : <span className="jm-muted">—</span> },
+                  { title: 'Status', dataIndex: 'status', width: 130,
+                    render: (s: number) => {
+                      const m = INSTALLMENT_STATUS[s] ?? { label: String(s), color: 'default' };
+                      return <Tag color={m.color}>{m.label}</Tag>;
+                    } },
+                ]}
+              />
+            ),
+          },
+          {
+            key: 'payments', label: 'Payments',
+            children: <CommitmentPaymentsTab commitmentId={id} currency={c.currency} />,
+          },
+          {
+            key: 'agreement', label: 'Agreement',
+            children: c.hasAcceptedAgreement || c.status === 1
+              ? <CommitmentAgreementTab commitmentId={id} acceptedAtUtc={c.agreementAcceptedAtUtc} acceptedByName={c.agreementAcceptedByName} />
+              : <Empty description="No agreement on file yet." />,
+          },
+        ]} />
       </Card>
+    </div>
+  );
+}
+
+// Local label maps for the new bordered Descriptions block.
+const COMMIT_FREQUENCY: Record<number, string> = {
+  1: 'One-time', 2: 'Weekly', 3: 'Bi-weekly',
+  4: 'Monthly', 5: 'Quarterly', 6: 'Half-yearly', 7: 'Yearly', 99: 'Custom',
+};
+
+function CommitmentPaymentsTab({ commitmentId, currency }: { commitmentId: string; currency: string }) {
+  const q = useQuery({
+    queryKey: ['portal-me-commitment-payments', commitmentId],
+    queryFn: () => portalMeApi.commitmentPayments(commitmentId),
+    enabled: !!commitmentId,
+  });
+  if (q.isLoading) return <Skeleton active />;
+  const rows = q.data ?? [];
+  return (
+    <Table
+      rowKey="receiptId" dataSource={rows} pagination={{ pageSize: 25 }} size="small"
+      locale={{ emptyText: <Empty description="No payments recorded against this commitment yet." /> }}
+      columns={[
+        { title: 'Date', dataIndex: 'receiptDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
+        { title: 'Receipt #', dataIndex: 'receiptNumber', width: 160,
+          render: (v: string | null, r) => v
+            ? <Link to={`/portal/me/contributions/${r.receiptId}`} className="jm-tnum">{v}</Link>
+            : <em className="jm-muted-em">pending</em> },
+        { title: 'Inst.', dataIndex: 'installmentNo', width: 70, align: 'end',
+          render: (v: number | null) => v ? `#${v}` : <span className="jm-muted">—</span> },
+        { title: 'Amount', dataIndex: 'amount', align: 'end', width: 160,
+          render: (v: number) => <span className="jm-tnum jm-num-strong">{v.toLocaleString()} {currency}</span> },
+        { title: 'Method', dataIndex: 'paymentMode', width: 130,
+          render: (v: number) => PAYMENT_MODE[v] ?? `Mode ${v}` },
+        { title: 'Cheque / ref', key: 'ref', width: 200,
+          render: (_, r) => r.chequeNumber ? `Cheque ${r.chequeNumber}${r.chequeDate ? ` · ${dayjs(r.chequeDate).format('DD MMM YYYY')}` : ''}`
+            : (r.paymentReference ?? <span className="jm-muted">—</span>) },
+        { title: 'Bank', dataIndex: 'bankAccountName', render: (v: string | null) => v ?? '—' },
+        { title: 'Status', dataIndex: 'receiptStatus', width: 120,
+          render: (s: number) => {
+            const m = RECEIPT_STATUS[s] ?? { label: String(s), color: 'default' };
+            return <Tag color={m.color}>{m.label}</Tag>;
+          } },
+      ]}
+    />
+  );
+}
+
+function CommitmentAgreementTab({ commitmentId, acceptedAtUtc, acceptedByName }: {
+  commitmentId: string; acceptedAtUtc: string | null; acceptedByName?: string | null;
+}) {
+  const q = useQuery({
+    queryKey: ['portal-me-commitment-agreement-tab', commitmentId],
+    queryFn: () => portalMeApi.commitmentAgreementPreview(commitmentId),
+    enabled: !!commitmentId,
+  });
+  if (q.isLoading) return <Skeleton active />;
+  if (q.isError) return <Result status="error" title="Couldn't load the agreement" subTitle={(q.error as Error)?.message} />;
+  const data = q.data!;
+  return (
+    <div>
+      {data.templateName && (
+        <Typography.Text type="secondary">
+          Template: {data.templateName}{data.templateVersion ? ` v${data.templateVersion}` : ''}
+        </Typography.Text>
+      )}
+      <div className="jm-portal-agreement-text">
+        <ReactMarkdown>{data.renderedText}</ReactMarkdown>
+      </div>
+      {acceptedAtUtc && (
+        <Card className="jm-card jm-portal-section-spaced" size="small" title="Acceptance proof">
+          <Descriptions column={1} size="small" colon items={[
+            { key: 'who',  label: 'Accepted by', children: acceptedByName ?? 'You' },
+            { key: 'when', label: 'On',          children: dayjs(acceptedAtUtc).format('DD MMM YYYY HH:mm') },
+            { key: 'how',  label: 'Method',      children: 'Member portal (self)' },
+          ]} />
+        </Card>
+      )}
     </div>
   );
 }
@@ -308,60 +432,206 @@ export function MemberQhDetailPage() {
           stepper with a status Alert. */}
       <WorkflowStepper title="Loan workflow" {...qhWorkflow(l.status, l.rejectionReason)} />
 
-      <Card className="jm-card">
-        <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small">
-          <Descriptions.Item label="Status"><Tag color={statusMeta.color}>{statusMeta.label}</Tag></Descriptions.Item>
-          <Descriptions.Item label="Started">{dayjs(l.startDate).format('DD MMM YYYY')}</Descriptions.Item>
-          <Descriptions.Item label="Ends">{l.endDate ? dayjs(l.endDate).format('DD MMM YYYY') : '—'}</Descriptions.Item>
-          <Descriptions.Item label="Requested">
-            <span className="jm-tnum">{l.amountRequested.toLocaleString()} {l.currency}</span>
-          </Descriptions.Item>
-          <Descriptions.Item label="Approved">
-            <span className="jm-tnum">{l.amountApproved.toLocaleString()} {l.currency}</span>
-          </Descriptions.Item>
-          <Descriptions.Item label="Disbursed">
-            <span className="jm-tnum">{l.amountDisbursed.toLocaleString()} {l.currency}</span>
-          </Descriptions.Item>
-          <Descriptions.Item label="Repaid">
-            <span className="jm-tnum">{l.amountRepaid.toLocaleString()} {l.currency}</span>
-          </Descriptions.Item>
-          <Descriptions.Item label="Outstanding">
-            <span className="jm-tnum jm-num-strong">{l.amountOutstanding.toLocaleString()} {l.currency}</span>
-          </Descriptions.Item>
-          <Descriptions.Item label="Installments">{l.instalmentsApproved} of {l.instalmentsRequested}</Descriptions.Item>
-          <Descriptions.Item label="Guarantor 1"><Space><TeamOutlined />{l.guarantor1Name}</Space></Descriptions.Item>
-          <Descriptions.Item label="Guarantor 2"><Space><TeamOutlined />{l.guarantor2Name}</Space></Descriptions.Item>
-          {l.disbursedOn && <Descriptions.Item label="Disbursed on">{dayjs(l.disbursedOn).format('DD MMM YYYY')}</Descriptions.Item>}
-          {l.purpose && <Descriptions.Item label="Purpose" span={3}>{l.purpose}</Descriptions.Item>}
-          {l.repaymentPlan && <Descriptions.Item label="Repayment plan" span={3}>{l.repaymentPlan}</Descriptions.Item>}
-          {l.rejectionReason && <Descriptions.Item label="Rejection reason" span={3}>
-            <Alert type="error" showIcon message={l.rejectionReason} />
-          </Descriptions.Item>}
-        </Descriptions>
-      </Card>
+      {/* Two-column header: comprehensive Descriptions + Progress side-card. */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={16}>
+          <Card className="jm-card" size="small">
+            <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered
+              items={[
+                { key: 'code',    label: 'Code',         children: <span className="jm-tnum">{l.code}</span> },
+                { key: 'status',  label: 'Status',       children: <Tag color={statusMeta.color}>{statusMeta.label}</Tag> },
+                { key: 'scheme',  label: 'Scheme',       children: QH_SCHEME_LABEL[l.scheme] ?? `Scheme ${l.scheme}` },
+                { key: 'currency', label: 'Currency',    children: l.currency },
+                { key: 'req',     label: 'Requested',
+                  children: <span className="jm-tnum">{l.amountRequested.toLocaleString()} {l.currency}</span> },
+                { key: 'app',     label: 'Approved',
+                  children: <span className="jm-tnum">{l.amountApproved.toLocaleString()} {l.currency}</span> },
+                { key: 'disb',    label: 'Disbursed',
+                  children: <span className="jm-tnum">{l.amountDisbursed.toLocaleString()} {l.currency}</span> },
+                { key: 'rep',     label: 'Repaid',
+                  children: <span className="jm-tnum">{l.amountRepaid.toLocaleString()} {l.currency}</span> },
+                { key: 'inst',    label: 'Instalments',  children: `${l.instalmentsApproved} of ${l.instalmentsRequested}` },
+                { key: 'start',   label: 'Start',        children: dayjs(l.startDate).format('DD MMM YYYY') },
+                { key: 'end',     label: 'End',          children: l.endDate ? dayjs(l.endDate).format('DD MMM YYYY') : '—' },
+                { key: 'disb_on', label: 'Disbursed on', children: l.disbursedOn ? dayjs(l.disbursedOn).format('DD MMM YYYY') : '—' },
+              ]} />
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card className="jm-card jm-portal-progress-card" size="small">
+            <div className="jm-portal-progress-card-label">Repayment progress</div>
+            <div className="jm-portal-progress-card-pct">{Math.round(l.progressPercent)}%</div>
+            <Progress percent={Math.round(l.progressPercent)} showInfo={false}
+              strokeColor={{ from: 'var(--jm-primary-500)', to: 'var(--jm-success-fg-strong)' }} />
+            <div className="jm-portal-progress-card-stats">
+              <div><Statistic title="Repaid" value={l.amountRepaid} suffix={l.currency} precision={0} /></div>
+              <div><Statistic title="Outstanding" value={l.amountOutstanding} suffix={l.currency} precision={0}
+                valueStyle={{ color: l.amountOutstanding > 0 ? 'var(--jm-warning, #f59e0b)' : 'var(--jm-success-fg-strong)' }} /></div>
+            </div>
+          </Card>
+        </Col>
+      </Row>
 
-      <Card className="jm-card jm-portal-section-spaced" title="Repayment schedule" styles={{ body: { padding: 0 } }}>
-        <Table
-          rowKey="id" dataSource={d.installments} pagination={false} size="small"
-          locale={{ emptyText: <Empty description="No installments scheduled yet." /> }}
-          columns={[
-            { title: '#', dataIndex: 'installmentNo', width: 60 },
-            { title: 'Due date', dataIndex: 'dueDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
-            { title: 'Scheduled', dataIndex: 'scheduledAmount', align: 'end', width: 140,
-              render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {l.currency}</span> },
-            { title: 'Paid', dataIndex: 'paidAmount', align: 'end', width: 140,
-              render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {l.currency}</span> },
-            { title: 'Remaining', dataIndex: 'remainingAmount', align: 'end', width: 140,
-              render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {l.currency}</span> },
-            { title: 'Status', dataIndex: 'status', width: 130,
-              render: (s: number) => {
-                const m = QH_INSTALLMENT_STATUS[s] ?? { label: String(s), color: 'default' };
-                return <Tag color={m.color}>{m.label}</Tag>;
-              } },
-          ]}
-        />
+      {/* Tabs: Borrower's case / Approval / Schedule / Guarantors / Payments. */}
+      <Card className="jm-card jm-portal-section-spaced">
+        <Tabs defaultActiveKey="case" items={[
+          {
+            key: 'case', label: "Borrower's case",
+            children: (
+              <Descriptions column={{ xs: 1, sm: 2 }} size="small" colon items={[
+                ...(l.purpose ? [{ key: 'p', label: 'Purpose', span: 2, children: l.purpose }] : []),
+                ...(l.repaymentPlan ? [{ key: 'rp', label: 'Repayment plan', span: 2, children: l.repaymentPlan }] : []),
+                { key: 'mi',  label: 'Monthly income',
+                  children: l.monthlyIncome !== null ? <span className="jm-tnum">{l.monthlyIncome.toLocaleString()} {l.currency}</span> : '—' },
+                { key: 'me',  label: 'Monthly expenses',
+                  children: l.monthlyExpenses !== null ? <span className="jm-tnum">{l.monthlyExpenses.toLocaleString()} {l.currency}</span> : '—' },
+                ...(l.rejectionReason ? [{
+                  key: 'rj', label: 'Rejection reason', span: 2,
+                  children: <Alert type="error" showIcon message={l.rejectionReason} />,
+                }] : []),
+              ]} />
+            ),
+          },
+          {
+            key: 'approval', label: 'Approval audit',
+            children: (
+              <Descriptions column={1} size="small" bordered items={[
+                { key: 'l1at', label: 'L1 reviewed at',
+                  children: l.level1ApprovedAtUtc ? dayjs(l.level1ApprovedAtUtc).format('DD MMM YYYY HH:mm') : <span className="jm-muted">Pending</span> },
+                { key: 'l2at', label: 'L2 reviewed at',
+                  children: l.level2ApprovedAtUtc ? dayjs(l.level2ApprovedAtUtc).format('DD MMM YYYY HH:mm') : <span className="jm-muted">Pending</span> },
+                { key: 'disb', label: 'Disbursed on',
+                  children: l.disbursedOn ? dayjs(l.disbursedOn).format('DD MMM YYYY') : <span className="jm-muted">Not yet</span> },
+              ]} />
+            ),
+          },
+          {
+            key: 'schedule', label: 'Repayment schedule',
+            children: (
+              <Table
+                rowKey="id" dataSource={d.installments} pagination={false} size="small"
+                locale={{ emptyText: <Empty description="No instalments scheduled yet." /> }}
+                columns={[
+                  { title: '#', dataIndex: 'installmentNo', width: 60 },
+                  { title: 'Due date', dataIndex: 'dueDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
+                  { title: 'Scheduled', dataIndex: 'scheduledAmount', align: 'end', width: 140,
+                    render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {l.currency}</span> },
+                  { title: 'Paid', dataIndex: 'paidAmount', align: 'end', width: 140,
+                    render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {l.currency}</span> },
+                  { title: 'Remaining', dataIndex: 'remainingAmount', align: 'end', width: 140,
+                    render: (v: number) => <span className="jm-tnum">{v.toLocaleString()} {l.currency}</span> },
+                  { title: 'Last payment', dataIndex: 'lastPaymentDate', width: 140,
+                    render: (v: string | null) => v ? dayjs(v).format('DD MMM YYYY') : '—' },
+                  { title: 'Status', dataIndex: 'status', width: 130,
+                    render: (s: number) => {
+                      const m = QH_INSTALLMENT_STATUS[s] ?? { label: String(s), color: 'default' };
+                      return <Tag color={m.color}>{m.label}</Tag>;
+                    } },
+                ]}
+              />
+            ),
+          },
+          {
+            key: 'guarantors', label: 'Guarantors',
+            children: <QhGuarantorsTab loanId={id}
+              fallbackG1Name={l.guarantor1Name} fallbackG2Name={l.guarantor2Name} />,
+          },
+          {
+            key: 'payments', label: 'Repayments',
+            children: <QhPaymentsTab loanId={id} currency={l.currency} />,
+          },
+        ]} />
       </Card>
     </div>
+  );
+}
+
+const QH_SCHEME_LABEL: Record<number, string> = {
+  0: 'Other',
+  1: 'Mohammadi (against gold)',
+  2: 'Hussain (against kafil)',
+};
+
+const CONSENT_STATUS: Record<number, { label: string; color: string }> = {
+  1: { label: 'Pending', color: 'gold' },
+  2: { label: 'Endorsed', color: 'green' },
+  3: { label: 'Declined', color: 'red' },
+};
+
+function QhGuarantorsTab({ loanId, fallbackG1Name, fallbackG2Name }: {
+  loanId: string; fallbackG1Name: string; fallbackG2Name: string;
+}) {
+  const q = useQuery({
+    queryKey: ['portal-me-qh-consents', loanId],
+    queryFn: () => portalMeApi.qhGuarantorConsents(loanId),
+    enabled: !!loanId,
+  });
+  if (q.isLoading) return <Skeleton active />;
+  const rows = q.data ?? [];
+  if (rows.length === 0) {
+    // Fall back to the loan's snapshot guarantor names if the consent rows haven't been
+    // populated yet (very early-stage drafts).
+    return (
+      <Space direction="vertical" size={8}>
+        <Typography.Text type="secondary">Awaiting consent records to be issued.</Typography.Text>
+        <div>{fallbackG1Name} <Tag>Guarantor 1</Tag></div>
+        <div>{fallbackG2Name} <Tag>Guarantor 2</Tag></div>
+      </Space>
+    );
+  }
+  return (
+    <Table
+      rowKey="id" dataSource={rows} pagination={false} size="small"
+      columns={[
+        { title: 'Guarantor', key: 'who',
+          render: (_, r) => <Space><TeamOutlined /><strong>{r.guarantorName}</strong> <span className="jm-tnum jm-muted">{r.guarantorItsNumber}</span></Space> },
+        { title: 'Status', dataIndex: 'status', width: 140,
+          render: (s: number) => {
+            const m = CONSENT_STATUS[s] ?? { label: String(s), color: 'default' };
+            return <Tag color={m.color}>{m.label}</Tag>;
+          } },
+        { title: 'Decided at', dataIndex: 'respondedAtUtc', width: 200,
+          render: (v: string | null) => v ? dayjs(v).format('DD MMM YYYY HH:mm') : <span className="jm-muted">—</span> },
+        { title: 'Notified at', dataIndex: 'notificationSentAtUtc', width: 200,
+          render: (v: string | null) => v ? dayjs(v).format('DD MMM YYYY HH:mm') : <span className="jm-muted">—</span> },
+      ]}
+    />
+  );
+}
+
+function QhPaymentsTab({ loanId, currency }: { loanId: string; currency: string }) {
+  const q = useQuery({
+    queryKey: ['portal-me-qh-payments', loanId],
+    queryFn: () => portalMeApi.qhPayments(loanId),
+    enabled: !!loanId,
+  });
+  if (q.isLoading) return <Skeleton active />;
+  const rows = q.data ?? [];
+  return (
+    <Table
+      rowKey="id" dataSource={rows} pagination={{ pageSize: 25 }} size="small"
+      locale={{ emptyText: <Empty description="No repayments recorded against this loan yet." /> }}
+      columns={[
+        { title: 'Date', dataIndex: 'receiptDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
+        { title: 'Receipt #', dataIndex: 'receiptNumber', width: 160,
+          render: (v: string | null, r) => v
+            ? <Link to={`/portal/me/contributions/${r.id}`} className="jm-tnum">{v}</Link>
+            : <em className="jm-muted-em">pending</em> },
+        { title: 'Amount', dataIndex: 'amount', align: 'end', width: 160,
+          render: (v: number) => <span className="jm-tnum jm-num-strong">{v.toLocaleString()} {currency}</span> },
+        { title: 'Method', dataIndex: 'paymentMode', width: 130,
+          render: (v: number) => PAYMENT_MODE[v] ?? `Mode ${v}` },
+        { title: 'Cheque / ref', key: 'ref', width: 200,
+          render: (_, r) => r.chequeNumber ? `Cheque ${r.chequeNumber}${r.chequeDate ? ` · ${dayjs(r.chequeDate).format('DD MMM YYYY')}` : ''}`
+            : (r.paymentReference ?? <span className="jm-muted">—</span>) },
+        { title: 'Notes', dataIndex: 'remarks', render: (v: string | null) => v ?? '—' },
+        { title: 'Status', dataIndex: 'status', width: 120,
+          render: (s: number) => {
+            const m = RECEIPT_STATUS[s] ?? { label: String(s), color: 'default' };
+            return <Tag color={m.color}>{m.label}</Tag>;
+          } },
+      ]}
+    />
   );
 }
 
@@ -431,21 +701,36 @@ export function MemberPatronageDetailPage() {
     <div>
       <DetailHeader icon={<GiftOutlined />} title={`Patronage ${e.code}`} backTo="/portal/me/fund-enrollments" />
       <WorkflowStepper title="Patronage workflow" {...patronageWorkflow(e.status)} />
-      <Card className="jm-card">
-        <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small">
-          <Descriptions.Item label="Fund">{e.fundTypeName}</Descriptions.Item>
-          <Descriptions.Item label="Sub-type">{e.subType ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="Status"><Tag color={statusMeta.color}>{statusMeta.label}</Tag></Descriptions.Item>
-          <Descriptions.Item label="Recurrence">{FE_RECURRENCE[e.recurrence] ?? e.recurrence}</Descriptions.Item>
-          <Descriptions.Item label="Started">{dayjs(e.startDate).format('DD MMM YYYY')}</Descriptions.Item>
-          <Descriptions.Item label="Ends">{e.endDate ? dayjs(e.endDate).format('DD MMM YYYY') : '—'}</Descriptions.Item>
-          <Descriptions.Item label="Total collected">
-            <span className="jm-tnum jm-num-strong">{e.totalCollected.toLocaleString()}</span>
-          </Descriptions.Item>
-          <Descriptions.Item label="Receipt count">{e.receiptCount}</Descriptions.Item>
-          {e.notes && <Descriptions.Item label="Notes" span={3}>{e.notes}</Descriptions.Item>}
-        </Descriptions>
-      </Card>
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={16}>
+          <Card className="jm-card" size="small">
+            <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered items={[
+              { key: 'code',   label: 'Code',        children: <span className="jm-tnum">{e.code}</span> },
+              { key: 'status', label: 'Status',      children: <Tag color={statusMeta.color}>{statusMeta.label}</Tag> },
+              { key: 'fund',   label: 'Fund',        children: e.fundTypeName },
+              { key: 'sub',    label: 'Sub-type',    children: e.subType ?? '—' },
+              { key: 'rec',    label: 'Recurrence',  children: FE_RECURRENCE[e.recurrence] ?? e.recurrence },
+              { key: 'start',  label: 'Started',     children: dayjs(e.startDate).format('DD MMM YYYY') },
+              { key: 'end',    label: 'Ends',        children: e.endDate ? dayjs(e.endDate).format('DD MMM YYYY') : '—' },
+              { key: 'count',  label: 'Receipts',    children: <span className="jm-tnum">{e.receiptCount}</span> },
+              ...(e.notes ? [{ key: 'notes', label: 'Notes', span: 2, children: e.notes }] : []),
+            ]} />
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card className="jm-card jm-portal-progress-card" size="small">
+            <div className="jm-portal-progress-card-label">Total collected</div>
+            <div className="jm-portal-progress-card-pct">
+              {e.totalCollected.toLocaleString()}
+            </div>
+            <div className="jm-portal-progress-card-stats">
+              <div><Statistic title="Receipts" value={e.receiptCount} /></div>
+              <div><Statistic title="Status" valueRender={() => <Tag color={statusMeta.color}>{statusMeta.label}</Tag>} value="" /></div>
+            </div>
+          </Card>
+        </Col>
+      </Row>
 
       <Card className="jm-card jm-portal-section-spaced" title="Contributing receipts" styles={{ body: { padding: 0 } }}>
         <Table

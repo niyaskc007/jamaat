@@ -248,6 +248,25 @@
 .jm-portal-back-link { display: inline-flex; }
 .jm-portal-back-link :where(.ant-btn) { color: var(--jm-gray-600); }
 
+/* Progress side-card on the Commitment / QH detail pages: big % up top, gradient progress
+   bar, two-stat split (Paid / Outstanding) below. Matches the visual weight of the bordered
+   Descriptions block on the same row so the page reads as one cohesive unit. */
+.jm-portal-progress-card { display: flex; flex-direction: column; gap: 12px; }
+.jm-portal-progress-card-label {
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--jm-gray-500);
+}
+.jm-portal-progress-card-pct { font-size: 36px; font-weight: 700; line-height: 1; color: var(--jm-gray-900); }
+.jm-portal-progress-card-stats {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--jm-space-3);
+  margin-block-start: var(--jm-space-2);
+  padding-block-start: var(--jm-space-3);
+  border-block-start: 1px solid var(--jm-border);
+}
+.jm-portal-progress-card-stats :where(.ant-statistic-title) { font-size: 11px; }
+.jm-portal-progress-card-stats :where(.ant-statistic-content) { font-size: 18px; font-weight: 600; }
+
 /* Guarantor inbox card: pending requests render as full-width review cards with a head
    row (borrower + scheme), the borrower's case in a Descriptions block, then primary +
    danger action buttons inline. Past decisions fall back to a compact table below. */
