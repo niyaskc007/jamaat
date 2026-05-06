@@ -59,7 +59,7 @@ export function QhRepaymentChart({
             <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748B' }} interval="preserveStartEnd"
               axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} width={80} />
-            <RTooltip formatter={(v: number) => money(v, currency)}
+            <RTooltip formatter={(v) => money(typeof v === 'number' ? v : Number(v ?? 0), currency)}
               labelFormatter={(_l, p) => p[0]?.payload?.date ? dayjs(p[0].payload.date).format('DD MMM YYYY') : ''}
               contentStyle={{ fontSize: 12, borderRadius: 6, border: '1px solid var(--jm-border)' }} />
             <Legend wrapperStyle={{ fontSize: 12 }} iconSize={10} />
