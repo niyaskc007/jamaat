@@ -247,21 +247,23 @@ export function HelpPage() {
         </Col>
 
         <Col xs={24} lg={10}>
-          <Card title="Test logins (development)" size="small" style={{ marginBlockEnd: 16 }}>
-            <Paragraph type="secondary" style={{ fontSize: 12, marginBlockEnd: 8 }}>
-              Every persona ships with password <Text code>Test@12345</Text>.
-            </Paragraph>
-            <ul style={{ paddingInlineStart: 18, marginBlockEnd: 0 }}>
-              <li><Text code>admin@jamaat.local</Text> - full access</li>
-              <li><Text code>cashier@jamaat.local</Text> - Counter (receipts + scan)</li>
-              <li><Text code>accountant@jamaat.local</Text> - Receipts, vouchers, ledger, periods, reports</li>
-              <li><Text code>events@jamaat.local</Text> - Events + scan</li>
-              <li><Text code>qh-l1@jamaat.local</Text> - QH create + L1 approval</li>
-              <li><Text code>qh-l2@jamaat.local</Text> - QH L2 approval, disburse, waive</li>
-              <li><Text code>verifier@jamaat.local</Text> - Member verify only</li>
-              <li><Text code>viewer@jamaat.local</Text> - Read-only across the app</li>
-            </ul>
-          </Card>
+          {import.meta.env.DEV && (
+            <Card title="Test logins (development)" size="small" style={{ marginBlockEnd: 16 }}>
+              <Paragraph type="secondary" style={{ fontSize: 12, marginBlockEnd: 8 }}>
+                Every persona ships with password <Text code>Test@12345</Text>.
+              </Paragraph>
+              <ul style={{ paddingInlineStart: 18, marginBlockEnd: 0 }}>
+                <li><Text code>admin@jamaat.local</Text> - full access</li>
+                <li><Text code>cashier@jamaat.local</Text> - Counter (receipts + scan)</li>
+                <li><Text code>accountant@jamaat.local</Text> - Receipts, vouchers, ledger, periods, reports</li>
+                <li><Text code>events@jamaat.local</Text> - Events + scan</li>
+                <li><Text code>qh-l1@jamaat.local</Text> - QH create + L1 approval</li>
+                <li><Text code>qh-l2@jamaat.local</Text> - QH L2 approval, disburse, waive</li>
+                <li><Text code>verifier@jamaat.local</Text> - Member verify only</li>
+                <li><Text code>viewer@jamaat.local</Text> - Read-only across the app</li>
+              </ul>
+            </Card>
+          )}
 
           <Card title="Keyboard shortcuts" size="small" style={{ marginBlockEnd: 16 }}>
             <ul style={{ paddingInlineStart: 18, marginBlockEnd: 0 }}>

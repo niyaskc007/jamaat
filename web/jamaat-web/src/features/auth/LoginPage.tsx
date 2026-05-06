@@ -33,7 +33,7 @@ export function LoginPage() {
 
   const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = useForm<LoginForm>({
     resolver: zodResolver(schema),
-    defaultValues: { email: 'admin@jamaat.local', password: 'Admin@12345', remember: true },
+    defaultValues: { email: '', password: '', remember: true },
   });
   // CMS-driven marketing copy on the brand panel. Static fallbacks (i18n strings) are used until
   // the network call returns, and forever if it fails - the login screen MUST render even when
