@@ -217,6 +217,96 @@
 .jm-num-strong { font-weight: 500; }
 .jm-alert-after-card { margin-block-start: var(--jm-space-4); }
 
+/* ----- Shared CommitmentProgressCard (admin + portal both use it) -- */
+.jm-progress-card :where(.ant-card-body) {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  block-size: 100%; gap: 18px; padding: 20px;
+}
+.jm-progress-health {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 12px; border-radius: 999px;
+}
+.jm-progress-health-success { color: #0E5C40; background: #DCFCE7; }
+.jm-progress-health-warning { color: #B45309; background: #FEF3C7; }
+.jm-progress-health-danger  { color: #B91C1C; background: #FEE2E2; }
+.jm-progress-health-default { color: #6B7280; background: #F3F4F6; }
+
+.jm-progress-pct       { font-size: 26px; font-weight: 700; color: var(--jm-gray-900, #1F2937); line-height: 1; }
+.jm-progress-pct-label { font-size: 11px; color: var(--jm-gray-500); margin-block-start: 4px; }
+
+.jm-progress-stats {
+  inline-size: 100%; max-inline-size: 260px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.jm-progress-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+.jm-progress-row-label { color: var(--jm-gray-500); }
+.jm-progress-row-value { font-weight: 600; color: var(--jm-gray-900, #1F2937); font-size: 14px; }
+.jm-progress-row[data-accent="true"]  .jm-progress-row-value { color: #0E5C40; }
+.jm-progress-row[data-muted="true"]   .jm-progress-row-value { color: var(--jm-gray-600); font-size: 12px; font-weight: 500; }
+
+.jm-progress-ribbon-wrap  { inline-size: 100%; max-inline-size: 260px; }
+.jm-progress-ribbon-title {
+  font-size: 10px; color: var(--jm-gray-500);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  margin-block-end: 6px; text-align: center;
+}
+/* Cells fill the row evenly via a CSS grid that reads the column count from the data
+   attribute. Avoids inline `gridTemplateColumns: repeat(N, 1fr)` style at the call site. */
+.jm-progress-ribbon {
+  display: grid; gap: 2px;
+  grid-template-columns: repeat(var(--jm-ribbon-cells, 12), minmax(0, 1fr));
+}
+.jm-progress-ribbon[data-cells="1"]  { --jm-ribbon-cells: 1; }
+.jm-progress-ribbon[data-cells="2"]  { --jm-ribbon-cells: 2; }
+.jm-progress-ribbon[data-cells="3"]  { --jm-ribbon-cells: 3; }
+.jm-progress-ribbon[data-cells="4"]  { --jm-ribbon-cells: 4; }
+.jm-progress-ribbon[data-cells="5"]  { --jm-ribbon-cells: 5; }
+.jm-progress-ribbon[data-cells="6"]  { --jm-ribbon-cells: 6; }
+.jm-progress-ribbon[data-cells="7"]  { --jm-ribbon-cells: 7; }
+.jm-progress-ribbon[data-cells="8"]  { --jm-ribbon-cells: 8; }
+.jm-progress-ribbon[data-cells="9"]  { --jm-ribbon-cells: 9; }
+.jm-progress-ribbon[data-cells="10"] { --jm-ribbon-cells: 10; }
+.jm-progress-ribbon[data-cells="11"] { --jm-ribbon-cells: 11; }
+.jm-progress-ribbon[data-cells="12"] { --jm-ribbon-cells: 12; }
+.jm-progress-ribbon[data-cells="13"] { --jm-ribbon-cells: 13; }
+.jm-progress-ribbon[data-cells="14"] { --jm-ribbon-cells: 14; }
+.jm-progress-ribbon[data-cells="15"] { --jm-ribbon-cells: 15; }
+.jm-progress-ribbon[data-cells="16"] { --jm-ribbon-cells: 16; }
+.jm-progress-ribbon[data-cells="18"] { --jm-ribbon-cells: 18; }
+.jm-progress-ribbon[data-cells="20"] { --jm-ribbon-cells: 20; }
+.jm-progress-ribbon[data-cells="24"] { --jm-ribbon-cells: 24; }
+.jm-progress-ribbon[data-cells="36"] { --jm-ribbon-cells: 36; }
+.jm-progress-ribbon[data-cells="48"] { --jm-ribbon-cells: 48; }
+.jm-progress-ribbon[data-cells="60"] { --jm-ribbon-cells: 60; }
+
+.jm-progress-cell { block-size: 14px; border-radius: 2px; }
+.jm-progress-cell-paid    { background: #10B981; }
+.jm-progress-cell-partial { background: #FBBF24; }
+.jm-progress-cell-overdue { background: #EF4444; }
+.jm-progress-cell-waived  { background: #A78BFA; }
+.jm-progress-cell-pending { background: #E5E7EB; }
+
+.jm-progress-ribbon-foot {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--jm-gray-500); margin-block-start: 6px;
+}
+
+/* QH repayment trajectory chart (admin + portal both render it). */
+.jm-qh-trend-card { margin-block-end: var(--jm-space-4); }
+.jm-qh-trend-extra { font-size: 11px; color: var(--jm-gray-500); }
+
+/* QH repayment progress card (member portal version, same dashboard donut shape as admin). */
+.jm-qh-progress-card :where(.ant-card-body) { text-align: center; }
+.jm-qh-progress-stats {
+  display: flex; justify-content: space-around;
+  font-size: 12px; margin-block-start: var(--jm-space-3);
+}
+.jm-qh-progress-stat-label   { color: var(--jm-gray-500); }
+.jm-qh-progress-stat-paid    { font-weight: 600; color: #0E5C40; }
+.jm-qh-progress-stat-remaining { font-weight: 600; color: var(--jm-gray-900); }
+
 /* ----- Shared portal LIST page primitives -------------------------- */
 /* Used by every member-portal list page (Contributions, Commitments, Patronages, Qarzan
    Hasana, Events, Guarantor inbox, Login history) to keep the visual language identical to

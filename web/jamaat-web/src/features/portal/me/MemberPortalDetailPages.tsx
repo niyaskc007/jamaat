@@ -19,6 +19,8 @@ import {
 import { WorkflowStepper, qhWorkflow, commitmentWorkflow, patronageWorkflow } from './WorkflowStepper';
 import { MemberSearchSelect } from './MemberSearchSelect';
 import { PageHeader } from '../../../shared/ui/PageHeader';
+import { CommitmentProgressCard } from '../../../shared/ui/CommitmentProgressCard';
+import { QhRepaymentChart } from '../../../shared/ui/QhRepaymentChart';
 import ReactMarkdown from 'react-markdown';
 
 // --- Shared header --------------------------------------------------------
@@ -256,17 +258,9 @@ export function MemberCommitmentDetailPage() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card className="jm-card jm-portal-progress-card" size="small">
-            <div className="jm-portal-progress-card-label">Progress</div>
-            <div className="jm-portal-progress-card-pct">{Math.round(c.progressPercent)}%</div>
-            <Progress percent={Math.round(c.progressPercent)} showInfo={false}
-              strokeColor={{ from: 'var(--jm-primary-500)', to: 'var(--jm-success-fg-strong)' }} />
-            <div className="jm-portal-progress-card-stats">
-              <div><Statistic title="Paid" value={c.paidAmount} suffix={c.currency} precision={0} /></div>
-              <div><Statistic title="Outstanding" value={c.remainingAmount} suffix={c.currency} precision={0}
-                valueStyle={{ color: c.remainingAmount > 0 ? 'var(--jm-warning, #f59e0b)' : 'var(--jm-success-fg-strong)' }} /></div>
-            </div>
-          </Card>
+          {/* Same dashboard donut + health pill + instalment ribbon admin uses on
+              /commitments/:id - one source of truth in shared/ui/CommitmentProgressCard. */}
+          <CommitmentProgressCard commitment={c} installments={d.installments} />
         </Col>
       </Row>
 
@@ -468,19 +462,30 @@ export function MemberQhDetailPage() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card className="jm-card jm-portal-progress-card" size="small">
-            <div className="jm-portal-progress-card-label">Repayment progress</div>
-            <div className="jm-portal-progress-card-pct">{Math.round(l.progressPercent)}%</div>
-            <Progress percent={Math.round(l.progressPercent)} showInfo={false}
-              strokeColor={{ from: 'var(--jm-primary-500)', to: 'var(--jm-success-fg-strong)' }} />
-            <div className="jm-portal-progress-card-stats">
-              <div><Statistic title="Repaid" value={l.amountRepaid} suffix={l.currency} precision={0} /></div>
-              <div><Statistic title="Outstanding" value={l.amountOutstanding} suffix={l.currency} precision={0}
-                valueStyle={{ color: l.amountOutstanding > 0 ? 'var(--jm-warning, #f59e0b)' : 'var(--jm-success-fg-strong)' }} /></div>
+          {/* Same dashboard donut admin uses on /qarzan-hasana/:id - one Card per side. */}
+          <Card size="small" title="Repayment progress" className="jm-card jm-qh-progress-card">
+            <Progress type="dashboard"
+              percent={Math.min(100, Number(l.progressPercent.toFixed(1)))}
+              status={l.status === 7 ? 'success' : (l.status === 8 || l.status === 9 || l.status === 10) ? 'exception' : 'active'} />
+            <div className="jm-qh-progress-stats">
+              <div>
+                <div className="jm-qh-progress-stat-label">Paid</div>
+                <div className="jm-tnum jm-qh-progress-stat-paid">{l.amountRepaid.toLocaleString()} {l.currency}</div>
+              </div>
+              <div>
+                <div className="jm-qh-progress-stat-label">Remaining</div>
+                <div className="jm-tnum jm-qh-progress-stat-remaining">{l.amountOutstanding.toLocaleString()} {l.currency}</div>
+              </div>
             </div>
           </Card>
         </Col>
       </Row>
+
+      {/* Repayment trajectory: cumulative scheduled vs paid. Shared with admin. Hidden during
+          approval phase because no schedule exists yet. */}
+      {l.status >= 5 && d.installments.length > 0 && (
+        <QhRepaymentChart installments={d.installments} currency={l.currency} />
+      )}
 
       {/* Tabs: Borrower's case / Approval / Schedule / Guarantors / Payments. */}
       <Card className="jm-card jm-portal-section-spaced">

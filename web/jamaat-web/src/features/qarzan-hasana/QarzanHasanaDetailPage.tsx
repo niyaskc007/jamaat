@@ -12,6 +12,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { PageHeader } from '../../shared/ui/PageHeader';
+import { QhRepaymentChart } from '../../shared/ui/QhRepaymentChart';
 import { formatDate, formatDateTime, money } from '../../shared/format/format';
 import { extractProblem } from '../../shared/api/client';
 import {
@@ -82,30 +83,8 @@ export function QarzanHasanaDetailPage() {
     onSuccess: () => { onOk(); setWaiving(null); setWaiveReason(''); }, onError: onErr,
   });
 
-  // Build the repayment trend chart data once per render. Two cumulative series:
-  //   - Scheduled: cumulative sum of scheduledAmount across installments by due date
-  //   - Paid: cumulative sum of paidAmount, attributed to the lastPaymentDate when present
-  // Falls back to no-data state when the loan hasn't generated a schedule yet.
-  const repaymentTrend = useMemo(() => {
-    if (!data?.installments?.length) return [];
-    const sorted = [...data.installments].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-    let cumScheduled = 0;
-    let cumPaid = 0;
-    const points: { label: string; date: string; scheduled: number; paid: number }[] = [];
-    for (const i of sorted) {
-      cumScheduled += i.scheduledAmount;
-      // We attribute paid amount to the lastPaymentDate; if absent (still pending), it's
-      // accumulated at zero so the line stays flat for that bucket.
-      if (i.paidAmount > 0) cumPaid += i.paidAmount;
-      points.push({
-        label: dayjs(i.dueDate).format("MMM 'YY"),
-        date: i.dueDate,
-        scheduled: cumScheduled,
-        paid: cumPaid,
-      });
-    }
-    return points;
-  }, [data?.installments]);
+  // Repayment-trajectory chart logic moved to shared/ui/QhRepaymentChart so the operator
+  // and member-portal pages render identical visualisation. RULES.md §15.
 
   if (isLoading || !data) return <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>;
   const { loan, installments } = data;
@@ -419,27 +398,10 @@ export function QarzanHasanaDetailPage() {
 
       {/* Full-width repayment trend chart - fills the visual gap that used to exist on
           disbursed/active/closed loans when the right column was nearly empty. Two cumulative
-          series make over- vs under-pace immediately obvious. */}
+          series make over- vs under-pace immediately obvious. Shared component, also used on
+          the member-portal QH detail page. */}
       {!inApproval && installments.length > 0 && (
-        <Card size="small" title={<span><LineChartOutlined /> Repayment trajectory</span>}
-          style={{ marginBlockEnd: 16, border: '1px solid var(--jm-border)' }}
-          extra={<span style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>Cumulative scheduled vs paid</span>}>
-          {repaymentTrend.length === 0 ? <Empty description="No installments yet" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={repaymentTrend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="#E5E9EF" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748B' }} interval="preserveStartEnd" axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} width={80} />
-                <RTooltip formatter={(v: number) => money(v, loan.currency)}
-                  labelFormatter={(_l, p) => p[0]?.payload?.date ? dayjs(p[0].payload.date).format('DD MMM YYYY') : ''}
-                  contentStyle={{ fontSize: 12, borderRadius: 6, border: '1px solid var(--jm-border)' }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} iconSize={10} />
-                <Line type="monotone" dataKey="scheduled" name="Scheduled" stroke="#94A3B8" strokeWidth={2} dot={{ r: 2 }} strokeDasharray="6 3" />
-                <Line type="monotone" dataKey="paid" name="Paid" stroke="#0E5C40" strokeWidth={2} dot={{ r: 2 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
+        <QhRepaymentChart installments={installments} currency={loan.currency} />
       )}
 
       <Card title="Installments" size="small" style={{ marginBlockEnd: 16, border: '1px solid var(--jm-border)' }}>
