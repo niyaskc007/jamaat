@@ -155,6 +155,7 @@ export type PortalCommitmentDetail = {
     hasAcceptedAgreement: boolean;
     agreementAcceptedAtUtc: string | null;
     agreementAcceptedByName: string | null;
+    createdAtUtc?: string | null;
   };
   installments: CommitmentInstallment[];
   agreementText: string | null;
@@ -255,6 +256,26 @@ export type CommitmentPaymentRow = {
   confirmedAtUtc: string | null; confirmedByUserId: string | null; confirmedByUserName: string | null;
 };
 
+/// Read-only mirror of the operator's PostDatedCheque shape - the portal lists cheques
+/// but cannot add / clear / bounce them, so we don't import the operator type.
+export type CommitmentChequeRow = {
+  id: string;
+  chequeNumber: string; chequeDate: string; drawnOnBank: string;
+  amount: number; currency: string;
+  status: number;             // 1=Pledged, 2=Deposited, 3=Cleared, 4=Bounced, 5=Cancelled
+  installmentNo: number | null;
+  installmentDueDate: string | null;
+  depositedOn: string | null;
+  clearedOn: string | null;
+  clearedReceiptId: string | null;
+  clearedReceiptNumber: string | null;
+  bouncedOn: string | null;
+  bounceReason: string | null;
+  cancelledOn: string | null;
+  cancellationReason: string | null;
+  notes: string | null;
+};
+
 export type QhGuarantorConsent = {
   id: string;
   guarantorMemberId: string; guarantorName: string; guarantorItsNumber: string;
@@ -331,6 +352,8 @@ export const portalMeApi = {
     ).then((r) => r.data),
   commitmentPayments: (id: string) =>
     api.get<Array<CommitmentPaymentRow>>(`/api/v1/portal/me/commitments/${id}/payments`).then((r) => r.data),
+  commitmentCheques: (id: string) =>
+    api.get<Array<CommitmentChequeRow>>(`/api/v1/portal/me/commitments/${id}/cheques`).then((r) => r.data),
   qhGuarantorConsents: (id: string) =>
     api.get<Array<QhGuarantorConsent>>(`/api/v1/portal/me/qarzan-hasana/${id}/guarantor-consents`).then((r) => r.data),
   qhPayments: (id: string) =>

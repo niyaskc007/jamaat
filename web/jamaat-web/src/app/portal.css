@@ -293,6 +293,9 @@
   font-size: 10px; color: var(--jm-gray-500); margin-block-start: 6px;
 }
 
+/* Cheque bounce reason - red, italic, sits under the status pill. */
+.jm-portal-cheque-bounce { color: var(--jm-danger, #DC2626); font-style: italic; }
+
 /* QH repayment trajectory chart (admin + portal both render it). */
 .jm-qh-trend-card { margin-block-end: var(--jm-space-4); }
 .jm-qh-trend-extra { font-size: 11px; color: var(--jm-gray-500); }
@@ -662,25 +665,68 @@
 .jm-portal-donut-dot--paid { background: var(--jm-success-fg-strong, #16a34a); }
 .jm-portal-donut-dot--out  { background: var(--jm-warning, #f59e0b); }
 
-/* Workflow stepper card wrapping AntD Steps - nice background + spacing. */
+/* Workflow stepper card wrapping AntD Steps - prominent header row, completion stamps
+   under each step, and a "what's next" footer with a clock icon. */
 .jm-portal-stepper-card {
   margin-block-end: var(--jm-space-4);
-  padding: var(--jm-space-4) var(--jm-space-5) var(--jm-space-3);
-  background: var(--jm-surface);
+  padding: var(--jm-space-4) var(--jm-space-5);
+  background: linear-gradient(135deg, #FAFCFA 0%, #F5F8F5 100%);
   border: 1px solid var(--jm-border);
   border-radius: var(--jm-radius-lg);
   box-shadow: var(--jm-shadow-1);
 }
-.jm-portal-stepper-title {
-  font-size: 13px; font-weight: 500; color: var(--jm-gray-600);
+.jm-portal-stepper-head {
+  display: flex; align-items: center; justify-content: space-between;
   margin-block-end: var(--jm-space-3);
-  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.jm-portal-stepper-title {
+  font-size: 12px; font-weight: 600; color: var(--jm-gray-600);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.jm-portal-stepper-status {
+  margin: 0;
+  background: var(--jm-primary-50, #ECFDF5); color: var(--jm-primary-500);
+  border: 1px solid var(--jm-primary-200, #A7F3D0);
+  font-size: 11px; font-weight: 600;
+  padding: 2px 10px; border-radius: 999px;
+}
+.jm-portal-stepper-step-title {
+  font-weight: 600; color: var(--jm-gray-900);
+}
+.jm-portal-stepper-step-desc {
+  font-size: 12px; color: var(--jm-gray-500);
+  display: block;
+}
+.jm-portal-stepper-step-completed {
+  display: inline-flex; gap: 4px; align-items: center;
+  margin-block-start: 2px;
+  font-size: 11px; color: #0E5C40; font-weight: 500;
 }
 .jm-portal-stepper-note {
+  display: flex; align-items: flex-start; gap: 8px;
   font-size: 13px; color: var(--jm-gray-700);
-  margin-block-start: var(--jm-space-3);
-  padding-block-start: var(--jm-space-3);
-  border-block-start: 1px dashed var(--jm-border);
+  margin-block-start: var(--jm-space-4);
+  padding: var(--jm-space-3); border-radius: var(--jm-radius-md, 8px);
+  background: var(--jm-info-bg-soft, rgba(37, 99, 235, 0.06));
+  border: 1px dashed rgba(37, 99, 235, 0.2);
+}
+.jm-portal-stepper-note > .anticon {
+  color: #2563EB; margin-block-start: 2px; flex-shrink: 0;
+}
+
+/* Stepper visual upgrade: AntD's default is functional but flat. Bump the icon size and
+   give finished steps a green ring + tick animation. */
+.jm-portal-stepper-card :where(.ant-steps-item-icon) {
+  inline-size: 36px; block-size: 36px; line-height: 36px;
+  font-size: 16px;
+}
+.jm-portal-stepper-card :where(.ant-steps-item-finish) :where(.ant-steps-item-icon) {
+  background: #ECFDF5; border-color: #10B981;
+}
+.jm-portal-stepper-card :where(.ant-steps-item-finish) :where(.ant-steps-icon) { color: #10B981; }
+.jm-portal-stepper-card :where(.ant-steps-item-process) :where(.ant-steps-item-icon) {
+  background: var(--jm-primary-500); border-color: var(--jm-primary-500);
+  box-shadow: 0 0 0 4px rgba(11, 110, 99, 0.12);
 }
 
 /* ----- Change-password page ---------------------------------------- */

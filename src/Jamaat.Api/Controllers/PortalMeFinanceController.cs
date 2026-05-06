@@ -141,6 +141,25 @@ public sealed class PortalMeFinanceController(
         return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }
 
+    /// Post-dated cheques pledged against this commitment. Member-scoped + read-only -
+    /// the portal can't add / clear / bounce / cancel cheques (those are operator
+    /// actions on the cashier's workbench). Reuses the operator service to keep the
+    /// shape identical to /api/v1/post-dated-cheques/commitment/{id}.
+    [HttpGet("commitments/{id:guid}/cheques")]
+    public async Task<IActionResult> CommitmentCheques(
+        Guid id,
+        [FromServices] Application.PostDatedCheques.IPostDatedChequeService pdcSvc,
+        CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return NotFound();
+        var owns = await db.Commitments.AsNoTracking()
+            .AnyAsync(c => c.Id == id && c.MemberId == memberId.Value, ct);
+        if (!owns) return NotFound();
+        var rows = await pdcSvc.ListByCommitmentAsync(id, ct);
+        return Ok(rows);
+    }
+
     /// Render the agreement text for a Draft commitment WITHOUT accepting it. The portal
     /// shows this text in a modal so the member can read what they're agreeing to before
     /// they click Accept. Same template-resolution path as <see cref="CommitmentAcceptAgreement"/>.

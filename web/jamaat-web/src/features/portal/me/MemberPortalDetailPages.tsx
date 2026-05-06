@@ -180,8 +180,11 @@ export function MemberCommitmentDetailPage() {
         backTo="/portal/me/commitments" />
 
       {/* Workflow stepper - one component shows the whole journey + the current stage.
-          The Accept-agreement CTA below appears only when the member can act. */}
-      <WorkflowStepper title="Commitment workflow" {...commitmentWorkflow(c.status, c.hasAcceptedAgreement)} />
+          The Accept-agreement CTA below appears only when the member can act. Audit
+          timestamps light up the completed-at line under each step. */}
+      <WorkflowStepper title="Commitment workflow"
+        {...commitmentWorkflow(c.status, c.hasAcceptedAgreement,
+          { agreementAcceptedAtUtc: c.agreementAcceptedAtUtc, createdAtUtc: c.createdAtUtc })} />
       {c.status === 1 /* Draft */ && (
         <Alert type="warning" showIcon className="jm-portal-dashboard-alert"
           message="Action required: review and accept the agreement to activate."
@@ -303,6 +306,10 @@ export function MemberCommitmentDetailPage() {
             children: <CommitmentPaymentsTab commitmentId={id} currency={c.currency} />,
           },
           {
+            key: 'cheques', label: 'Cheques',
+            children: <CommitmentChequesTab commitmentId={id} />,
+          },
+          {
             key: 'agreement', label: 'Agreement',
             children: c.hasAcceptedAgreement || c.status === 1
               ? <CommitmentAgreementTab commitmentId={id} acceptedAtUtc={c.agreementAcceptedAtUtc} acceptedByName={c.agreementAcceptedByName} />
@@ -311,6 +318,63 @@ export function MemberCommitmentDetailPage() {
         ]} />
       </Card>
     </div>
+  );
+}
+
+const PDC_STATUS: Record<number, { label: string; tone: 'default' | 'info' | 'success' | 'warning' | 'danger' }> = {
+  1: { label: 'Pledged',   tone: 'warning' },
+  2: { label: 'Deposited', tone: 'info'    },
+  3: { label: 'Cleared',   tone: 'success' },
+  4: { label: 'Bounced',   tone: 'danger'  },
+  5: { label: 'Cancelled', tone: 'default' },
+};
+
+function CommitmentChequesTab({ commitmentId }: { commitmentId: string }) {
+  const q = useQuery({
+    queryKey: ['portal-me-commitment-cheques', commitmentId],
+    queryFn: () => portalMeApi.commitmentCheques(commitmentId),
+    enabled: !!commitmentId,
+  });
+  if (q.isLoading) return <Skeleton active />;
+  const rows = q.data ?? [];
+  return (
+    <>
+      <Alert type="info" showIcon className="jm-portal-dashboard-alert"
+        message="Post-dated cheques you've handed over for this commitment."
+        description="Pledged + Deposited cheques don't reduce your balance until they actually clear at the bank. Once cleared, a receipt is issued and the linked instalment moves to Paid." />
+      <Table
+        rowKey="id" dataSource={rows} pagination={{ pageSize: 25 }} size="small"
+        locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={<div className="jm-portal-list-empty">
+            <div className="jm-portal-list-empty-title">No cheques on file</div>
+            <div className="jm-portal-list-empty-sub">Post-dated cheques you hand over at the counter will appear here.</div>
+          </div>} /> }}
+        columns={[
+          { title: 'Cheque #', dataIndex: 'chequeNumber', width: 140,
+            render: (v: string) => <span className="jm-portal-mono-link">{v}</span> },
+          { title: 'Cheque date', dataIndex: 'chequeDate', width: 130, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
+          { title: 'Drawn on', dataIndex: 'drawnOnBank' },
+          { title: 'For instalment', key: 'inst', width: 160,
+            render: (_, r) => r.installmentNo
+              ? <span><span className="jm-tnum">#{r.installmentNo}</span>{r.installmentDueDate && <span className="jm-portal-cell-meta"> {dayjs(r.installmentDueDate).format('DD MMM YYYY')}</span>}</span>
+              : <span className="jm-muted">—</span> },
+          { title: 'Amount', dataIndex: 'amount', align: 'end', width: 140,
+            render: (v: number, r) => <span className="jm-tnum jm-num-strong">{v.toLocaleString()} {r.currency}</span> },
+          { title: 'Status', dataIndex: 'status', width: 200,
+            render: (s: number, r) => {
+              const m = PDC_STATUS[s] ?? { label: String(s), tone: 'default' as const };
+              return (
+                <Space direction="vertical" size={0}>
+                  <Tag className="jm-portal-status" data-tone={m.tone}>{m.label}</Tag>
+                  {s === 3 && r.clearedOn && <span className="jm-portal-cell-meta">cleared {dayjs(r.clearedOn).format('DD MMM YYYY')}{r.clearedReceiptNumber ? ` · ${r.clearedReceiptNumber}` : ''}</span>}
+                  {s === 4 && r.bounceReason && <span className="jm-portal-cell-meta jm-portal-cheque-bounce">{r.bounceReason}</span>}
+                  {s === 2 && r.depositedOn && <span className="jm-portal-cell-meta">deposited {dayjs(r.depositedOn).format('DD MMM YYYY')}</span>}
+                </Space>
+              );
+            } },
+        ]}
+      />
+    </>
   );
 }
 
@@ -433,8 +497,10 @@ export function MemberQhDetailPage() {
 
       {/* Workflow stepper: one component shows the journey, the current stage, and a
           member-friendly note. Terminal states (rejected/cancelled/defaulted) replace the
-          stepper with a status Alert. */}
-      <WorkflowStepper title="Loan workflow" {...qhWorkflow(l.status, l.rejectionReason)} />
+          stepper with a status Alert. Audit timestamps surface under each milestone. */}
+      <WorkflowStepper title="Loan workflow"
+        {...qhWorkflow(l.status, l.rejectionReason,
+          { level1ApprovedAtUtc: l.level1ApprovedAtUtc, level2ApprovedAtUtc: l.level2ApprovedAtUtc, disbursedOn: l.disbursedOn })} />
 
       {/* Two-column header: comprehensive Descriptions + Progress side-card. */}
       <Row gutter={[16, 16]}>
