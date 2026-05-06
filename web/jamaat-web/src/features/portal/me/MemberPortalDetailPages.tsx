@@ -22,22 +22,24 @@ import { PageHeader } from '../../../shared/ui/PageHeader';
 import ReactMarkdown from 'react-markdown';
 
 // --- Shared header --------------------------------------------------------
-
-function DetailHeader({ icon, title, backTo, children }: {
-  icon: React.ReactNode; title: string; backTo: string; children?: React.ReactNode;
+// Detail pages reuse the operator-portal <PageHeader> so the title typography, action-bar
+// alignment and subtitle treatment match exactly. The only portal-specific addition is the
+// "← Back" button rendered in the actions slot - the admin pages don't need it because they
+// drill in via tabs / dashboard widgets, but a member arriving at a deep-link benefits from
+// an explicit way back to the list.
+function DetailHeader({ title, subtitle, backTo, actions }: {
+  title: string; subtitle?: string; backTo: string; actions?: React.ReactNode;
 }) {
   return (
-    <div className="jm-section-head">
-      <Space size={8}>
-        <Link to={backTo} className="jm-portal-back-link">
-          <Button type="text" icon={<ArrowLeftOutlined />} size="small" />
-        </Link>
-        <Typography.Title level={4} className="jm-section-title">
-          {icon} {title}
-        </Typography.Title>
-      </Space>
-      {children}
-    </div>
+    <PageHeader title={title} subtitle={subtitle}
+      actions={
+        <Space size={8}>
+          <Link to={backTo}>
+            <Button icon={<ArrowLeftOutlined />}>Back</Button>
+          </Link>
+          {actions}
+        </Space>
+      } />
   );
 }
 
@@ -78,11 +80,14 @@ export function MemberContributionDetailPage() {
 
   return (
     <div>
-      <DetailHeader icon={<GiftOutlined />} title={`Receipt ${r.receiptNumber ?? '(pending)'}`} backTo="/portal/me/contributions">
-        <Button type="primary" icon={<DownloadOutlined />} loading={downloading} onClick={downloadPdf}>
-          Download duplicate copy
-        </Button>
-      </DetailHeader>
+      <DetailHeader title={`Receipt ${r.receiptNumber ?? '(pending)'}`}
+        subtitle={`${dayjs(r.receiptDate).format('DD MMM YYYY')} · ${r.amountTotal.toLocaleString()} ${r.currency} · ${PAYMENT_MODE[r.paymentMode] ?? r.paymentMode}`}
+        backTo="/portal/me/contributions"
+        actions={
+          <Button type="primary" icon={<DownloadOutlined />} loading={downloading} onClick={downloadPdf}>
+            Download duplicate copy
+          </Button>
+        } />
 
       <Card className="jm-card">
         <Descriptions column={{ xs: 1, sm: 2, md: 2 }} size="small">
@@ -168,7 +173,9 @@ export function MemberCommitmentDetailPage() {
 
   return (
     <div>
-      <DetailHeader icon={<HeartOutlined />} title={`Commitment ${c.code}`} backTo="/portal/me/commitments" />
+      <DetailHeader title={`Commitment ${c.code}`}
+        subtitle={`${c.fundTypeName} · ${c.totalAmount.toLocaleString()} ${c.currency} over ${c.numberOfInstallments} ${COMMIT_FREQUENCY[c.frequency] ?? ''} instalments`}
+        backTo="/portal/me/commitments" />
 
       {/* Workflow stepper - one component shows the whole journey + the current stage.
           The Accept-agreement CTA below appears only when the member can act. */}
@@ -426,7 +433,9 @@ export function MemberQhDetailPage() {
 
   return (
     <div>
-      <DetailHeader icon={<BankOutlined />} title={`Qarzan Hasana ${l.code}`} backTo="/portal/me/qarzan-hasana" />
+      <DetailHeader title={`Qarzan Hasana ${l.code}`}
+        subtitle={`${QH_SCHEME_LABEL[l.scheme] ?? 'Loan'} · ${l.amountRequested.toLocaleString()} ${l.currency} requested${l.amountApproved > 0 ? ` · ${l.amountApproved.toLocaleString()} ${l.currency} approved` : ''}`}
+        backTo="/portal/me/qarzan-hasana" />
 
       {/* Workflow stepper: one component shows the journey, the current stage, and a
           member-friendly note. Terminal states (rejected/cancelled/defaulted) replace the
@@ -724,7 +733,9 @@ export function MemberPatronageDetailPage() {
 
   return (
     <div>
-      <DetailHeader icon={<GiftOutlined />} title={`Patronage ${e.code}`} backTo="/portal/me/fund-enrollments" />
+      <DetailHeader title={`Patronage ${e.code}`}
+        subtitle={`${e.fundTypeName}${e.subType ? ` · ${e.subType}` : ''} · ${FE_RECURRENCE[e.recurrence] ?? 'Recurring'}`}
+        backTo="/portal/me/fund-enrollments" />
       <WorkflowStepper title="Patronage workflow" {...patronageWorkflow(e.status)} />
 
       <Row gutter={[16, 16]}>
