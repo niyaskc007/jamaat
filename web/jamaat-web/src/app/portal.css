@@ -934,3 +934,187 @@
 /* Used inside Alert descriptions where the default <ul> margin-bottom adds an extra
    gap below the Alert. The "Notes" alert at the bottom of Portal access uses this. */
 .jm-bullets-tight { margin-block-end: 0; }
+
+/* =============================================================================
+   Member portal — mobile responsive layer.
+
+   The portal originally shipped with one media query (the hero card at 640px).
+   Everything else assumed >= 1280px desktop and broke on phones - the 232px
+   sidebar ate 60% of a 375px viewport, tables overflowed without scrollbars,
+   KPI cards didn't stack, the stepper truncated, forms put fields side-by-side
+   off-screen, and the install-PWA card collided with the Outlet.
+
+   This block adds the missing breakpoints in one place so individual page
+   components don't need their own inline media queries (RULES.md §10).
+   Breakpoints: < 992px = "tablet/phone", < 640px = "phone".
+   ========================================================================= */
+
+/* The sider becomes an overlay at < lg (992px) - JS toggles `--mobile`
+   on the shell, and the sider gets `position: fixed` so it slides over the
+   content instead of pushing it sideways. Backdrop traps the next tap. */
+.jm-portal-shell--mobile .jm-portal-sider--overlay {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  block-size: 100dvh;
+  z-index: 1100;
+  box-shadow: 2px 0 24px rgba(0, 0, 0, 0.25);
+}
+.jm-portal-sider-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1099;
+  /* Tap-to-close target. */
+  cursor: pointer;
+}
+.jm-portal-header-hamburger {
+  margin-inline-end: 4px;
+  font-size: 18px;
+}
+
+@media (max-width: 992px) {
+  /* Header tightens up so the brand label + avatar + hamburger fit on a phone. */
+  .jm-portal-header {
+    padding-inline: 12px !important;
+    block-size: 56px !important;
+    line-height: 56px !important;
+    gap: 8px;
+  }
+  .jm-portal-header-label { display: none; }
+  .jm-portal-header-trigger { padding-inline: 6px !important; }
+  /* Drop the descriptive "Member" line under the avatar to reclaim header
+     real estate; the avatar itself is enough to identify the dropdown. */
+  .jm-portal-user-block { display: none; }
+
+  /* Content padding shrinks so on a 360px phone there's room for the page,
+     not just the gutters. */
+  .jm-portal-content {
+    padding: 12px !important;
+  }
+
+  /* Hero greeting card stacks - the big greeting + meta + CTA used to sit on
+     one row and clipped on mobile. */
+  .jm-portal-hero {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    padding: 16px !important;
+  }
+  .jm-portal-hero-cta {
+    flex-wrap: wrap;
+    inline-size: 100%;
+  }
+  .jm-portal-hero-cta > * { flex: 1 1 auto; }
+
+  /* KPI / quick-stat cards: each card on its own row instead of 4-up. */
+  .jm-portal-kpi-grid,
+  .jm-portal-quickstats {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Workflow stepper - on mobile force AntD's vertical layout because the
+     horizontal one truncates step titles + descriptions and the icons collide. */
+  .jm-portal-stepper-card .ant-steps-horizontal {
+    flex-direction: column !important;
+  }
+  .jm-portal-stepper-card .ant-steps-horizontal .ant-steps-item {
+    padding-inline-start: 0 !important;
+  }
+  .jm-portal-stepper-step-completed {
+    display: block;
+    margin-block-start: 4px;
+  }
+
+  /* Tabs on detail pages - the AntD Tabs nav can horizontal-scroll, which is
+     fine, but make sure the wrapper itself doesn't clip the indicator. */
+  .ant-tabs-nav-wrap { overflow-x: auto; }
+
+  /* Cards: tighter inner padding on phones. The default 24px eats screen. */
+  .jm-card .ant-card-body {
+    padding: 16px !important;
+  }
+  .jm-card .ant-card-head {
+    padding-inline: 16px !important;
+  }
+
+  /* Tables: any AntD Table inside the portal wraps in a horizontal scroller
+     instead of overflowing the parent and breaking the layout. The Table's
+     own `scroll={{ x: 'max-content' }}` prop handles the inner scroll - this
+     is the safety net for any table that hasn't been wired up yet. */
+  .jm-portal-content .ant-table-wrapper {
+    overflow-x: auto;
+  }
+
+  /* Forms: every Form.Item spans full width and labels stay on top, even when
+     the desktop layout had two columns. Avoids label-text overlapping the
+     adjacent input. */
+  .jm-portal-content .ant-form-item .ant-form-item-control { inline-size: 100%; }
+  .jm-portal-content .ant-form-horizontal .ant-form-item-label {
+    text-align: start !important;
+  }
+
+  /* Sticky-footer form footer (NewQarzanHasanaPage etc.) becomes a vertical
+     stack so the summary chip doesn't push the submit button off-screen. */
+  .jm-form-sticky-footer {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    padding-inline: 12px !important;
+  }
+  .jm-form-sticky-footer-summary {
+    inline-size: 100%;
+    order: -1;
+  }
+
+  /* Recharts containers shrink to the available width and never overflow. */
+  .jm-portal-content .recharts-responsive-container { inline-size: 100% !important; }
+
+  /* PWA install card on phones: full-width along the bottom edge, leaving room
+     for browser chrome / iOS bottom safe-area. */
+  .jm-pwa-install-card {
+    inset-inline: 12px !important;
+    inset-block-end: max(12px, env(safe-area-inset-bottom, 12px)) !important;
+    max-inline-size: none !important;
+  }
+}
+
+/* Base styling for the PWA install prompt (desktop default). The mobile overrides
+   above just relax the bottom-right pinning to a full-width banner. */
+.jm-pwa-install-card {
+  position: fixed;
+  inset-block-end: 16px;
+  inset-inline-end: 16px;
+  z-index: 1000;
+  max-inline-size: 360px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.jm-pwa-install-row { inline-size: 100%; }
+.jm-pwa-install-icon { font-size: 18px; color: var(--jm-primary-500); }
+.jm-pwa-install-body { flex: 1; }
+.jm-pwa-install-copy {
+  font-size: 12px;
+  color: var(--jm-gray-500);
+  margin-block-start: 4px;
+}
+.jm-pwa-install-share-icon { margin-inline: 2px; }
+.jm-pwa-install-actions { margin-block-start: 8px; }
+
+@media (max-width: 640px) {
+  .jm-portal-content { padding: 8px !important; }
+  .jm-portal-hero-greeting { font-size: 18px !important; }
+  .jm-portal-stepper-title { font-size: 14px; }
+
+  /* AntD Descriptions inside the portal collapses to a single column so the
+     label/value pairs don't end up sharing a row at < 640px (where the labels
+     get squashed to two characters wide). */
+  .jm-portal-content .ant-descriptions-row > th,
+  .jm-portal-content .ant-descriptions-row > td {
+    display: block !important;
+    padding-inline: 0 !important;
+  }
+
+  /* PageHeader extra actions wrap below the title instead of forcing the
+     title to ellipsize aggressively. */
+  .jm-page-header { flex-direction: column !important; align-items: flex-start !important; }
+  .jm-page-header-extra { inline-size: 100%; flex-wrap: wrap; }
+}
+

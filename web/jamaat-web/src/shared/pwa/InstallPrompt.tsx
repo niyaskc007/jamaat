@@ -64,28 +64,22 @@ export function InstallPrompt() {
   };
 
   return (
-    <Card
-      size="small"
-      style={{
-        position: 'fixed', insetBlockEnd: 16, insetInlineEnd: 16, zIndex: 1000,
-        maxInlineSize: 360, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-      }}
-    >
-      <Space align="start" style={{ inlineSize: '100%' }}>
-        <DownloadOutlined style={{ fontSize: 18, color: 'var(--jm-primary-500)' }} />
-        <div style={{ flex: 1 }}>
+    <Card size="small" className="jm-pwa-install-card">
+      <Space align="start" className="jm-pwa-install-row">
+        <DownloadOutlined className="jm-pwa-install-icon" />
+        <div className="jm-pwa-install-body">
           <Typography.Text strong>Install Jamaat as an app</Typography.Text>
-          <div style={{ fontSize: 12, color: 'var(--jm-gray-500)', marginBlockStart: 4 }}>
+          <div className="jm-pwa-install-copy">
             {deferred
               ? 'Adds an icon to your home screen and lets the portal open like a native app.'
               : (
                 <>
-                  In Safari, tap <ShareAltOutlined style={{ marginInline: 2 }} /> Share, then
+                  In Safari, tap <ShareAltOutlined className="jm-pwa-install-share-icon" /> Share, then
                   &quot;Add to Home Screen&quot; to install Jamaat as an app.
                 </>
               )}
           </div>
-          <Space style={{ marginBlockStart: 8 }}>
+          <Space className="jm-pwa-install-actions">
             {deferred && <Button type="primary" size="small" onClick={onInstall}>Install</Button>}
             <Button type="text" size="small" icon={<CloseOutlined />} onClick={onDismiss}>
               {deferred ? 'Not now' : 'Got it'}

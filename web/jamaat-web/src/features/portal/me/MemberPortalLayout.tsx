@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Layout, Menu, Avatar, Space, Typography, Dropdown, Button } from 'antd';
+import { Layout, Menu, Avatar, Space, Typography, Dropdown, Button, Grid } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   HomeOutlined, UserOutlined, GiftOutlined, HeartOutlined, BankOutlined,
   TeamOutlined, CalendarOutlined, HistoryOutlined, LockOutlined, LogoutOutlined,
-  AppstoreOutlined, ProfileOutlined,
+  AppstoreOutlined, ProfileOutlined, MenuOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +21,12 @@ import { UpdateToast } from '../../../shared/pwa/UpdateToast';
 export function MemberPortalLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
+  // Below the `lg` breakpoint (992px) the sidebar collapses to width 0 and
+  // overlays the content as a slide-in drawer when toggled - so on a phone the
+  // member sees full-width content by default and can tap the hamburger to nav.
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.lg;
+  const [collapsed, setCollapsed] = useState(true);
   const user = authStore.getUser();
   const { t } = useTranslation('portal');
 
@@ -76,13 +81,18 @@ export function MemberPortalLayout() {
   };
 
   return (
-    <Layout className="jm-portal-shell">
+    <Layout className={`jm-portal-shell ${isMobile ? 'jm-portal-shell--mobile' : ''}`}>
       <Layout.Sider
-        collapsible collapsed={collapsed} onCollapse={setCollapsed}
+        collapsible
+        collapsed={isMobile ? collapsed : false}
+        onCollapse={setCollapsed}
+        breakpoint="lg"
+        collapsedWidth={isMobile ? 0 : 80}
+        trigger={null}
         theme="dark" width={232}
-        className="jm-portal-sider"
+        className={`jm-portal-sider ${isMobile ? 'jm-portal-sider--overlay' : ''}`}
       >
-        <div className={`jm-portal-sider-brand ${collapsed ? 'jm-portal-sider-brand--collapsed' : ''}`}>
+        <div className={`jm-portal-sider-brand ${(isMobile && collapsed) ? 'jm-portal-sider-brand--collapsed' : ''}`}>
           <Logo size={28} variant="light" />
         </div>
         <Menu
@@ -91,12 +101,31 @@ export function MemberPortalLayout() {
           defaultOpenKeys={['activity', 'engagement', 'account']}
           selectedKeys={[matchKey(flatKeys, location.pathname)]}
           items={items}
-          onClick={({ key }) => { if (key.startsWith('/')) navigate(key); }}
+          onClick={({ key }) => {
+            if (key.startsWith('/')) {
+              navigate(key);
+              if (isMobile) setCollapsed(true); // close drawer after picking a destination
+            }
+          }}
         />
       </Layout.Sider>
 
+      {/* Backdrop tap-to-close when the drawer is open on mobile */}
+      {isMobile && !collapsed && (
+        <div className="jm-portal-sider-backdrop" onClick={() => setCollapsed(true)} />
+      )}
+
       <Layout>
         <Layout.Header className="jm-portal-header">
+          {isMobile && (
+            <Button
+              type="text"
+              icon={<MenuOutlined />}
+              className="jm-portal-header-hamburger"
+              aria-label="Open navigation menu"
+              onClick={() => setCollapsed((c) => !c)}
+            />
+          )}
           <Typography.Text type="secondary" className="jm-portal-header-label">
             {t('shell.label')}
           </Typography.Text>

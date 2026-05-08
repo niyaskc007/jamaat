@@ -95,6 +95,7 @@ export function MemberContributionsPage() {
         </div>
         <Table<ContributionRow>
           rowKey="id" size="middle" loading={q.isLoading} dataSource={rows}
+          scroll={{ x: 'max-content' }}
           pagination={{ pageSize: 20, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
           locale={{ emptyText: <ListEmpty title="No contributions on record" sub="Receipts issued in your name will appear here." /> }}
           onRow={(r) => ({ onClick: () => { window.location.href = `/portal/me/contributions/${r.id}`; } })}
@@ -171,6 +172,7 @@ export function MemberCommitmentsPage() {
         </div>
         <Table<CommitmentRow>
           rowKey="id" size="middle" loading={q.isLoading} dataSource={rows}
+          scroll={{ x: 'max-content' }}
           pagination={{ pageSize: 20, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
           locale={{ emptyText: <ListEmpty title="No commitments yet" sub="Use the New commitment button to make a pledge." /> }}
           onRow={(r) => ({ onClick: () => { window.location.href = `/portal/me/commitments/${r.id}`; } })}
@@ -249,6 +251,7 @@ export function MemberQhPage() {
         </div>
         <Table<QhLoanRow>
           rowKey="id" size="middle" loading={q.isLoading} dataSource={rows}
+          scroll={{ x: 'max-content' }}
           pagination={{ pageSize: 20, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
           locale={{ emptyText: <ListEmpty title="No QH applications yet" sub="Use the Request a loan button to start one." /> }}
           onRow={(r) => ({ onClick: () => { window.location.href = `/portal/me/qarzan-hasana/${r.id}`; } })}
@@ -412,6 +415,7 @@ export function MemberGuarantorInboxPage() {
                 <PortalListCard>
                   <Table<GuarantorInboxRow>
                     rowKey="id" dataSource={past} pagination={{ pageSize: 20 }} size="middle"
+                    scroll={{ x: 'max-content' }}
                     columns={[
                       { title: 'Requested', dataIndex: 'requestedAtUtc', width: 200, render: (v: string) => dayjs(v).format('DD MMM YYYY HH:mm') },
                       { title: 'Borrower', key: 'b', render: (_, r) => `${r.loan.borrowerName} · ${r.loan.borrowerItsNumber}` },
@@ -520,6 +524,7 @@ export function MemberEventsPage() {
         </div>
         <Table<EventRegistrationRow>
           rowKey="id" size="middle" loading={q.isLoading} dataSource={rows}
+          scroll={{ x: 'max-content' }}
           pagination={{ pageSize: 20, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
           locale={{ emptyText: <ListEmpty title="No event registrations yet" sub="Use Browse upcoming events to register." /> }}
           columns={[

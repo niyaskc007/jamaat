@@ -15,6 +15,15 @@ import './index.css';
 
 // Global runtime handlers → push to backend error log
 import { clientErrorReporter } from './shared/api/client';
+import { initServiceWorker } from './shared/pwa/registerSw';
+
+// Register the PWA service worker as early as possible. Doing this from the layout
+// component (UpdateToast) meant the SW didn't register until after login + portal
+// navigation, which prevented the browser's install criteria from being met on a
+// member's first visit so `beforeinstallprompt` never fired. Registering here at
+// boot lets Chrome/Edge surface the install prompt as soon as the member lands on
+// /portal/me, and lets the precache start downloading on the login screen too.
+initServiceWorker();
 
 window.addEventListener('error', (e) => {
   void clientErrorReporter.report({

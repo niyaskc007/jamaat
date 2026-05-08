@@ -116,6 +116,7 @@ export function MemberContributionDetailPage() {
       <Card className="jm-card jm-portal-section-spaced" title="Lines" styles={{ body: { padding: 0 } }}>
         <Table
           rowKey="id" dataSource={r.lines} pagination={false} size="small"
+          scroll={{ x: 'max-content' }}
           columns={[
             { title: '#', dataIndex: 'lineNo', width: 60 },
             { title: 'Fund', dataIndex: 'fundTypeName',
@@ -283,6 +284,7 @@ export function MemberCommitmentDetailPage() {
             children: (
               <Table
                 rowKey="id" dataSource={d.installments} pagination={false} size="small"
+                scroll={{ x: 'max-content' }}
                 locale={{ emptyText: <Empty description="No instalments." /> }}
                 columns={[
                   { title: '#', dataIndex: 'installmentNo', width: 60 },
@@ -352,6 +354,7 @@ function CommitmentChequesTab({ commitmentId }: { commitmentId: string }) {
         description="Pledged + Deposited cheques don't reduce your balance until they actually clear at the bank. Once cleared, a receipt is issued and the linked instalment moves to Paid." />
       <Table
         rowKey="id" dataSource={rows} pagination={{ pageSize: 25 }} size="small"
+        scroll={{ x: 'max-content' }}
         locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={<div className="jm-portal-list-empty">
             <div className="jm-portal-list-empty-title">No cheques on file</div>
@@ -403,6 +406,7 @@ function CommitmentPaymentsTab({ commitmentId, currency }: { commitmentId: strin
   return (
     <Table
       rowKey="receiptId" dataSource={rows} pagination={{ pageSize: 25 }} size="small"
+      scroll={{ x: 'max-content' }}
       locale={{ emptyText: <Empty description="No payments recorded against this commitment yet." /> }}
       columns={[
         { title: 'Date', dataIndex: 'receiptDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
@@ -599,6 +603,7 @@ export function MemberQhDetailPage() {
             children: (
               <Table
                 rowKey="id" dataSource={d.installments} pagination={false} size="small"
+                scroll={{ x: 'max-content' }}
                 locale={{ emptyText: <Empty description="No instalments scheduled yet." /> }}
                 columns={[
                   { title: '#', dataIndex: 'installmentNo', width: 60 },
@@ -671,6 +676,7 @@ function QhGuarantorsTab({ loanId, fallbackG1Name, fallbackG2Name }: {
   return (
     <Table
       rowKey="id" dataSource={rows} pagination={false} size="small"
+      scroll={{ x: 'max-content' }}
       columns={[
         { title: 'Guarantor', key: 'who',
           render: (_, r) => <Space><TeamOutlined /><strong>{r.guarantorName}</strong> <span className="jm-tnum jm-muted">{r.guarantorItsNumber}</span></Space> },
@@ -699,6 +705,7 @@ function QhPaymentsTab({ loanId, currency }: { loanId: string; currency: string 
   return (
     <Table
       rowKey="id" dataSource={rows} pagination={{ pageSize: 25 }} size="small"
+      scroll={{ x: 'max-content' }}
       locale={{ emptyText: <Empty description="No repayments recorded against this loan yet." /> }}
       columns={[
         { title: 'Date', dataIndex: 'receiptDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
@@ -779,6 +786,7 @@ export function MemberPatronagesPage() {
         </div>
         <Table<FundEnrollmentRow>
           rowKey="id" size="middle" loading={q.isLoading} dataSource={rows}
+          scroll={{ x: 'max-content' }}
           pagination={{ pageSize: 20, showTotal: (t, [f, to]) => `${f}–${to} of ${t}` }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={<div className="jm-portal-list-empty">
@@ -855,6 +863,7 @@ export function MemberPatronageDetailPage() {
       <Card className="jm-card jm-portal-section-spaced" title="Contributing receipts" styles={{ body: { padding: 0 } }}>
         <Table
           rowKey="receiptId" dataSource={d.receipts} pagination={{ pageSize: 20 }} size="small"
+          scroll={{ x: 'max-content' }}
           locale={{ emptyText: <Empty description="No receipts have contributed yet." /> }}
           columns={[
             { title: 'Date', dataIndex: 'receiptDate', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
