@@ -98,6 +98,13 @@ export function MemberPortalLayout() {
         <Menu
           theme="dark"
           mode="inline"
+          // Force inline-expanded layout regardless of Sider's collapse state.
+          // Without this, AntD auto-passes the Sider's collapsed=true (which we
+          // use on mobile to hide the drawer at width 0) into the Menu as
+          // inlineCollapsed=true, which then renders all defaultOpenKeys as
+          // floating Portal popovers stacked on top of the page - the bug the
+          // user saw where the nav menu auto-appeared on first page load.
+          inlineCollapsed={false}
           defaultOpenKeys={['activity', 'engagement', 'account']}
           selectedKeys={[matchKey(flatKeys, location.pathname)]}
           items={items}

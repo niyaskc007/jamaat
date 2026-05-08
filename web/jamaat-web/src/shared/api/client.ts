@@ -113,7 +113,15 @@ export function extractProblem(err: unknown): ApiProblem {
   }
   // ProblemDetails (RFC 7807) - what most controllers return.
   if (typeof data.title === 'string' || typeof data.detail === 'string') {
-    const p = data as ApiProblem;
+    const p = { ...data } as ApiProblem;
+    // Some controllers (PortalMeProfileController, PortalMeFinanceController) return
+    // a hybrid `{ error: "code", detail: "..." }` shape instead of standard ProblemDetails
+    // `{ title: "code", detail: "..." }`. The `error` field plays the same role as `title`
+    // (machine-readable code) - promote it so consumers can do `problem.title === "..."`
+    // checks without caring which shape the API used.
+    if (!p.title && typeof (data as Record<string, unknown>).error === 'string') {
+      p.title = (data as Record<string, unknown>).error as string;
+    }
     // ModelState validation: flatten the {fieldName: [msgs]} dict into a readable list
     // so the SPA can show the real reasons instead of just "validation errors occurred".
     if (!p.detail && p.errors && typeof p.errors === 'object') {

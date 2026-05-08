@@ -5,10 +5,12 @@ import {
 } from 'antd';
 import { UserOutlined, UploadOutlined, MailOutlined, PhoneOutlined, GlobalOutlined, BellOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import {
   portalMeApi, type PortalProfile, type UpdateContactDto, type UpdateAddressDto, type NotificationPrefs,
 } from './portalMeApi';
 import { extractProblem } from '../../../shared/api/client';
+import { authStore } from '../../../shared/auth/authStore';
 import { getPushState, enablePush, disablePush, type PushState } from '../../../shared/pwa/push';
 
 /// Self-edit profile form for /portal/me/profile. Two tabs (Contact + Address) — the most
@@ -33,12 +35,51 @@ export function ProfileEditForm() {
 
   if (profileQ.isLoading) return <Card loading className="jm-card" />;
   if (profileQ.isError) {
+    const problem = extractProblem(profileQ.error);
+    // The API returns `error: "no_member_link"` when the signed-in user isn't
+    // linked to a Member row. Most commonly this is an Operator (Administrator,
+    // Accountant, etc.) who landed on the member portal during testing - they
+    // don't have a profile to edit here. Show a friendly explanation + a quick
+    // route back to where they belong rather than a generic error.
+    const isNoMemberLink = problem.title === 'no_member_link';
+    const userType = authStore.getUser()?.userType ?? null;
+    if (isNoMemberLink) {
+      const isOperator = userType === 'Operator' || userType === 'Hybrid';
+      return (
+        <Card className="jm-card">
+          <Alert
+            type="info"
+            showIcon
+            message={isOperator
+              ? "You're signed in as an operator"
+              : 'Your account is not linked to a member record'}
+            description={isOperator ? (
+              <span>
+                The member portal is for Jamaat members. Operators (Administrator, Accountant, Counter, etc.) don't have
+                a personal member profile to edit here. Switch to the operator dashboard to continue.
+              </span>
+            ) : (
+              <span>
+                We couldn't find a member record linked to your sign-in. Contact your committee so they can link your
+                account to your Jamaat profile.
+              </span>
+            )}
+            action={isOperator ? (
+              <Space direction="vertical" size={8}>
+                <Link to="/dashboard"><Button type="primary" block>Go to operator dashboard</Button></Link>
+                <Link to="/me"><Button block>View my account</Button></Link>
+              </Space>
+            ) : undefined}
+          />
+        </Card>
+      );
+    }
     return (
       <Card className="jm-card">
         <Alert
           type="error"
           message="Could not load your profile"
-          description={extractProblem(profileQ.error).detail ?? 'Try refreshing the page. If this persists, contact your committee.'}
+          description={problem.detail ?? 'Try refreshing the page. If this persists, contact your committee.'}
           showIcon
         />
       </Card>
