@@ -142,6 +142,8 @@
   background: var(--jm-surface);
   border-block-end: 1px solid var(--jm-border);
   padding-inline: var(--jm-space-6);
+  /* iOS PWA standalone safe-area inset (translucent status bar) - 0 in browser. */
+  padding-block-start: env(safe-area-inset-top, 0px);
   display: flex; align-items: center; justify-content: space-between;
 }
 .jm-portal-header-label { font-size: 13px; }
@@ -945,7 +947,13 @@
   position: sticky;
   inset-block-start: 0;
   z-index: 10;
-  block-size: 56px;
+  /* iOS standalone PWA mode: the status bar (time, battery, signal) is
+     translucent and overlays the page. Without this padding the hamburger
+     button sits underneath the status bar and isn't tappable. In a regular
+     browser tab `env(safe-area-inset-top)` evaluates to 0 so the rule is
+     a no-op there. */
+  padding-block-start: env(safe-area-inset-top, 0px);
+  min-block-size: 56px;
   background: #FFFFFF;
   border-block-end: 1px solid var(--jm-border);
   display: flex;
@@ -963,9 +971,12 @@
 
 /* Drawer overlay for the operator Sider on phones / small tablets. The
    sider gets `position: fixed` from the JSX style prop because it depends on
-   the mobile flag; this rule just adds the shadow + tap-to-close backdrop. */
+   the mobile flag; this rule just adds the shadow, tap-to-close backdrop, and
+   pads the top so the sider's logo row doesn't slide under the iOS status
+   bar when the app is installed as a standalone PWA. */
 .jm-sider--overlay {
   box-shadow: 2px 0 24px rgba(0, 0, 0, 0.25);
+  padding-block-start: env(safe-area-inset-top, 0px);
 }
 .jm-sider-backdrop {
   position: fixed;
@@ -1104,6 +1115,8 @@
   block-size: 100dvh;
   z-index: 1100;
   box-shadow: 2px 0 24px rgba(0, 0, 0, 0.25);
+  /* Clear the iOS status bar when running standalone (env=0 in browser). */
+  padding-block-start: env(safe-area-inset-top, 0px);
 }
 .jm-portal-sider-backdrop {
   position: fixed;
@@ -1119,11 +1132,13 @@
 }
 
 @media (max-width: 992px) {
-  /* Header tightens up so the brand label + avatar + hamburger fit on a phone. */
+  /* Header tightens up so the brand label + avatar + hamburger fit on a phone.
+     Uses min-block-size (not block-size) so the safe-area-inset-top padding on
+     iOS standalone PWAs can push the chrome down past the status bar without
+     squeezing the row contents into ~9px. */
   .jm-portal-header {
     padding-inline: 12px !important;
-    block-size: 56px !important;
-    line-height: 56px !important;
+    min-block-size: 56px;
     gap: 8px;
   }
   .jm-portal-header-label { display: none; }
