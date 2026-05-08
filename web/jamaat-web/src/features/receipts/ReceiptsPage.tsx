@@ -177,6 +177,7 @@ export function ReceiptsPage() {
         <Table<ReceiptListItem>
           rowKey="id" size="middle" loading={isLoading} columns={columns}
           dataSource={data?.items ?? []}
+          scroll={{ x: 'max-content' }}
           // Whole-row click navigates to detail. Drafts + PendingClearance receipts have no
           // receipt number to click on as a link, so without this the only way to view them
           // was through the 3-dots menu.

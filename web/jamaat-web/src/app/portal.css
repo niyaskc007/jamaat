@@ -936,6 +936,151 @@
 .jm-bullets-tight { margin-block-end: 0; }
 
 /* =============================================================================
+   Operator AppLayout — shared shell styles (top bar, content padding, mobile
+   drawer Sider) lifted out of the inline `style` props on AppLayout.tsx so we
+   can apply media queries. Below `lg` (992px) the Sider becomes a fixed-
+   position drawer overlay; the hamburger button in the header opens it.
+   ========================================================================= */
+.jm-app-topbar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 10;
+  block-size: 56px;
+  background: #FFFFFF;
+  border-block-end: 1px solid var(--jm-border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-inline: 24px;
+}
+.jm-app-topbar-hamburger {
+  margin-inline-end: 4px;
+  font-size: 18px;
+}
+.jm-app-content {
+  padding: 24px;
+}
+
+/* Drawer overlay for the operator Sider on phones / small tablets. The
+   sider gets `position: fixed` from the JSX style prop because it depends on
+   the mobile flag; this rule just adds the shadow + tap-to-close backdrop. */
+.jm-sider--overlay {
+  box-shadow: 2px 0 24px rgba(0, 0, 0, 0.25);
+}
+.jm-sider-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1099;
+  cursor: pointer;
+}
+
+@media (max-width: 992px) {
+  .jm-app-topbar {
+    padding-inline: 12px;
+    gap: 8px;
+  }
+  .jm-app-content {
+    padding: 12px;
+  }
+}
+@media (max-width: 640px) {
+  .jm-app-content {
+    padding: 8px;
+  }
+}
+
+/* =============================================================================
+   PageHeader — shared component used on both operator and member pages.
+   Title (+ optional subtitle) on the left, actions on the right. On phones the
+   actions stack below the title so a long greeting can't squeeze the title
+   column to 5 characters wide and wrap per-character.
+
+   Lives in portal.css because portal.css is imported globally from index.css;
+   the .jm-page-header selectors aren't portal-scoped so the operator AppLayout
+   gets the same responsive behaviour for free.
+   ========================================================================= */
+.jm-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-block-end: 24px;
+}
+.jm-page-header-titles {
+  /* min-inline-size:0 lets the flex item shrink below its content's intrinsic
+     min width, which would otherwise refuse to shrink past the longest word. */
+  min-inline-size: 0;
+  flex: 1 1 auto;
+}
+.jm-page-header-title {
+  margin: 0 !important;
+  font-size: 22px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+}
+.jm-page-header-subtitle {
+  margin: 4px 0 0 !important;
+  font-size: 13px !important;
+}
+.jm-page-header-extra {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .jm-page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .jm-page-header-extra {
+    inline-size: 100%;
+    flex-wrap: wrap;
+  }
+  .jm-page-header-extra > * { flex: 1 1 auto; }
+  .jm-page-header-extra a { flex: 1 1 auto; }
+  .jm-page-header-extra a > .ant-btn { inline-size: 100%; }
+  .jm-page-header-title {
+    font-size: 20px !important;
+    /* Ensure the title can wrap on regular word boundaries when there really
+       isn't enough room - never per-character. */
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+}
+
+/* =============================================================================
+   AntD <Alert> with a long description + an action button: by default action
+   is rendered to the right of the description column. On a narrow viewport
+   the action takes its natural width and the description column gets squeezed
+   so hard the text wraps per-character. Drop the action below at < 768px.
+
+   Applies globally (not portal-scoped) because the operator dashboard's
+   PeriodGuard alert was hitting the exact same bug.
+   ========================================================================= */
+@media (max-width: 768px) {
+  /* AntD 5 emits siblings (icon | message | description | actions) inside a
+     single flex container - allow wrap so actions drops to its own row, and
+     force the actions block to take 100% so the button fills it. */
+  .ant-alert.ant-alert-with-description { flex-wrap: wrap; }
+  .ant-alert.ant-alert-with-description .ant-alert-message,
+  .ant-alert.ant-alert-with-description .ant-alert-description {
+    min-inline-size: 0;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+  /* AntD 5: `.ant-alert-actions` (plural). The earlier rule targeted
+     `.ant-alert-action` (singular, AntD 4) which never matched. */
+  .ant-alert.ant-alert-with-description .ant-alert-actions {
+    flex: 1 1 100%;
+    margin-block-start: 12px;
+    margin-inline-start: 0;
+  }
+  .ant-alert.ant-alert-with-description .ant-alert-actions > * { inline-size: 100%; }
+}
+
+/* =============================================================================
    Member portal — mobile responsive layer.
 
    The portal originally shipped with one media query (the hero card at 640px).

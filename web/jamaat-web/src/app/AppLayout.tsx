@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Layout, Menu, Dropdown, Button, Avatar, Badge, Input, Tooltip, Breadcrumb } from 'antd';
+import { Layout, Menu, Dropdown, Button, Avatar, Badge, Input, Tooltip, Breadcrumb, Grid } from 'antd';
 import { useHotkey } from '../shared/hooks/useHotkey';
 import {
   DashboardOutlined,
@@ -25,6 +25,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   PlusOutlined,
+  MenuOutlined,
   QuestionCircleOutlined,
   AppstoreOutlined,
   LineChartOutlined,
@@ -61,6 +62,13 @@ export function AppLayout() {
   const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  // Below `lg` (992px) the Sider becomes a fixed-position drawer that overlays
+  // content instead of consuming horizontal space. The hamburger in the top bar
+  // toggles it, and a backdrop tap closes it. On desktop the existing collapsed
+  // / expanded persistence applies; on mobile the drawer always starts closed.
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.lg;
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem(COLLAPSED_KEY) === '1'; } catch { return false; }
   });
@@ -221,17 +229,19 @@ export function AppLayout() {
           footer) sits inside .jm-sider-row-* with appropriate flex properties. */}
       <Sider
         width={240}
-        collapsedWidth={72}
-        collapsed={collapsed}
+        collapsedWidth={isMobile ? 0 : 72}
+        collapsed={isMobile ? !mobileNavOpen : collapsed}
         trigger={null}
         theme="dark"
-        className="jm-sider"
+        className={`jm-sider ${isMobile ? 'jm-sider--overlay' : ''}`}
         style={{
           background: 'var(--jm-sider-bg)',
-          position: 'sticky',
+          position: isMobile ? 'fixed' : 'sticky',
           insetBlockStart: 0,
+          insetInlineStart: 0,
           blockSize: '100dvh',
           borderInlineEnd: '1px solid var(--jm-sider-border)',
+          zIndex: isMobile ? 1100 : 'auto',
         }}
       >
         <div className="jm-sider-row-header"
@@ -259,12 +269,15 @@ export function AppLayout() {
             theme="dark"
             mode="inline"
             selectedKeys={[activeKey]}
-            openKeys={collapsed ? [] : openSections}
+            openKeys={(isMobile ? !mobileNavOpen : collapsed) ? [] : openSections}
             onOpenChange={handleOpenChange}
             items={navItems}
-            onClick={(e) => navigate(e.key)}
+            onClick={(e) => {
+              navigate(e.key);
+              if (isMobile) setMobileNavOpen(false);
+            }}
             style={{ background: 'transparent', borderInlineEnd: 'none' }}
-            inlineCollapsed={collapsed}
+            inlineCollapsed={isMobile ? false : collapsed}
           />
         </div>
 
@@ -293,37 +306,48 @@ export function AppLayout() {
         </div>
       </Sider>
 
-      <Layout>
+      {isMobile && mobileNavOpen && (
+        <div
+          className="jm-sider-backdrop"
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden
+        />
+      )}
+
+      <Layout className={isMobile ? 'jm-app-content--mobile' : ''}>
         {/* TOP BAR */}
-        <header
-          style={{
-            position: 'sticky',
-            insetBlockStart: 0,
-            zIndex: 10,
-            blockSize: 56,
-            background: '#FFFFFF',
-            borderBlockEnd: '1px solid var(--jm-border)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 16,
-            paddingInline: 24,
-          }}
-        >
-          <Breadcrumb items={breadcrumb} style={{ fontSize: 13 }} />
+        <header className="jm-app-topbar">
+          {isMobile && (
+            <Button
+              type="text"
+              icon={<MenuOutlined />}
+              onClick={() => setMobileNavOpen((v) => !v)}
+              aria-label="Open navigation"
+              className="jm-app-topbar-hamburger"
+            />
+          )}
+          {!isMobile && <Breadcrumb items={breadcrumb} style={{ fontSize: 13 }} />}
           <div style={{ flex: 1 }} />
 
-          <Input
-            size="middle"
-            placeholder={`${t('search.placeholder')}  (Press /)`}
-            prefix={<SearchOutlined style={{ color: 'var(--jm-gray-400)' }} />}
-            style={{ inlineSize: 320, background: 'var(--jm-surface-muted)', border: '1px solid transparent' }}
-            disabled
-          />
+          {!isMobile && (
+            <Input
+              size="middle"
+              placeholder={`${t('search.placeholder')}  (Press /)`}
+              prefix={<SearchOutlined style={{ color: 'var(--jm-gray-400)' }} />}
+              style={{ inlineSize: 320, background: 'var(--jm-surface-muted)', border: '1px solid transparent' }}
+              disabled
+            />
+          )}
 
           {hasPermission('receipt.create') && (
             <Tooltip title="Alt+N">
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/receipts/new')}>
-                {t('actions.newReceipt')}
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => navigate('/receipts/new')}
+                aria-label="New receipt"
+              >
+                {!isMobile && t('actions.newReceipt')}
               </Button>
             </Tooltip>
           )}
@@ -346,17 +370,19 @@ export function AppLayout() {
               aria-label="User menu"
             >
               <Avatar size={32} style={{ background: 'var(--jm-primary-500)', fontWeight: 600 }}>{initials}</Avatar>
-              <div style={{ textAlign: 'start', lineHeight: 1.2 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--jm-gray-800)' }}>
-                  {user?.fullName ?? user?.userName}
+              {!isMobile && (
+                <div style={{ textAlign: 'start', lineHeight: 1.2 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--jm-gray-800)' }}>
+                    {user?.fullName ?? user?.userName}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>{deriveRoleLabel(user?.permissions ?? [])}</div>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>{deriveRoleLabel(user?.permissions ?? [])}</div>
-              </div>
+              )}
             </button>
           </Dropdown>
         </header>
 
-        <Content style={{ padding: 24, maxInlineSize: 1440, inlineSize: '100%', marginInline: 'auto' }}>
+        <Content className="jm-app-content" style={{ maxInlineSize: 1440, inlineSize: '100%', marginInline: 'auto' }}>
           <Outlet />
         </Content>
 
