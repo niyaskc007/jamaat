@@ -823,9 +823,13 @@ public sealed class QarzanHasanaService(
             .FirstOrDefaultAsync(l => l.Id == consent.LoanId, ct);
         if (loan is null) return Error.NotFound("qh_consent.not_found", "This consent link is not valid.");
 
+        // Project ItsNumber.Value (the underlying string column) rather than the
+        // value-converted struct itself. EF Core 10's materializer can't coerce the
+        // ItsNumber owned struct back into an anonymous-type field at the shaper layer
+        // (throws "No coercion operator defined between ItsNumber and System.String").
         var borrower = await db.Members.IgnoreQueryFilters()
             .Where(m => m.Id == loan.MemberId)
-            .Select(m => new { m.FullName, m.ItsNumber })
+            .Select(m => new { m.FullName, ItsNumber = m.ItsNumber.Value })
             .FirstOrDefaultAsync(ct);
         var guarantor = await db.Members.IgnoreQueryFilters()
             .Where(m => m.Id == consent.GuarantorMemberId)
@@ -834,7 +838,7 @@ public sealed class QarzanHasanaService(
         return new GuarantorConsentPortalDto(
             loan.Id, loan.Code,
             borrower?.FullName ?? "(unknown)",
-            borrower?.ItsNumber.Value ?? "",
+            borrower?.ItsNumber ?? "",
             loan.AmountRequested, loan.Currency, loan.InstalmentsRequested,
             loan.Purpose,
             (int)consent.Status, consent.RespondedAtUtc,
@@ -1014,10 +1018,8 @@ public sealed class QarzanHasanaService(
     private static QarzanHasanaLoanDto ProjectRow(JamaatDbContextFacade db, QarzanHasanaLoan x) =>
         new(x.Id, x.Code,
             x.MemberId,
-            // Cast through (string)(object) to bypass the EF Core 10 owned-property
-            // translator pitfall on value-converted ItsNumber (the chained Select form
-            // would throw at runtime in a correlated subquery).
-            db.Members.Where(m => m.Id == x.MemberId).Select(m => (string)(object)m.ItsNumber).FirstOrDefault() ?? "",
+            // Value-converted ItsNumber; `.Value` reads the underlying string column.
+            db.Members.Where(m => m.Id == x.MemberId).Select(m => m.ItsNumber.Value).FirstOrDefault() ?? "",
             db.Members.Where(m => m.Id == x.MemberId).Select(m => m.FullName).FirstOrDefault() ?? "",
             x.FamilyId,
             db.Families.Where(f => f.Id == x.FamilyId).Select(f => f.Code).FirstOrDefault(),

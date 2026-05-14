@@ -205,10 +205,13 @@ public sealed class FundEnrollmentService(
     private static FundEnrollmentDto Project(JamaatDbContextFacade db, FundEnrollment x) =>
         new(x.Id, x.Code,
             x.MemberId,
-            // (string)(object) cast: EF Core 10's translator can't handle
-            // `Select(m => m.ItsNumber.Value)` in a correlated subquery (the owned
-            // record-struct property access). Boxing through string works.
-            db.Members.Where(m => m.Id == x.MemberId).Select(m => (string)(object)m.ItsNumber).FirstOrDefault() ?? "",
+            // ItsNumber is a value-converted record-struct (string column under the hood).
+            // The chained correlated subquery `Where().Select(m.ItsNumber.Value)` translates
+            // here because the OUTER query is a Select projection too - EF Core 10 collapses
+            // the converter through .Value into a raw column read. (A previous attempt to
+            // boxing-cast via `(string)(object)m.ItsNumber` failed with "No coercion operator
+            // defined" because the cast didn't elide the converter; that's why we keep .Value.)
+            db.Members.Where(m => m.Id == x.MemberId).Select(m => m.ItsNumber.Value).FirstOrDefault() ?? "",
             db.Members.Where(m => m.Id == x.MemberId).Select(m => m.FullName).FirstOrDefault() ?? "",
             x.FundTypeId,
             db.FundTypes.Where(f => f.Id == x.FundTypeId).Select(f => f.Code).FirstOrDefault() ?? "",

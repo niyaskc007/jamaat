@@ -37,11 +37,10 @@ public sealed class SectorService(
             .Take(Math.Clamp(q.PageSize, 1, 500))
             .Select(x => new SectorProjection(
                 x,
-                // (string)(object) cast bypasses the EF Core 10 owned-property translator
-                // pitfall on the value-converted ItsNumber struct (see MemberRepository.cs:28).
-                db.Members.Where(m => m.Id == x.MaleInchargeMemberId).Select(m => (string)(object)m.ItsNumber).FirstOrDefault(),
+                // Value-converted ItsNumber; `.Value` reads the underlying string column.
+                db.Members.Where(m => m.Id == x.MaleInchargeMemberId).Select(m => m.ItsNumber.Value).FirstOrDefault(),
                 db.Members.Where(m => m.Id == x.MaleInchargeMemberId).Select(m => m.FullName).FirstOrDefault(),
-                db.Members.Where(m => m.Id == x.FemaleInchargeMemberId).Select(m => (string)(object)m.ItsNumber).FirstOrDefault(),
+                db.Members.Where(m => m.Id == x.FemaleInchargeMemberId).Select(m => m.ItsNumber.Value).FirstOrDefault(),
                 db.Members.Where(m => m.Id == x.FemaleInchargeMemberId).Select(m => m.FullName).FirstOrDefault(),
                 db.SubSectors.Count(ss => ss.SectorId == x.Id),
                 db.Members.Count(m => m.SectorId == x.Id && !m.IsDeleted)))
@@ -54,11 +53,10 @@ public sealed class SectorService(
         var p = await db.Sectors.AsNoTracking().Where(x => x.Id == id)
             .Select(x => new SectorProjection(
                 x,
-                // (string)(object) cast bypasses the EF Core 10 owned-property translator
-                // pitfall on the value-converted ItsNumber struct (see MemberRepository.cs:28).
-                db.Members.Where(m => m.Id == x.MaleInchargeMemberId).Select(m => (string)(object)m.ItsNumber).FirstOrDefault(),
+                // Value-converted ItsNumber; `.Value` reads the underlying string column.
+                db.Members.Where(m => m.Id == x.MaleInchargeMemberId).Select(m => m.ItsNumber.Value).FirstOrDefault(),
                 db.Members.Where(m => m.Id == x.MaleInchargeMemberId).Select(m => m.FullName).FirstOrDefault(),
-                db.Members.Where(m => m.Id == x.FemaleInchargeMemberId).Select(m => (string)(object)m.ItsNumber).FirstOrDefault(),
+                db.Members.Where(m => m.Id == x.FemaleInchargeMemberId).Select(m => m.ItsNumber.Value).FirstOrDefault(),
                 db.Members.Where(m => m.Id == x.FemaleInchargeMemberId).Select(m => m.FullName).FirstOrDefault(),
                 db.SubSectors.Count(ss => ss.SectorId == x.Id),
                 db.Members.Count(m => m.SectorId == x.Id && !m.IsDeleted)))

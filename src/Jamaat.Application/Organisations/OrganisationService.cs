@@ -120,9 +120,9 @@ public sealed class MembershipService(
 
     private static IQueryable<MP> Project(JamaatDbContextFacade db, IQueryable<MemberOrganisationMembership> q) =>
         q.Select(x => new MP(x,
-            // (string)(object) cast unwraps the owned record-struct ItsNumber so EF Core 10
-            // can translate this correlated subquery (Select(m.ItsNumber.Value) wouldn't).
-            db.Members.Where(m => m.Id == x.MemberId).Select(m => (string)(object)m.ItsNumber).FirstOrDefault() ?? "",
+            // Value-converted ItsNumber; `.Value` reads the underlying string column via the
+            // converter and EF Core 10 translates this correctly inside an outer Select.
+            db.Members.Where(m => m.Id == x.MemberId).Select(m => m.ItsNumber.Value).FirstOrDefault() ?? "",
             db.Members.Where(m => m.Id == x.MemberId).Select(m => m.FullName).FirstOrDefault() ?? "",
             db.Organisations.Where(o => o.Id == x.OrganisationId).Select(o => o.Code).FirstOrDefault() ?? "",
             db.Organisations.Where(o => o.Id == x.OrganisationId).Select(o => o.Name).FirstOrDefault() ?? ""));

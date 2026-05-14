@@ -264,6 +264,13 @@ public sealed class PortalMeController(
     ///
     /// Gated by <c>portal.qh.request</c>: only members who can request a loan need to pick
     /// guarantors, which limits the directory-scraping vector to a narrower role surface.
+    ///
+    /// Search strategy: ITS is exactly 8 digits, so a query that parses cleanly as an ITS
+    /// gets an exact-match against ItsNumber; everything else (or an unparseable ITS) falls
+    /// back to a FullName LIKE. This avoids the LINQ-translation pitfall of running an
+    /// EF.Functions.Like over the value-converted ItsNumber column, which EF Core 10 cannot
+    /// translate inside a chained Where (it surfaces as "The LINQ expression ... could not
+    /// be translated") and which was producing intermittent 500s for portal callers.
     [HttpGet("members/search")]
     [Authorize(Policy = "portal.qh.request")]
     public async Task<IActionResult> SearchMembers([FromQuery] string q, CancellationToken ct)
@@ -272,19 +279,25 @@ public sealed class PortalMeController(
             return Ok(Array.Empty<object>());
         var s = q.Trim();
         var (_, memberId) = await CurrentMemberAsync(ct);
-        // ItsNumber is an owned value object - `m.ItsNumber.Value` doesn't
-        // translate to SQL ("LINQ expression could not be translated"). The
-        // operator-side MemberRepository solves this with a `(string)(object)`
-        // cast (see MemberRepository.cs:28); we use the same pattern here.
-        // Also fixed an operator-precedence bug in the previous version:
-        // `!IsDeleted && (Id != id && Like(name)) || Like(its)` was OR-ing
-        // outside the IsDeleted/own-row guard, leaking soft-deleted members
-        // and the caller themselves via ITS search.
+
+        // Exact-ITS path: input parses as a valid 8-digit ITS -> one-shot lookup. This is
+        // the path the SPA's guarantor picker hits when the user pastes a full ITS.
+        if (ItsNumber.TryCreate(s, out var its))
+        {
+            var hit = await db.Members.AsNoTracking()
+                .Where(m => !m.IsDeleted && m.Id != memberId && m.ItsNumber == its)
+                .Select(m => new { m.Id, ItsNumber = m.ItsNumber.Value, FullName = m.FullName })
+                .FirstOrDefaultAsync(ct);
+            return Ok(hit is null ? Array.Empty<object>() : new[] { hit });
+        }
+
+        // Otherwise full-name LIKE only. Partial-ITS substring search was the broken path;
+        // it cost us 500s without giving callers anything they couldn't get by typing a
+        // few more digits.
         var rows = await db.Members.AsNoTracking()
             .Where(m => !m.IsDeleted
                 && m.Id != memberId
-                && (EF.Functions.Like(m.FullName, $"%{s}%")
-                    || EF.Functions.Like(((string)(object)m.ItsNumber), $"%{s}%")))
+                && EF.Functions.Like(m.FullName, $"%{s}%"))
             .OrderBy(m => m.FullName)
             .Take(25)
             .Select(m => new { m.Id, ItsNumber = m.ItsNumber.Value, FullName = m.FullName })
