@@ -48,11 +48,24 @@ public interface IQarzanHasanaService
     /// <summary>Resolve a public consent token. No auth required; the token IS the credential.</summary>
     Task<Result<GuarantorConsentPortalDto>> GetConsentPortalAsync(string token, CancellationToken ct = default);
 
-    /// <summary>Record an Accepted response on a consent token. Idempotent within Pending state.</summary>
+    /// <summary>Record an Accepted response via the public token. Anonymous; requires
+    /// the caller to also pass the guarantor's ITS so a forwarded URL alone can't
+    /// act as the kafil. Idempotent within Pending state.</summary>
     Task<Result<GuarantorConsentPortalDto>> AcceptConsentAsync(string token, RecordConsentResponseDto meta, CancellationToken ct = default);
 
-    /// <summary>Record a Declined response on a consent token. Idempotent within Pending state.</summary>
+    /// <summary>Record a Declined response via the public token. Same constraints
+    /// as AcceptConsentAsync.</summary>
     Task<Result<GuarantorConsentPortalDto>> DeclineConsentAsync(string token, RecordConsentResponseDto meta, CancellationToken ct = default);
+
+    /// <summary>Authenticated-member path: record an Accept by the signed-in member.
+    /// The JWT is the identity proof - the caller has already verified consent.GuarantorMemberId
+    /// matches the signed-in member, so we skip the ITS verification the public path requires.
+    /// Strictly stronger than the token+ITS flow; preferred for portal-onboarded guarantors.</summary>
+    Task<Result<GuarantorConsentPortalDto>> AcceptConsentByGuarantorAsync(Guid consentId, Guid guarantorMemberId, RecordConsentResponseDto meta, CancellationToken ct = default);
+
+    /// <summary>Authenticated-member path: record a Decline by the signed-in member.
+    /// Mirror of AcceptConsentByGuarantorAsync.</summary>
+    Task<Result<GuarantorConsentPortalDto>> DeclineConsentByGuarantorAsync(Guid consentId, Guid guarantorMemberId, RecordConsentResponseDto meta, CancellationToken ct = default);
 }
 
 public sealed class QarzanHasanaService(
@@ -154,6 +167,25 @@ public sealed class QarzanHasanaService(
             dto.MonthlyIncome, dto.MonthlyExpenses, dto.MonthlyExistingEmis,
             dto.GoldWeightGrams, dto.GoldPurityKarat, dto.GoldHeldAt,
             dto.IncomeSources);
+        // Resolve the scheme master-data row. If the caller sent a SchemeId we
+        // honour it (after verifying it exists in this tenant). Otherwise we
+        // fall back to looking up the seeded row that maps to the legacy int
+        // Scheme - keeps existing call-sites that haven't migrated to SchemeId
+        // working. Either way the entity gets both fields populated.
+        Guid? schemeId = dto.SchemeId;
+        if (schemeId is { } sid)
+        {
+            var exists = await db.QhSchemes.AsNoTracking().AnyAsync(s => s.Id == sid && s.IsActive, ct);
+            if (!exists) return Error.NotFound("qh_scheme.not_found", "Scheme not found or inactive.");
+        }
+        else
+        {
+            schemeId = await db.QhSchemes.AsNoTracking()
+                .Where(s => s.ParentSchemeId == null && s.LegacySchemeValue == (int)dto.Scheme && s.IsActive)
+                .Select(s => (Guid?)s.Id).FirstOrDefaultAsync(ct);
+        }
+        loan.SetSchemeId(schemeId);
+
         // Operator-witnessed kafalah consent. Captured here at draft time; the consent flag stays
         // true through edits unless the borrower changes a guarantor (UpdateDraft path).
         if (dto.GuarantorsAcknowledged)
@@ -810,43 +842,68 @@ public sealed class QarzanHasanaService(
     }
 
     public async Task<Result<GuarantorConsentPortalDto>> AcceptConsentAsync(string token, RecordConsentResponseDto meta, CancellationToken ct = default)
-        => await RecordConsentResponseAsync(token, accept: true, meta, ct);
+        => await RecordConsentResponseAsync(token, accept: true, meta, requireItsVerification: true, ct);
 
     public async Task<Result<GuarantorConsentPortalDto>> DeclineConsentAsync(string token, RecordConsentResponseDto meta, CancellationToken ct = default)
-        => await RecordConsentResponseAsync(token, accept: false, meta, ct);
+        => await RecordConsentResponseAsync(token, accept: false, meta, requireItsVerification: true, ct);
 
-    private async Task<Result<GuarantorConsentPortalDto>> RecordConsentResponseAsync(string token, bool accept, RecordConsentResponseDto meta, CancellationToken ct)
+    public async Task<Result<GuarantorConsentPortalDto>> AcceptConsentByGuarantorAsync(Guid consentId, Guid guarantorMemberId, RecordConsentResponseDto meta, CancellationToken ct = default)
+        => await RecordByGuarantorAsync(consentId, guarantorMemberId, accept: true, meta, ct);
+
+    public async Task<Result<GuarantorConsentPortalDto>> DeclineConsentByGuarantorAsync(Guid consentId, Guid guarantorMemberId, RecordConsentResponseDto meta, CancellationToken ct = default)
+        => await RecordByGuarantorAsync(consentId, guarantorMemberId, accept: false, meta, ct);
+
+    /// Authenticated-member path. The caller has already verified the JWT belongs to
+    /// the guarantor; we look up the consent by Id (faster than scanning by token) and
+    /// re-verify the binding (defense in depth - the controller's check could be removed
+    /// in a future refactor without weakening this method). Then we hand off to the
+    /// shared RecordConsentResponseAsync with requireItsVerification=false because the
+    /// JWT is the identity proof.
+    private async Task<Result<GuarantorConsentPortalDto>> RecordByGuarantorAsync(Guid consentId, Guid guarantorMemberId, bool accept, RecordConsentResponseDto meta, CancellationToken ct)
+    {
+        var consent = await db.QarzanHasanaGuarantorConsents.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.Id == consentId, ct);
+        if (consent is null) return Error.NotFound("qh_consent.not_found", "Consent record not found.");
+        if (consent.GuarantorMemberId != guarantorMemberId)
+            return Error.Forbidden("qh_consent.not_yours", "This consent doesn't belong to you.");
+        return await RecordConsentResponseAsync(consent.Token, accept, meta, requireItsVerification: false, ct);
+    }
+
+    private async Task<Result<GuarantorConsentPortalDto>> RecordConsentResponseAsync(string token, bool accept, RecordConsentResponseDto meta, bool requireItsVerification, CancellationToken ct)
     {
         var consent = await db.QarzanHasanaGuarantorConsents.IgnoreQueryFilters()
             .FirstOrDefaultAsync(c => c.Token == token, ct);
         if (consent is null) return Error.NotFound("qh_consent.not_found", "This consent link is not valid.");
 
-        // Security: ITS-verification gate. The token URL alone is no longer
-        // sufficient - the responder must also type the guarantor's 8-digit
-        // ITS, which we cross-check against the member referenced by the
-        // consent row. Without this, a phishing leak (forwarded SMS,
-        // screenshot, intercepted email) would let anyone act as the kafil.
+        // Security gate. Two paths:
         //
-        // EF Core 10 trips on the value-converted record-struct ItsNumber when
-        // it's projected via `Where(...).Select(m => m.ItsNumber.Value)`. The
-        // pattern that works (used in ListGuarantorConsentsAsync above) is a
-        // join+select inside one query expression: EF translates m.ItsNumber.Value
-        // to a direct column read because the optimizer can see the property
-        // access in context. We use the same shape via a join against the
-        // consent's own row.
-        var expectedIts = await (from c in db.QarzanHasanaGuarantorConsents.AsNoTracking()
-                                 where c.Id == consent.Id
-                                 join m in db.Members.AsNoTracking().IgnoreQueryFilters()
-                                     on c.GuarantorMemberId equals m.Id
-                                 where !m.IsDeleted
-                                 select m.ItsNumber.Value)
-                                .FirstOrDefaultAsync(ct);
-        if (string.IsNullOrEmpty(expectedIts))
-            return Error.NotFound("qh_consent.guarantor_missing", "Guarantor record not found.");
-        var supplied = (meta.ItsNumberVerification ?? string.Empty).Trim();
-        if (!string.Equals(supplied, expectedIts, StringComparison.Ordinal))
-            return Error.Business("qh_consent.its_mismatch",
-                "The ITS number you entered doesn't match the guarantor's. Check the digits and try again.");
+        //   Public token path (requireItsVerification=true): the URL is the only
+        //   credential, so we also require the guarantor to type their 8-digit ITS
+        //   as a second factor. A forwarded SMS / screenshot then isn't enough to
+        //   act as the kafil. The expected ITS comes from a join-projection -
+        //   EF Core 10 can't translate `Where().Select(m.ItsNumber.Value)` for the
+        //   value-converted record-struct ItsNumber, but a join inside one query
+        //   expression translates cleanly (same pattern as ListGuarantorConsentsAsync).
+        //
+        //   Authenticated path (requireItsVerification=false): the JWT identifies
+        //   the responder and the caller has already proven consent.GuarantorMemberId
+        //   matches the signed-in member. Asking for an ITS too would be theatre.
+        if (requireItsVerification)
+        {
+            var expectedIts = await (from c in db.QarzanHasanaGuarantorConsents.AsNoTracking()
+                                     where c.Id == consent.Id
+                                     join m in db.Members.AsNoTracking().IgnoreQueryFilters()
+                                         on c.GuarantorMemberId equals m.Id
+                                     where !m.IsDeleted
+                                     select m.ItsNumber.Value)
+                                    .FirstOrDefaultAsync(ct);
+            if (string.IsNullOrEmpty(expectedIts))
+                return Error.NotFound("qh_consent.guarantor_missing", "Guarantor record not found.");
+            var supplied = (meta.ItsNumberVerification ?? string.Empty).Trim();
+            if (!string.Equals(supplied, expectedIts, StringComparison.Ordinal))
+                return Error.Business("qh_consent.its_mismatch",
+                    "The ITS number you entered doesn't match the guarantor's. Check the digits and try again.");
+        }
 
         try
         {

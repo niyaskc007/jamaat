@@ -40,6 +40,7 @@ public sealed class JamaatDbContextFacadeImpl(JamaatDbContext db) : JamaatDbCont
     public override DbSet<Lookup> Lookups => db.Lookups;
     public override DbSet<FundEnrollment> FundEnrollments => db.FundEnrollments;
     public override DbSet<QarzanHasanaLoan> QarzanHasanaLoans => db.QarzanHasanaLoans;
+    public override DbSet<QhScheme> QhSchemes => db.QhSchemes;
     public override DbSet<Event> Events => db.Events;
     public override DbSet<EventScan> EventScans => db.EventScans;
     public override DbSet<EventRegistration> EventRegistrations => db.EventRegistrations;

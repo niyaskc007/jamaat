@@ -56,6 +56,7 @@ public class JamaatDbContext : IdentityDbContext<ApplicationUser, ApplicationRol
     public DbSet<Lookup> Lookups => Set<Lookup>();
     public DbSet<FundEnrollment> FundEnrollments => Set<FundEnrollment>();
     public DbSet<QarzanHasanaLoan> QarzanHasanaLoans => Set<QarzanHasanaLoan>();
+    public DbSet<QhScheme> QhSchemes => Set<QhScheme>();
     public DbSet<Event> Events => Set<Event>();
     public DbSet<EventScan> EventScans => Set<EventScan>();
     public DbSet<EventRegistration> EventRegistrations => Set<EventRegistration>();

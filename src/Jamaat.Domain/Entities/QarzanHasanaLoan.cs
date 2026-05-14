@@ -45,7 +45,17 @@ public sealed class QarzanHasanaLoan : AggregateRoot<Guid>, ITenantScoped, IAudi
     public string Code { get; private set; } = default!;
     public Guid MemberId { get; private set; }
     public Guid? FamilyId { get; private set; }
+
+    /// Legacy int-typed scheme. New code reads/writes <see cref="SchemeId"/>
+    /// instead; this column stays populated for backwards compatibility with
+    /// already-issued loans and display code that branches on the int.
     public QarzanHasanaScheme Scheme { get; private set; }
+
+    /// Foreign key into the admin-managed <see cref="QhScheme"/> master-data
+    /// table. Nullable because legacy rows pre-date the migration and the
+    /// seeder backfills them lazily, but every new loan must set it.
+    public Guid? SchemeId { get; private set; }
+    public void SetSchemeId(Guid? schemeId) => SchemeId = schemeId;
 
     public decimal AmountRequested { get; private set; }
     public decimal AmountApproved { get; private set; }

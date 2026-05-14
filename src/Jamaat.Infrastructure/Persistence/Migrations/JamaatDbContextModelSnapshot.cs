@@ -3311,6 +3311,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<int>("Scheme")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("SchemeId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("SourceOfIncome")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -3348,6 +3351,77 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "Status");
 
                     b.ToTable("QarzanHasanaLoan", "txn");
+                });
+
+            modelBuilder.Entity("Jamaat.Domain.Entities.QhScheme", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("LegacySchemeValue")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("ParentSchemeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("RequiresGoldCollateral")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParentSchemeId");
+
+                    b.HasIndex("TenantId", "IsActive", "SortOrder");
+
+                    b.HasIndex("TenantId", "ParentSchemeId", "Code")
+                        .IsUnique()
+                        .HasFilter("[ParentSchemeId] IS NOT NULL");
+
+                    b.ToTable("QhScheme", "cfg");
                 });
 
             modelBuilder.Entity("Jamaat.Domain.Entities.Receipt", b =>
@@ -5050,6 +5124,14 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("Installments");
+                });
+
+            modelBuilder.Entity("Jamaat.Domain.Entities.QhScheme", b =>
+                {
+                    b.HasOne("Jamaat.Domain.Entities.QhScheme", null)
+                        .WithMany()
+                        .HasForeignKey("ParentSchemeId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Jamaat.Domain.Entities.Receipt", b =>

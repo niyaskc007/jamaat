@@ -43,6 +43,7 @@ public abstract class JamaatDbContextFacade
     public abstract DbSet<Lookup> Lookups { get; }
     public abstract DbSet<FundEnrollment> FundEnrollments { get; }
     public abstract DbSet<QarzanHasanaLoan> QarzanHasanaLoans { get; }
+    public abstract DbSet<QhScheme> QhSchemes { get; }
     public abstract DbSet<Event> Events { get; }
     public abstract DbSet<EventScan> EventScans { get; }
     public abstract DbSet<EventRegistration> EventRegistrations { get; }

@@ -15,12 +15,14 @@ import { AgreementTemplatesPanel } from './master-data/agreement-templates/Agree
 import { SectorsPanel } from './master-data/sectors/SectorsPanel';
 import { OrganisationsPanel } from './master-data/organisations/OrganisationsPanel';
 import { LookupsPanel } from './master-data/lookups/LookupsPanel';
+import { QhSchemesPanel } from './master-data/qh-schemes/QhSchemesPanel';
 import { TenantSettingsPanel } from './master-data/tenant/TenantSettingsPanel';
 
 type SectionKey =
   | 'currencies' | 'exchange-rates' | 'fund-categories' | 'fund-types' | 'expense-types'
   | 'numbering-series' | 'bank-accounts' | 'chart-of-accounts' | 'periods'
-  | 'agreement-templates' | 'sectors' | 'organisations' | 'lookups' | 'tenant';
+  | 'agreement-templates' | 'sectors' | 'organisations' | 'lookups' | 'tenant'
+  | 'qh-schemes';
 
 type Section = {
   key: SectionKey;
@@ -63,6 +65,9 @@ const SECTIONS: Section[] = [
   { key: 'numbering-series', title: 'Numbering Series', group: 'Funds & Receipts',
     description: 'Receipt, voucher, journal and other document numbering rules per year.',
     icon: <FieldNumberOutlined />, color: '#475569', render: () => <NumberingSeriesPanel /> },
+  { key: 'qh-schemes', title: 'QH Schemes', group: 'Funds & Receipts',
+    description: 'Qarzan Hasana scheme catalogue. Replaces the legacy two-value enum; subcategories supported. The form\'s gold-collateral panel is driven by each scheme\'s flag.',
+    icon: <BankOutlined />, color: '#C9A34B', render: () => <QhSchemesPanel /> },
 
   // Community
   { key: 'sectors', title: 'Sectors', group: 'Community',

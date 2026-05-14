@@ -72,7 +72,12 @@ public sealed record CreateQarzanHasanaDto(
     string? GoldHeldAt = null,
     /// <summary>Comma-separated tags from the income-source enum (SALARY, BUSINESS, INVESTMENT,
     /// SHARE_MARKET, REAL_ESTATE, RENTAL, PENSION, FAMILY, AGRICULTURE, FREELANCE, OTHER).</summary>
-    string? IncomeSources = null);
+    string? IncomeSources = null,
+    /// <summary>Admin-managed scheme master-data id. New loans should send this;
+    /// the service persists it alongside the legacy <see cref="Scheme"/> int for
+    /// backwards compatibility. The form's "gold collateral required" panel is
+    /// driven by the chosen scheme's RequiresGoldCollateral flag.</summary>
+    Guid? SchemeId = null);
 
 public sealed record UpdateQarzanHasanaDraftDto(
     decimal AmountRequested,

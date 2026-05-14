@@ -200,7 +200,13 @@ export type CreateQhPayload = {
   startDate: string;
   guarantor1MemberId: string;
   guarantor2MemberId: string;
+  /// Legacy int (1=Mohammadi, 2=Hussain, 0=Other). New code populates this
+  /// from the chosen scheme's `legacySchemeValue` so historical reports
+  /// keep working. `schemeId` below is the new source of truth.
   scheme: number;
+  /// Admin-managed scheme master-data id - drives the gold-collateral
+  /// conditional and what shows up on the loan detail page going forward.
+  schemeId?: string | null;
   goldAmount?: number | null;
   purpose?: string | null;
   repaymentPlan?: string | null;
@@ -215,6 +221,21 @@ export type CreateQhPayload = {
   /// Comma-separated codes from IncomeSourceOptions ('SALARY,BUSINESS' etc.)
   incomeSources?: string | null;
   guarantorsAcknowledged?: boolean;
+};
+
+/// Mirror of QhSchemeDto from the API. Drives the member-portal QH form's
+/// scheme picker + conditional gold-collateral panel.
+export type PortalQhScheme = {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  parentSchemeId: string | null;
+  parentSchemeName: string | null;
+  requiresGoldCollateral: boolean;
+  sortOrder: number;
+  isActive: boolean;
+  legacySchemeValue: number;
 };
 
 export type FundEnrollmentRow = {
@@ -370,6 +391,10 @@ export const portalMeApi = {
     api.get<PortalQhDetail>(`/api/v1/portal/me/qarzan-hasana/${id}`).then((r) => r.data),
   qhCreate: (payload: CreateQhPayload) =>
     api.post('/api/v1/portal/me/qarzan-hasana', payload).then((r) => r.data),
+  /// Active QH schemes from the master-data table - read-only mirror of the
+  /// admin `/qh-schemes` list, gated by portal.qh.request.
+  qhSchemes: () =>
+    api.get<PortalQhScheme[]>('/api/v1/portal/me/qh-schemes').then((r) => r.data),
   fundEnrollments: () =>
     api.get<FundEnrollmentRow[]>('/api/v1/portal/me/fund-enrollments').then((r) => r.data),
   fundEnrollmentDetail: (id: string) =>

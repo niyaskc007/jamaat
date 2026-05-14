@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Button, Result, Tag, Space, Descriptions, App as AntdApp, Spin, Alert, Input, Form } from 'antd';
-import { CheckCircleFilled, CloseCircleFilled, SafetyCertificateOutlined } from '@ant-design/icons';
+import { CheckCircleFilled, CloseCircleFilled, SafetyCertificateOutlined, LoginOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { PortalLayout } from './PortalLayout';
 import { guarantorConsentPortalApi } from '../qarzan-hasana/qarzanHasanaApi';
 import { extractProblem } from '../../shared/api/client';
+import { authStore } from '../../shared/auth/authStore';
 import { money } from '../../shared/format/format';
 
 /// Public-facing page where a guarantor accepts or declines kafalah for a QH loan.
@@ -110,6 +111,26 @@ export function PortalGuarantorConsentPage() {
               <li>Decline freely if you have any doubts - it is your right.</li>
             </ul>
           </div>
+
+          {/* Upsell the authenticated portal flow when the visitor is already
+              signed in - the stronger path. The token-based flow below stays
+              for guarantors who haven't enabled portal access yet. */}
+          {!responded && authStore.getUser() && (
+            <Alert
+              type="info"
+              icon={<LoginOutlined />}
+              showIcon
+              style={{ marginBlockStart: 16 }}
+              message="You're already signed in"
+              description={
+                <span>
+                  Acting from inside your member portal is the most secure path - your sign-in
+                  is the identity proof, no ITS digits to type.{' '}
+                  <Link to="/portal/me/guarantor-inbox">Open guarantor inbox</Link>
+                </span>
+              }
+            />
+          )}
 
           {!responded && (
             <div style={{ marginBlockStart: 20 }}>

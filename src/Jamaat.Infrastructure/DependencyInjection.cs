@@ -175,6 +175,7 @@ public static class DependencyInjection
         services.AddScoped<IReliabilityService, ReliabilityService>();
         services.AddScoped<IFundEnrollmentService, FundEnrollmentService>();
         services.AddScoped<IQarzanHasanaService, QarzanHasanaService>();
+        services.AddScoped<IQhSchemeService, QhSchemeService>();
         services.AddScoped<IEventService, EventService>();
         services.AddScoped<IEventRegistrationService, EventRegistrationService>();
         services.AddScoped<IEventPortalService, EventPortalService>();

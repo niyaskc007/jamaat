@@ -6,9 +6,10 @@ import {
   TeamOutlined, CalendarOutlined, HistoryOutlined, LockOutlined, LogoutOutlined,
   AppstoreOutlined, ProfileOutlined, MenuOutlined,
 } from '@ant-design/icons';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authStore } from '../../../shared/auth/authStore';
+import { resolveUserType } from '../../../shared/auth/routing';
 import { Logo } from '../../../shared/ui/Logo';
 import { LanguageSwitcher } from '../../../shared/i18n/LanguageSwitcher';
 import { InstallPrompt } from '../../../shared/pwa/InstallPrompt';
@@ -29,6 +30,17 @@ export function MemberPortalLayout() {
   const [collapsed, setCollapsed] = useState(true);
   const user = authStore.getUser();
   const { t } = useTranslation('portal');
+
+  // A pure Operator who somehow lands on /portal/me (deep link, refresh after
+  // type-flip, etc.) has no business here - they don't have a member record
+  // to view. Send them back to the operator dashboard. Hybrid users (Member +
+  // Operator both) DO have a member record AND can switch back, so they keep
+  // access here. The check on userType excludes Hybrid by matching only the
+  // strict "Operator" string.
+  const userType = user ? resolveUserType(user) : null;
+  if (userType === 'Operator') {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   // Grouped nav (matches the operator AppLayout pattern: Operations / Insights). Members
   // see "My activity" (transactional), "Engagement" (events + kafil), and "Account" (profile,
@@ -144,6 +156,19 @@ export function MemberPortalLayout() {
                 items: [
                   { key: 'profile', icon: <UserOutlined />, label: t('menu.profile'), onClick: () => navigate('/portal/me/profile') },
                   { key: 'change-pw', icon: <LockOutlined />, label: t('menu.changePassword'), onClick: () => navigate('/change-password?returnTo=/portal/me') },
+                  // Hybrid users (Member + Operator both) get a quick way back to
+                  // the operator dashboard - mirrors the "Switch to member portal"
+                  // entry on AppLayout's avatar menu. Pure-Member users never see
+                  // this since they have no operator side to switch to.
+                  ...(userType === 'Hybrid' ? [
+                    { type: 'divider' as const },
+                    {
+                      key: 'switch-operator',
+                      icon: <AppstoreOutlined />,
+                      label: 'Switch to operator dashboard',
+                      onClick: () => navigate('/dashboard'),
+                    },
+                  ] : []),
                   { type: 'divider' as const },
                   { key: 'logout', icon: <LogoutOutlined />, label: t('menu.signOut'), danger: true, onClick: onLogout },
                 ],

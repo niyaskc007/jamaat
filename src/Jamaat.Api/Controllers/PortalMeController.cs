@@ -167,25 +167,29 @@ public sealed class PortalMeController(
     {
         var (_, memberId) = await CurrentMemberAsync(ct);
         if (memberId is null) return Unauthorized();
-        var consent = await db.QarzanHasanaGuarantorConsents.AsNoTracking()
-            .Where(g => g.Id == consentId && g.GuarantorMemberId == memberId.Value)
-            .Select(g => new { g.Token })
-            .FirstOrDefaultAsync(ct);
-        if (consent is null) return NotFound();
 
         var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
         var ua = Request.Headers.UserAgent.ToString();
-        var meta = new Contracts.QarzanHasana.RecordConsentResponseDto(ip, ua);
+        // No ItsNumberVerification needed: the JWT already proves identity.
+        // The service double-checks consent.GuarantorMemberId == memberId.
+        var meta = new Contracts.QarzanHasana.RecordConsentResponseDto(ip, ua,
+            DeclineReason: ReadDeclineReasonFromQuery());
         var r = decision.ToLowerInvariant() switch
         {
-            "accept"  => await qhSvc.AcceptConsentAsync(consent.Token, meta, ct),
-            "decline" => await qhSvc.DeclineConsentAsync(consent.Token, meta, ct),
+            "accept"  => await qhSvc.AcceptConsentByGuarantorAsync(consentId, memberId.Value, meta, ct),
+            "decline" => await qhSvc.DeclineConsentByGuarantorAsync(consentId, memberId.Value, meta, ct),
             _         => Domain.Common.Result.Failure<Contracts.QarzanHasana.GuarantorConsentPortalDto>(
                             Domain.Common.Error.Validation("guarantor.bad_decision",
                                 "Decision must be 'accept' or 'decline'.")),
         };
         return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }
+
+    /// Optional decline reason can ride on either a `?reason=` query string
+    /// (cheapest from a simple Decline button click) or a JSON body. We accept
+    /// either to keep the SPA's existing call-site simple.
+    private string? ReadDeclineReasonFromQuery()
+        => Request.Query["reason"].ToString() is { Length: > 0 } q ? q : null;
 
     /// Member-friendly search for a guarantor or family member to attach to a Qarzan Hasana
     /// application. Returns minimal fields (id, ITS, full name) so the portal isn't a vector

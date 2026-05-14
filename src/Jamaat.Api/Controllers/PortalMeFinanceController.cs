@@ -208,6 +208,16 @@ public sealed class PortalMeFinanceController(
 
     // ----- Qarzan Hasana ------------------------------------------------------
 
+    /// Active QH schemes for the member-portal new-loan form. Read-only mirror
+    /// of /api/v1/qh-schemes that doesn't require admin.masterdata; gated by
+    /// portal.qh.request because only would-be borrowers need to see it.
+    [HttpGet("qh-schemes")]
+    [Authorize(Policy = "portal.qh.request")]
+    public async Task<IActionResult> QhSchemes(
+        [FromServices] Application.QarzanHasana.IQhSchemeService schemeSvc,
+        CancellationToken ct)
+        => Ok(await schemeSvc.ListAsync(includeInactive: false, ct));
+
     [HttpGet("qarzan-hasana/{id:guid}")]
     public async Task<IActionResult> QhDetail(Guid id, CancellationToken ct)
     {

@@ -296,6 +296,8 @@ public static class DatabaseSeeder
         await SeedChartOfAccountsAsync(db, defaultTenantId, logger, ct);
         await SeedFundCategoriesAsync(db, defaultTenantId, logger, ct);
         await SeedFundTypesAsync(db, defaultTenantId, logger, ct);
+        await SeedQhSchemesAsync(db, defaultTenantId, logger, ct);
+        await BackfillQhSchemeIdAsync(db, logger, ct);
         await SeedNumberingSeriesAsync(db, defaultTenantId, logger, ct);
         await SeedFinancialPeriodAsync(db, defaultTenantId, logger, ct);
         await SeedBankAndExpenseAsync(db, defaultTenantId, logger, ct);
@@ -750,6 +752,78 @@ Accepted on {{today}}.
         {
             await db.SaveChangesAsync(ct);
             logger.LogInformation("Seeded {Count} fund categories.", added);
+        }
+    }
+
+    /// Default Qarzan Hasana schemes. Idempotent: only inserts what's missing
+    /// by Code. Admins can add more (e.g. 10+ tenant-specific schemes with
+    /// subcategories) via the Master Data UI. The seeded set mirrors the
+    /// historical enum values so old reports + display code that branches
+    /// on the legacy int continue to work.
+    private static async Task SeedQhSchemesAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
+    {
+        var existing = await db.QhSchemes.AsNoTracking()
+            .Where(s => s.TenantId == tenantId && s.ParentSchemeId == null)
+            .Select(s => s.Code)
+            .ToListAsync(ct);
+        var have = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
+
+        var seeds = new (string Code, string Name, bool RequiresGold, int Legacy, int SortOrder, string Description)[]
+        {
+            ("MOH",   "Mohammadi Scheme", true,  1, 10, "Gold-backed loan scheme. Requires gold collateral details on the application."),
+            ("HUS",   "Hussain Scheme",   false, 2, 20, "Benevolent loan scheme. No collateral required."),
+            ("OTHER", "Other",            false, 0, 90, "Catch-all for schemes that don't fit the standard ones. Replace with a tenant-specific scheme as needed."),
+        };
+        var added = 0;
+        foreach (var (code, name, requiresGold, legacy, sortOrder, description) in seeds)
+        {
+            if (have.Contains(code)) continue;
+            var s = new QhScheme(Guid.NewGuid(), tenantId, code, name, requiresGold);
+            s.Update(name, description, parentSchemeId: null, requiresGoldCollateral: requiresGold,
+                sortOrder: sortOrder, isActive: true, legacySchemeValue: legacy);
+            db.QhSchemes.Add(s);
+            added++;
+        }
+        if (added > 0)
+        {
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation("Seeded {Count} QH schemes.", added);
+        }
+    }
+
+    /// Backfill: every QH loan that was issued before the master-data table existed
+    /// has SchemeId=null. Map the legacy int Scheme back to one of the seeded master
+    /// rows by LegacySchemeValue. Idempotent: only touches rows where SchemeId is
+    /// null. Safe to run on every startup.
+    private static async Task BackfillQhSchemeIdAsync(JamaatDbContext db, ILogger logger, CancellationToken ct)
+    {
+        var orphans = await db.QarzanHasanaLoans
+            .Where(l => l.SchemeId == null)
+            .Select(l => new { l.Id, l.Scheme, l.TenantId })
+            .ToListAsync(ct);
+        if (orphans.Count == 0) return;
+
+        // Build a (tenantId, legacyValue) -> schemeId map for cheap lookup.
+        var legacyMap = await db.QhSchemes.AsNoTracking()
+            .Where(s => s.ParentSchemeId == null)
+            .Select(s => new { s.TenantId, s.LegacySchemeValue, s.Id })
+            .ToListAsync(ct);
+        var byKey = legacyMap
+            .GroupBy(x => (x.TenantId, x.LegacySchemeValue))
+            .ToDictionary(g => g.Key, g => g.First().Id);
+
+        var patched = 0;
+        foreach (var o in orphans)
+        {
+            if (!byKey.TryGetValue((o.TenantId, (int)o.Scheme), out var schemeId)) continue;
+            var entity = await db.QarzanHasanaLoans.FirstAsync(l => l.Id == o.Id, ct);
+            entity.SetSchemeId(schemeId);
+            patched++;
+        }
+        if (patched > 0)
+        {
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation("Backfilled SchemeId on {Count} QH loans from legacy Scheme int.", patched);
         }
     }
 

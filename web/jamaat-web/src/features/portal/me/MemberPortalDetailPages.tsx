@@ -889,7 +889,13 @@ export function MemberPatronageDetailPage() {
 
 type QhFormShape = {
   amountRequested: number; instalmentsRequested: number; currency: string;
-  startDate: Dayjs; scheme: number;
+  startDate: Dayjs;
+  // Hierarchical scheme picker. `schemeParentId` is the top-level scheme; if
+  // it has subcategories the second dropdown surfaces them and the chosen
+  // child id lands in `schemeId`. If no subcategories exist, schemeId equals
+  // schemeParentId. Either way the API gets a single SchemeId.
+  schemeParentId: string;
+  schemeId: string;
   guarantor1MemberId: string; guarantor2MemberId: string;
   purpose: string; repaymentPlan: string;
   sourceOfIncome?: string; otherObligations?: string;
@@ -933,13 +939,43 @@ export function MemberQhSubmitPage() {
   });
 
   const initial = useMemo<Partial<QhFormShape>>(() => ({
-    currency: 'INR', scheme: 1, instalmentsRequested: 12,
+    currency: 'INR', instalmentsRequested: 12,
     startDate: dayjs().add(7, 'day'),
   }), []);
 
-  // Schemes have different supporting evidence: Mohammadi requires gold collateral details;
-  // Hussain is a free-form benevolent loan against guarantors only. Toggle the gold panel.
-  const scheme = Form.useWatch('scheme', form);
+  // Load the active schemes from master-data. We split into top-level + child
+  // arrays so the form can render two cascading selects (parent then optional
+  // child). When the picked scheme's `requiresGoldCollateral` flag is true,
+  // the gold-details panel becomes visible + required - no more hardcoded
+  // "scheme === 1" check.
+  const schemesQ = useQuery({
+    queryKey: ['portal-me-qh-schemes'],
+    queryFn: () => portalMeApi.qhSchemes(),
+  });
+  const allSchemes = schemesQ.data ?? [];
+  const topLevelSchemes = useMemo(() => allSchemes.filter((s) => !s.parentSchemeId), [allSchemes]);
+  const schemeParentId = Form.useWatch('schemeParentId', form);
+  const schemeId = Form.useWatch('schemeId', form);
+  const childSchemes = useMemo(
+    () => schemeParentId ? allSchemes.filter((s) => s.parentSchemeId === schemeParentId) : [],
+    [allSchemes, schemeParentId],
+  );
+  const activeScheme = useMemo(
+    () => allSchemes.find((s) => s.id === (schemeId || schemeParentId)) ?? null,
+    [allSchemes, schemeId, schemeParentId],
+  );
+  // Parent inherits to child: if EITHER level has gold required, ask for gold.
+  const requiresGold = (() => {
+    if (!schemeParentId) return false;
+    const parent = allSchemes.find((s) => s.id === schemeParentId);
+    if (parent?.requiresGoldCollateral) return true;
+    if (schemeId && schemeId !== schemeParentId) {
+      const child = allSchemes.find((s) => s.id === schemeId);
+      if (child?.requiresGoldCollateral) return true;
+    }
+    return false;
+  })();
+
   const guarantor1 = Form.useWatch('guarantor1MemberId', form);
   const guarantor2 = Form.useWatch('guarantor2MemberId', form);
   // Same person can't kafil both slots.
@@ -950,6 +986,12 @@ export function MemberQhSubmitPage() {
   const watchInstal   = Form.useWatch('instalmentsRequested', form);
 
   function onFinish(v: QhFormShape) {
+    // Final SchemeId: child if a subcategory was picked, otherwise parent.
+    // Legacy int Scheme is derived from the resolved scheme's LegacySchemeValue
+    // so the backend keeps old-report compatibility.
+    const finalSchemeId = (v.schemeId && v.schemeId !== v.schemeParentId) ? v.schemeId : v.schemeParentId;
+    const resolved = allSchemes.find((s) => s.id === finalSchemeId);
+    const legacyScheme = resolved?.legacySchemeValue ?? 0;
     submit.mutate({
       amountRequested: v.amountRequested,
       instalmentsRequested: v.instalmentsRequested,
@@ -957,11 +999,12 @@ export function MemberQhSubmitPage() {
       startDate: v.startDate.format('YYYY-MM-DD'),
       guarantor1MemberId: v.guarantor1MemberId,
       guarantor2MemberId: v.guarantor2MemberId,
-      scheme: v.scheme,
-      goldAmount: v.scheme === 1 ? v.goldAmount ?? null : null,
-      goldWeightGrams: v.scheme === 1 ? v.goldWeightGrams ?? null : null,
-      goldPurityKarat: v.scheme === 1 ? v.goldPurityKarat ?? null : null,
-      goldHeldAt: v.scheme === 1 ? v.goldHeldAt ?? null : null,
+      schemeId: finalSchemeId,
+      scheme: legacyScheme,
+      goldAmount:      requiresGold ? v.goldAmount      ?? null : null,
+      goldWeightGrams: requiresGold ? v.goldWeightGrams ?? null : null,
+      goldPurityKarat: requiresGold ? v.goldPurityKarat ?? null : null,
+      goldHeldAt:      requiresGold ? v.goldHeldAt      ?? null : null,
       purpose: v.purpose,
       repaymentPlan: v.repaymentPlan,
       sourceOfIncome: v.sourceOfIncome ?? null,
@@ -1011,16 +1054,31 @@ export function MemberQhSubmitPage() {
                 <InputNumber<number> className="jm-full-width" min={1} max={60} />
               </Form.Item>
             </Col>
-            <Col xs={24} md={12}>
-              <Form.Item label={<LabelWithHelp help="Mohammadi: against gold collateral. Hussain: against guarantors only. Pick the closest match - the approver can adjust.">Scheme</LabelWithHelp>}
-                name="scheme" rules={[{ required: true }]}>
-                <Select options={[
-                  { value: 1, label: 'Mohammadi (against gold)' },
-                  { value: 2, label: 'Hussain (against kafil)' },
-                  { value: 0, label: 'Other' },
-                ]} />
+            <Col xs={24} md={childSchemes.length > 0 ? 6 : 12}>
+              <Form.Item label={<LabelWithHelp help="The Jamaat publishes a catalogue of schemes. Pick the one closest to your situation - the approver can adjust.">Scheme</LabelWithHelp>}
+                name="schemeParentId" rules={[{ required: true, message: 'Choose a scheme.' }]}>
+                <Select loading={schemesQ.isLoading}
+                  placeholder="Select scheme"
+                  options={topLevelSchemes.map((s) => ({ value: s.id, label: s.name }))}
+                  onChange={() => form.setFieldValue('schemeId', undefined)} />
               </Form.Item>
             </Col>
+            {childSchemes.length > 0 && (
+              <Col xs={24} md={6}>
+                <Form.Item label={<LabelWithHelp help="The chosen scheme has sub-types. Pick the one that applies.">Sub-scheme</LabelWithHelp>}
+                  name="schemeId" rules={[{ required: true, message: 'Pick a sub-scheme.' }]}>
+                  <Select placeholder="Select sub-scheme"
+                    options={childSchemes.map((s) => ({ value: s.id, label: s.name }))} />
+                </Form.Item>
+              </Col>
+            )}
+            {activeScheme?.description && (
+              <Col xs={24}>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {activeScheme.description}
+                </Typography.Text>
+              </Col>
+            )}
             <Col xs={24} md={12}>
               <Form.Item label={<LabelWithHelp help="The first repayment will be due about a month after this date. Default: a week from today.">Start date</LabelWithHelp>}
                 name="startDate" rules={[{ required: true }]}>
@@ -1119,9 +1177,9 @@ export function MemberQhSubmitPage() {
 
         </FormSection>
 
-        {scheme === 1 && (
-          <FormSection icon={<GoldOutlined />} title="Gold collateral (Mohammadi)"
-            help="Mohammadi loans are secured against gold. Bring the gold + assessor's slip to the counter; the cashier will weigh + verify before disbursement.">
+        {requiresGold && (
+          <FormSection icon={<GoldOutlined />} title={`Gold collateral${activeScheme?.name ? ` (${activeScheme.name})` : ''}`}
+            help="This scheme is secured against gold. Bring the gold + assessor's slip to the counter; the cashier will weigh + verify before disbursement.">
               <Row gutter={16}>
                 <Col xs={24} md={6}>
                   <Form.Item label={<LabelWithHelp help="Estimated market value of the gold pledged.">Gold value</LabelWithHelp>}
