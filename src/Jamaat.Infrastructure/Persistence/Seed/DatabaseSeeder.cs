@@ -360,7 +360,7 @@ public static class DatabaseSeeder
                 // user-claims (the additive reconcile won't remove them). Add to this list
                 // whenever a perm is removed from the Member role definition above.
                 new[] { "member.wealth.view" }, logger)),
-            ("user-types",         () => ReconcileUserTypesAsync(userMgr, logger)),
+            ("user-types",         () => ReconcileUserTypesAsync(userMgr, scope.ServiceProvider, logger)),
             ("test-users",         () => SeedTestUsersAsync(userMgr, defaultTenantId, logger, config)),
         };
         foreach (var (name, run) in seeds)
@@ -526,7 +526,11 @@ public static class DatabaseSeeder
 
     private static async Task SeedLookupsAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
     {
-        if (await db.Lookups.AnyAsync(ct)) return;
+        // Defense-in-depth: the global query filter already scopes by tenant, but we
+        // pin the predicate explicitly so this seeder still does the right thing if the
+        // filter is ever altered. Without it, a multi-tenant install would silently skip
+        // seeding tenant B's defaults because tenant A's rows answer the AnyAsync.
+        if (await db.Lookups.AnyAsync(l => l.TenantId == tenantId, ct)) return;
         // Values sourced from the workbook's "Lookups" sheet.
         var entries = new (string category, string code, string name)[]
         {
@@ -598,7 +602,8 @@ public static class DatabaseSeeder
 
     private static async Task SeedSectorsAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
     {
-        if (await db.Sectors.AnyAsync(ct)) return;
+        // Explicit tenant filter (see SeedLookupsAsync comment for rationale).
+        if (await db.Sectors.AnyAsync(s => s.TenantId == tenantId, ct)) return;
         var sector = new Sector(Guid.NewGuid(), tenantId, "HATEMI", "Hatemi");
         sector.Update("Hatemi", null, null, "Seeded sample sector from the workbook.", isActive: true);
         db.Sectors.Add(sector);
@@ -613,7 +618,8 @@ public static class DatabaseSeeder
 
     private static async Task SeedOrganisationsAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
     {
-        if (await db.Organisations.AnyAsync(ct)) return;
+        // Explicit tenant filter (see SeedLookupsAsync comment for rationale).
+        if (await db.Organisations.AnyAsync(o => o.TenantId == tenantId, ct)) return;
         var orgs = new (string code, string name, string category)[]
         {
             ("SHABABIL", "Shababil Eidz-Zahabi", "Committee"),
@@ -636,7 +642,8 @@ public static class DatabaseSeeder
 
     private static async Task SeedAgreementTemplateAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
     {
-        if (await db.CommitmentAgreementTemplates.AnyAsync(ct)) return;
+        // Explicit tenant filter (see SeedLookupsAsync comment for rationale).
+        if (await db.CommitmentAgreementTemplates.AnyAsync(t => t.TenantId == tenantId, ct)) return;
         const string body = """
 # Pledge Agreement
 
@@ -894,7 +901,11 @@ Accepted on {{today}}.
 
     private static async Task SeedFundTypesAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
     {
-        if (await db.FundTypes.AnyAsync(ct)) return;
+        // Explicit tenant filter (see SeedLookupsAsync comment for rationale). The probe
+        // also short-circuits the WHOLE fund-types seed once any row exists, so a tenant
+        // that already has SABIL/SABEELES/etc. won't pick up newly-added defaults on
+        // upgrade - that's by design (defaults are the boot set, not a perpetual baseline).
+        if (await db.FundTypes.AnyAsync(f => f.TenantId == tenantId, ct)) return;
         var donations = await db.Accounts.FirstOrDefaultAsync(a => a.Code == "4000", ct);
 
         // Resolve the new master categories so each fund type lands with its FundCategoryId set
@@ -970,13 +981,14 @@ Accepted on {{today}}.
     private static async Task SeedBankAndExpenseAsync(JamaatDbContext db, Guid tenantId, ILogger logger, CancellationToken ct)
     {
         var bankAcct = await db.Accounts.FirstOrDefaultAsync(a => a.Code == "1200", ct);
-        if (!await db.BankAccounts.AnyAsync(ct) && bankAcct is not null)
+        // Explicit tenant filter on both probes (see SeedLookupsAsync comment).
+        if (!await db.BankAccounts.AnyAsync(b => b.TenantId == tenantId, ct) && bankAcct is not null)
         {
             var b = new BankAccount(Guid.NewGuid(), tenantId, "Main Operating Account", "Sample Bank", "000000000000");
             b.Update("Main Operating Account", "Sample Bank", "000000000000", null, null, null, "INR", bankAcct.Id, true);
             db.BankAccounts.Add(b);
         }
-        if (!await db.ExpenseTypes.AnyAsync(ct))
+        if (!await db.ExpenseTypes.AnyAsync(e => e.TenantId == tenantId, ct))
         {
             var event_ = await db.Accounts.FirstOrDefaultAsync(a => a.Code == "5100", ct);
             var util = await db.Accounts.FirstOrDefaultAsync(a => a.Code == "5200", ct);
@@ -1042,6 +1054,13 @@ Accepted on {{today}}.
     /// added to the role in a later release. Without this reconciliation, members provisioned
     /// before a permission existed never see it - we just hit that exact bug with
     /// portal.fund_enrollments.request / portal.dashboard.view.own. Idempotent and additive.
+    ///
+    /// Performance gate: a previous version iterated every member-role user unconditionally
+    /// (UserManager.GetClaimsAsync per user, then AddClaimAsync per missing perm), which on a
+    /// 5k+ member tenant blew past the IIS 120s startup timeout. We now run a single bulk SQL
+    /// pre-check: for each role-perm, ask the DB "how many Member-role users are missing this
+    /// claim?". If the answer is zero across all perms, we skip the per-user loop entirely.
+    /// The slow path only fires when there's actual work to do (a new perm just shipped).
     private static async Task ReconcileMemberRoleUserPermissionsAsync(
         UserManager<ApplicationUser> userMgr, IServiceProvider services, ILogger logger)
     {
@@ -1054,23 +1073,48 @@ Accepted on {{today}}.
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (rolePerms.Count == 0) return;
 
-        var members = await userMgr.GetUsersInRoleAsync("Member");
-        var totalAdded = 0;
-        foreach (var u in members)
+        // Cheap pre-check: are any Member-role users actually missing any of these perms?
+        // If not, the per-user loop is pure waste. Use the DbContext directly because
+        // UserManager.GetUsersInRoleAsync + GetClaimsAsync per user is what we're avoiding.
+        var db = services.GetRequiredService<JamaatDbContext>();
+        var memberRoleId = memberRole.Id;
+        var memberUserIds = await db.UserRoles.AsNoTracking()
+            .Where(ur => ur.RoleId == memberRoleId).Select(ur => ur.UserId).ToListAsync();
+        if (memberUserIds.Count == 0) return;
+        var existingPairs = await db.UserClaims.AsNoTracking()
+            .Where(c => memberUserIds.Contains(c.UserId) && c.ClaimType == "permission")
+            .Select(c => new { c.UserId, c.ClaimValue })
+            .ToListAsync();
+        var existingByUser = existingPairs
+            .GroupBy(p => p.UserId)
+            .ToDictionary(g => g.Key, g => g.Select(p => p.ClaimValue!).ToHashSet(StringComparer.OrdinalIgnoreCase));
+
+        // Compute the work-list up-front. If empty, skip the slow loop entirely.
+        var missing = new List<(Guid UserId, string Perm)>();
+        foreach (var uid in memberUserIds)
         {
-            var existing = (await userMgr.GetClaimsAsync(u))
-                .Where(c => c.Type == "permission")
-                .Select(c => c.Value)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var have = existingByUser.TryGetValue(uid, out var s) ? s : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var p in rolePerms)
+                if (!have.Contains(p)) missing.Add((uid, p));
+        }
+        if (missing.Count == 0) return;
+
+        // Slow path: per-user UserManager.AddClaimAsync (Identity contract requires it for
+        // hook-friendliness around claim normalisation). Bounded by `missing.Count`, not
+        // total member count, so a no-op startup is fast.
+        var totalAdded = 0;
+        foreach (var grp in missing.GroupBy(m => m.UserId))
+        {
+            var u = await userMgr.FindByIdAsync(grp.Key.ToString());
+            if (u is null) continue;
+            foreach (var (_, perm) in grp)
             {
-                if (existing.Contains(p)) continue;
-                await userMgr.AddClaimAsync(u, new Claim("permission", p));
+                await userMgr.AddClaimAsync(u, new Claim("permission", perm));
                 totalAdded++;
             }
         }
-        if (totalAdded > 0)
-            logger.LogInformation("Reconciled {Count} new permission claim(s) across {Count2} Member-role users.", totalAdded, members.Count);
+        logger.LogInformation("Reconciled {Count} new permission claim(s) across {Count2} Member-role users.",
+            totalAdded, memberUserIds.Count);
     }
 
     /// One-shot cleanup: remove user-claims that USED to be granted by the Member role
@@ -1110,47 +1154,65 @@ Accepted on {{today}}.
     /// Member-only role -> Member. Any operator role -> Operator. Both -> Hybrid.
     /// Idempotent: only writes when the resolved type differs from the stored one, so
     /// subsequent runs are no-ops and admin overrides via the UI survive.
-    private static async Task ReconcileUserTypesAsync(UserManager<ApplicationUser> userMgr, ILogger logger)
+    ///
+    /// Performance: a previous version iterated every member-role + operator-role user
+    /// and called UserManager.UpdateAsync per diff, blowing the IIS 120s startup window
+    /// on large tenants. We now compute the diff with one SQL pass via DbContext and
+    /// only call UpdateAsync for rows that actually differ.
+    private static async Task ReconcileUserTypesAsync(UserManager<ApplicationUser> userMgr, IServiceProvider services, ILogger logger)
     {
-        var memberUsers = (await userMgr.GetUsersInRoleAsync("Member"))
-            .ToDictionary(u => u.Id, u => u);
+        var db = services.GetRequiredService<JamaatDbContext>();
+        var roleMgr = services.GetRequiredService<RoleManager<ApplicationRole>>();
 
-        // Find the union of users in any operator role (anyone in Administrator, SuperAdmin,
-        // or one of the seeded operator roles). The `Member` role is the only "not operator" role
-        // in this seed, so we enumerate the rest and union them.
         var operatorRoleNames = new[]
         {
             "Administrator", "SuperAdmin", "DataEditor", "DataValidator",
             "EventCoordinator", "EventVolunteer",
         };
-        var operatorUsers = new Dictionary<Guid, ApplicationUser>();
-        foreach (var roleName in operatorRoleNames)
-        {
-            foreach (var u in await userMgr.GetUsersInRoleAsync(roleName))
-                operatorUsers[u.Id] = u;
-        }
+
+        // Resolve role ids in one go (RoleManager.FindByName per role is a roundtrip each).
+        var roles = await db.Roles.AsNoTracking()
+            .Where(r => r.Name == "Member" || operatorRoleNames.Contains(r.Name!))
+            .Select(r => new { r.Id, r.Name })
+            .ToListAsync();
+        var memberRoleId = roles.FirstOrDefault(r => r.Name == "Member")?.Id;
+        var operatorRoleIds = roles.Where(r => r.Name != "Member").Select(r => r.Id).ToHashSet();
+
+        var userRoles = await db.UserRoles.AsNoTracking()
+            .Where(ur => operatorRoleIds.Contains(ur.RoleId) || ur.RoleId == memberRoleId)
+            .Select(ur => new { ur.UserId, ur.RoleId })
+            .ToListAsync();
+        var byUser = userRoles.GroupBy(x => x.UserId).ToDictionary(
+            g => g.Key,
+            g => new {
+                HasMember = memberRoleId is Guid mid && g.Any(x => x.RoleId == mid),
+                HasOperator = g.Any(x => operatorRoleIds.Contains(x.RoleId)),
+            });
+        if (byUser.Count == 0) return;
+
+        var userIds = byUser.Keys.ToList();
+        var currentTypes = await db.Users.AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.UserType })
+            .ToListAsync();
+        var typeByUser = currentTypes.ToDictionary(x => x.Id, x => x.UserType);
 
         var changed = 0;
-        // Walk the union of both sets so we cover every relevant user exactly once.
-        var allIds = memberUsers.Keys.Union(operatorUsers.Keys).ToList();
-        foreach (var id in allIds)
+        foreach (var (uid, mix) in byUser)
         {
-            var user = memberUsers.TryGetValue(id, out var m) ? m : operatorUsers[id];
-            var hasMember = memberUsers.ContainsKey(id);
-            var hasOperator = operatorUsers.ContainsKey(id);
-            var resolved = (hasMember, hasOperator) switch
+            var resolved = (mix.HasMember, mix.HasOperator) switch
             {
                 (true, true)   => UserType.Hybrid,
                 (true, false)  => UserType.Member,
                 (false, true)  => UserType.Operator,
-                _              => UserType.Operator, // No roles - safe default; won't have portal access either
+                _              => UserType.Operator,
             };
-            if (user.UserType != resolved)
-            {
-                user.UserType = resolved;
-                await userMgr.UpdateAsync(user);
-                changed++;
-            }
+            if (typeByUser.TryGetValue(uid, out var current) && current == resolved) continue;
+            var u = await userMgr.FindByIdAsync(uid.ToString());
+            if (u is null) continue;
+            u.UserType = resolved;
+            await userMgr.UpdateAsync(u);
+            changed++;
         }
         if (changed > 0)
             logger.LogInformation("Reconciled UserType on {Count} user(s).", changed);

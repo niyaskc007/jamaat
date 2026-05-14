@@ -53,7 +53,10 @@ public sealed class CommitmentService(
             .Skip(Math.Max(0, (q.Page - 1) * q.PageSize))
             .Take(Math.Clamp(q.PageSize, 1, 500))
             .Select(c => MapRow(c,
-                db.Members.Where(m => m.Id == c.MemberId).Select(m => m.ItsNumber.Value).FirstOrDefault(),
+                // (string)(object) cast unwraps the value-converted owned record-struct
+                // ItsNumber so EF Core 10 can translate the chained correlated subquery
+                // (Where().Select(m.ItsNumber.Value) wouldn't translate).
+                db.Members.Where(m => m.Id == c.MemberId).Select(m => (string)(object)m.ItsNumber).FirstOrDefault(),
                 db.Families.Where(f => f.Id == c.FamilyId).Select(f => f.Code).FirstOrDefault(),
                 db.FundTypes.Where(f => f.Id == c.FundTypeId).Select(f => f.Code).FirstOrDefault() ?? c.FundNameSnapshot,
                 db.FundTypes.Where(f => f.Id == c.FundTypeId).Select(f => f.NameEnglish).FirstOrDefault() ?? c.FundNameSnapshot))

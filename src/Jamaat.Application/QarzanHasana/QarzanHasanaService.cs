@@ -1007,7 +1007,10 @@ public sealed class QarzanHasanaService(
     private static QarzanHasanaLoanDto ProjectRow(JamaatDbContextFacade db, QarzanHasanaLoan x) =>
         new(x.Id, x.Code,
             x.MemberId,
-            db.Members.Where(m => m.Id == x.MemberId).Select(m => m.ItsNumber.Value).FirstOrDefault() ?? "",
+            // Cast through (string)(object) to bypass the EF Core 10 owned-property
+            // translator pitfall on value-converted ItsNumber (the chained Select form
+            // would throw at runtime in a correlated subquery).
+            db.Members.Where(m => m.Id == x.MemberId).Select(m => (string)(object)m.ItsNumber).FirstOrDefault() ?? "",
             db.Members.Where(m => m.Id == x.MemberId).Select(m => m.FullName).FirstOrDefault() ?? "",
             x.FamilyId,
             db.Families.Where(f => f.Id == x.FamilyId).Select(f => f.Code).FirstOrDefault(),

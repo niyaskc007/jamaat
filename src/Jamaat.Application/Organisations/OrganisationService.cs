@@ -120,7 +120,9 @@ public sealed class MembershipService(
 
     private static IQueryable<MP> Project(JamaatDbContextFacade db, IQueryable<MemberOrganisationMembership> q) =>
         q.Select(x => new MP(x,
-            db.Members.Where(m => m.Id == x.MemberId).Select(m => m.ItsNumber.Value).FirstOrDefault() ?? "",
+            // (string)(object) cast unwraps the owned record-struct ItsNumber so EF Core 10
+            // can translate this correlated subquery (Select(m.ItsNumber.Value) wouldn't).
+            db.Members.Where(m => m.Id == x.MemberId).Select(m => (string)(object)m.ItsNumber).FirstOrDefault() ?? "",
             db.Members.Where(m => m.Id == x.MemberId).Select(m => m.FullName).FirstOrDefault() ?? "",
             db.Organisations.Where(o => o.Id == x.OrganisationId).Select(o => o.Code).FirstOrDefault() ?? "",
             db.Organisations.Where(o => o.Id == x.OrganisationId).Select(o => o.Name).FirstOrDefault() ?? ""));

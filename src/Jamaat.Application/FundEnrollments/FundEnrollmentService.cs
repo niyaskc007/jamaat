@@ -205,7 +205,10 @@ public sealed class FundEnrollmentService(
     private static FundEnrollmentDto Project(JamaatDbContextFacade db, FundEnrollment x) =>
         new(x.Id, x.Code,
             x.MemberId,
-            db.Members.Where(m => m.Id == x.MemberId).Select(m => m.ItsNumber.Value).FirstOrDefault() ?? "",
+            // (string)(object) cast: EF Core 10's translator can't handle
+            // `Select(m => m.ItsNumber.Value)` in a correlated subquery (the owned
+            // record-struct property access). Boxing through string works.
+            db.Members.Where(m => m.Id == x.MemberId).Select(m => (string)(object)m.ItsNumber).FirstOrDefault() ?? "",
             db.Members.Where(m => m.Id == x.MemberId).Select(m => m.FullName).FirstOrDefault() ?? "",
             x.FundTypeId,
             db.FundTypes.Where(f => f.Id == x.FundTypeId).Select(f => f.Code).FirstOrDefault() ?? "",

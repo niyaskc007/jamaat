@@ -222,7 +222,10 @@ public sealed class EventService(
                 x.Id, x.EventId,
                 db.Events.Where(e => e.Id == x.EventId).Select(e => e.Name).FirstOrDefault() ?? "",
                 x.MemberId,
-                db.Members.Where(m => m.Id == x.MemberId).Select(m => m.ItsNumber.Value).FirstOrDefault() ?? "",
+                // EF Core 10 chokes on `Select(m => m.ItsNumber.Value)` in a correlated
+                // subquery; cast through (string)(object) to bypass the owned-property
+                // translator pitfall (same pattern as MemberRepository.cs:28).
+                db.Members.Where(m => m.Id == x.MemberId).Select(m => (string)(object)m.ItsNumber).FirstOrDefault() ?? "",
                 db.Members.Where(m => m.Id == x.MemberId).Select(m => m.FullName).FirstOrDefault() ?? "",
                 x.ScannedAtUtc, x.Location))
             .ToListAsync(ct);
