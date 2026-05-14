@@ -96,7 +96,14 @@ public sealed class MemberProfileController(
     }
 
     [HttpGet("photo/file")]
-    [AllowAnonymous] // photos themselves are not sensitive; the URL is obscure enough. Tighten later if needed.
+    [AllowAnonymous]
+    // KNOWN GAP (tracked): the endpoint is anonymous because the SPA renders photos via
+    // `<img src=...>` which can't attach a Bearer header. Enabling [Authorize] here would
+    // 401 every photo in the operator UI. The proper fix is to issue HMAC-signed URLs
+    // with a short TTL (e.g. ?sig=...&exp=...) baked into MemberProfile.PhotoUrl at DTO
+    // mapping time; the endpoint validates the signature. Until that ships, the URL is
+    // the only secret - leak surface = anyone with a member Guid. Acceptable per current
+    // threat model (member ids are not enumerable without authenticated APIs).
     public async Task<IActionResult> GetPhotoFile(Guid id, CancellationToken ct)
     {
         var opened = await photoStorage.OpenAsync(id, ct);

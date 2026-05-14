@@ -306,6 +306,38 @@ if (otherCommitId) {
   logProbe(`portal-me commitment for someone else's id (expect 404)`, probe.res, probe.res?.status);
 }
 
+// === Batch A fixes — confirm they actually close the holes ===
+
+// A.1 IDOR: MemberChangeRequest admin route should now require member.update
+// (operator-only). Members must hit 403, not 200/201 (the old IDOR symptom).
+const someoneElseId = allCommits.body?.items?.find(c => c.memberId !== memberLogin.body?.user?.id)?.memberId;
+if (someoneElseId) {
+  const idor = await call('POST', `/api/v1/members/${someoneElseId}/profile/contact/request-update`,
+    memberToken, { email: 'attacker@example.com' });
+  logProbe(`MemberChangeRequest IDOR (member submitting against another member, expect 403)`,
+    idor.res, idor.res?.status);
+}
+
+// A.3 anonymous event registration: omit dto.MemberId and pass another member's
+// Guid - the service should ignore it. Probe is observational only; we can't
+// fully verify without a public event, but a 4xx response means the trust-
+// the-body path is no longer silent.
+const evtAttack = await call('POST', '/api/v1/portal/events/register', null, {
+  eventId: '00000000-0000-0000-0000-000000000001',
+  memberId: someoneElseId ?? '00000000-0000-0000-0000-000000000002',
+  attendeeName: 'Attacker',
+});
+logProbe(`Anonymous event register w/ foreign memberId (expect 4xx, never 200)`,
+  evtAttack.res, evtAttack.res?.status);
+
+// A.4 wealth list: member token should now get 403 (perm revoked from Member role).
+// Note: existing prod users with the perm still cached in their old JWT will get
+// through until the token refresh; for a freshly-issued member token this should 403.
+const wealth = await call('GET', `/api/v1/members/${someoneElseId ?? memberLogin.body?.user?.id}/profile/assets`,
+  memberToken);
+logProbe(`Member wealth list (member token, expect 403 after perm revoke)`,
+  wealth.res, wealth.res?.status);
+
 // ============================================================================
 // GUARANTOR DECLINE: probe what happens to the loan when a guarantor declines
 // instead of accepting. We'll create another QH loan with the two test

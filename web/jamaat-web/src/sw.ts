@@ -101,11 +101,23 @@ registerRoute(
   }),
 );
 
-// ---- Update flow ---------------------------------------------------------
+// ---- Update + cache-management messages ----------------------------------
 // The SPA UpdateToast posts {type:'SKIP_WAITING'} when the user clicks "Reload now".
+// authStore.clear() / setSession() posts {type:'CLEAR_USER_CACHES'} on sign-out and
+// sign-in so a shared device (User A signs out, User B signs in) cannot serve A's
+// cached portal data to B - the runtime caches are keyed by URL only and would
+// otherwise be cross-user readable.
+const USER_SCOPED_CACHES = ['portal-me-v1', 'profile-images-v1'];
 self.addEventListener('message', (event) => {
-  if (event.data && (event.data as { type?: string }).type === 'SKIP_WAITING') {
+  const type = (event.data as { type?: string } | undefined)?.type;
+  if (type === 'SKIP_WAITING') {
     void self.skipWaiting();
+    return;
+  }
+  if (type === 'CLEAR_USER_CACHES') {
+    event.waitUntil((async () => {
+      await Promise.all(USER_SCOPED_CACHES.map((name) => caches.delete(name).catch(() => false)));
+    })());
   }
 });
 

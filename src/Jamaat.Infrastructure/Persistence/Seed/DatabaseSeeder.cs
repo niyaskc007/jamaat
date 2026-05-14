@@ -165,27 +165,50 @@ public static class DatabaseSeeder
                 "portal.fund_enrollments.request",
                 "portal.dashboard.view.own",
                 "member.self.update",
-                "member.wealth.view",
                 // Read-own-record + read-own-family. Strictly distinct from the
                 // operator perms `member.view` / `family.view` which list ALL
                 // tenants. With this single perm a member can hit the portal
                 // /me/family endpoint to see who else is in their household
                 // (identity only - financial data flows through portal.*.view.own).
                 "member.self.view",
+                // member.wealth.view was previously here but it gates the operator-side
+                // /api/v1/members/{id}/profile/assets route, which takes an arbitrary
+                // {id} - a Member with the perm could read anyone's wealth declaration.
+                // The perm is now operator-only; if/when a member-facing wealth view
+                // ships, it'll be a separate `portal.wealth.view.own` with a JWT-resolved
+                // memberId, not a URL parameter.
             }),
         };
         foreach (var (roleName, perms) in rolePermissions)
         {
             var role = await roleMgr.FindByNameAsync(roleName);
             if (role is null) continue;
-            var existing = (await roleMgr.GetClaimsAsync(role))
+            var existingClaims = (await roleMgr.GetClaimsAsync(role))
                 .Where(c => c.Type == "permission")
+                .ToList();
+            var existing = existingClaims
                 .Select(c => c.Value)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var canonical = new HashSet<string>(perms, StringComparer.OrdinalIgnoreCase);
             foreach (var p in perms)
             {
                 if (!existing.Contains(p))
                     await roleMgr.AddClaimAsync(role, new Claim("permission", p));
+            }
+            // Remove role-claims that no longer appear in the canonical list. Without this,
+            // a perm dropped from the array above lingers on the role forever (e.g. the
+            // wealth-view IDOR fix where `member.wealth.view` was removed from the Member
+            // role but persisted in RoleClaims until manual cleanup). NOTE: the seeded
+            // roles defined in this method are code-managed and treated as canonical;
+            // customer-specific perm tweaks should go on CUSTOM roles created via the
+            // admin Roles UI (those aren't reconciled here).
+            foreach (var c in existingClaims)
+            {
+                if (!canonical.Contains(c.Value))
+                {
+                    await roleMgr.RemoveClaimAsync(role, c);
+                    logger.LogInformation("Revoked stale perm '{Perm}' from seeded role '{Role}'.", c.Value, roleName);
+                }
             }
         }
 
@@ -332,6 +355,11 @@ public static class DatabaseSeeder
             ("cms-defaults",       () => SeedCmsDefaultsAsync(db, logger, ct)),
             ("admin-user-perms",   () => ReconcileAdminUserPermissionsAsync(userMgr, logger)),
             ("member-role-perms",  () => ReconcileMemberRoleUserPermissionsAsync(userMgr, scope.ServiceProvider, logger)),
+            ("revoke-stale-member-perms", () => RevokeStaleMemberRolePermsAsync(userMgr,
+                // Perms that USED to be on the Member role and need stripping from existing
+                // user-claims (the additive reconcile won't remove them). Add to this list
+                // whenever a perm is removed from the Member role definition above.
+                new[] { "member.wealth.view" }, logger)),
             ("user-types",         () => ReconcileUserTypesAsync(userMgr, logger)),
             ("test-users",         () => SeedTestUsersAsync(userMgr, defaultTenantId, logger, config)),
         };
@@ -1043,6 +1071,39 @@ Accepted on {{today}}.
         }
         if (totalAdded > 0)
             logger.LogInformation("Reconciled {Count} new permission claim(s) across {Count2} Member-role users.", totalAdded, members.Count);
+    }
+
+    /// One-shot cleanup: remove user-claims that USED to be granted by the Member role
+    /// but have since been dropped from the role definition. The additive reconcile above
+    /// never removes claims, so without this pass a permission stripped from the Member
+    /// role lingers on every existing user that was provisioned before the change.
+    ///
+    /// Used to fix the wealth-view IDOR: `member.wealth.view` was on the Member role and
+    /// gates the operator-side `/api/v1/members/{id}/profile/assets` route - any Member
+    /// could read any other member's wealth declaration. Once the perm is gone from the
+    /// Member role, this revokes it from the ~93 Member-role users already provisioned.
+    /// Idempotent: re-running is a no-op once the claims are gone.
+    private static async Task RevokeStaleMemberRolePermsAsync(
+        UserManager<ApplicationUser> userMgr, IReadOnlyList<string> stalePerms, ILogger logger)
+    {
+        if (stalePerms.Count == 0) return;
+        var stale = new HashSet<string>(stalePerms, StringComparer.OrdinalIgnoreCase);
+        var members = await userMgr.GetUsersInRoleAsync("Member");
+        var totalRemoved = 0;
+        foreach (var u in members)
+        {
+            var claims = (await userMgr.GetClaimsAsync(u))
+                .Where(c => c.Type == "permission" && stale.Contains(c.Value))
+                .ToList();
+            foreach (var c in claims)
+            {
+                await userMgr.RemoveClaimAsync(u, c);
+                totalRemoved++;
+            }
+        }
+        if (totalRemoved > 0)
+            logger.LogInformation("Revoked {Count} stale permission claim(s) from {Count2} Member-role users (perms: {Perms}).",
+                totalRemoved, members.Count, string.Join(", ", stalePerms));
     }
 
     /// Backfill the new ApplicationUser.UserType column from existing role membership.

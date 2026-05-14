@@ -90,13 +90,24 @@ public sealed class EventRegistrationService(
         if (!ev.CanAcceptRegistrationsAt(clock.UtcNow))
             return Error.Business("event.registration_closed", "This event is not currently accepting registrations.");
 
-        // Resolve memberId: explicit → from DTO; fallback → current user's member (matched by email)
-        var memberId = dto.MemberId;
-        if (memberId is null && currentUser.UserId is Guid uid)
+        // Resolve memberId server-side. NEVER trust dto.MemberId: a previous version did and
+        // any anonymous caller could POST another member's Guid here, lock them into a sold-out
+        // event, populate their /portal/me/events history, or block their later self-registration.
+        // - Anonymous caller  → memberId stays null. Allowed only when OpenToNonMembers=true,
+        //                       and the event row is created with no member link (guest).
+        // - Authenticated caller → resolve from currentUser.UserId via Members.ExternalUserId.
+        //                       If the caller also passed dto.MemberId and it disagrees with the
+        //                       resolved one, reject - that's someone trying to register on
+        //                       behalf of another logged-in member.
+        Guid? memberId = null;
+        if (currentUser.UserId is Guid uid)
         {
             memberId = await db.Members.AsNoTracking()
                 .Where(m => m.ExternalUserId == uid.ToString())
                 .Select(m => (Guid?)m.Id).FirstOrDefaultAsync(ct);
+            if (dto.MemberId is Guid claimed && memberId is Guid resolved && claimed != resolved)
+                return Error.Forbidden("registration.member_mismatch",
+                    "You may only register yourself; the MemberId in the body must match your account.");
         }
 
         if (memberId is null && !ev.OpenToNonMembers)
