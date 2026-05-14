@@ -85,14 +85,43 @@ public sealed class MemberProfileController(
         if (file.Length > photoOptions.Value.MaxBytes)
             return ErrorMapper.ToActionResult(this, Error.Validation("photo.too_large",
                 $"Photo exceeds the {photoOptions.Value.MaxBytes / 1024} KB limit."));
-        if (!(file.ContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ?? false))
-            return ErrorMapper.ToActionResult(this, Error.Validation("photo.invalid_type",
-                "Only image uploads are accepted."));
 
+        // Tighten the MIME allowlist + verify the first bytes match the declared format.
+        // Previously any `image/*` was accepted (incl. SVG which can carry script), and
+        // the declared Content-Type was trusted. Now we reject SVG and confirm the file's
+        // magic bytes match - same gate as PortalMeProfileController.UploadPhoto.
+        var declared = (file.ContentType ?? string.Empty).ToLowerInvariant();
+        var allowedMimes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif" };
+        if (!allowedMimes.Contains(declared))
+            return ErrorMapper.ToActionResult(this, Error.Validation("photo.invalid_type",
+                "Only JPEG, PNG, WebP, or GIF images are accepted."));
+
+        var head = new byte[12];
         await using var stream = file.OpenReadStream();
-        var url = await photoStorage.StoreAsync(id, stream, file.ContentType, ct);
+        var read = await stream.ReadAsync(head.AsMemory(0, head.Length), ct);
+        if (read < 4 || !IsAllowedImageSignature(head, declared))
+            return ErrorMapper.ToActionResult(this, Error.Validation("photo.bad_signature",
+                "File contents don't match an image of the declared type."));
+        stream.Position = 0;
+
+        var url = await photoStorage.StoreAsync(id, stream, declared, ct);
         var result = await svc.SetPhotoUrlAsync(id, new UploadPhotoDto(url), ct);
         return result.IsSuccess ? Ok(result.Value) : ErrorMapper.ToActionResult(this, result.Error);
+    }
+
+    /// Mirror of PortalMeProfileController.IsAllowedImageSignature. We don't share helpers
+    /// across controllers in this codebase (avoids the "central util" pattern that ages
+    /// poorly); 20 lines of magic-byte checks duplicated is fine.
+    private static bool IsAllowedImageSignature(byte[] head, string mime)
+    {
+        if ((mime is "image/jpeg" or "image/jpg") && head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF) return true;
+        if (mime == "image/png" && head[0] == 0x89 && head[1] == 0x50 && head[2] == 0x4E && head[3] == 0x47) return true;
+        if (mime == "image/gif" && head[0] == 0x47 && head[1] == 0x49 && head[2] == 0x46 && head[3] == 0x38) return true;
+        if (mime == "image/webp" && head.Length >= 12
+            && head[0] == 0x52 && head[1] == 0x49 && head[2] == 0x46 && head[3] == 0x46
+            && head[8] == 0x57 && head[9] == 0x45 && head[10] == 0x42 && head[11] == 0x50) return true;
+        return false;
     }
 
     [HttpGet("photo/file")]

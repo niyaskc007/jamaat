@@ -133,23 +133,57 @@ public sealed class PortalMeProfileController(
 
     /// Upload a new profile photo. Applied immediately (the photo storage layer has no pending
     /// state); admins can clear it via the existing member admin UI if it's inappropriate.
-    /// Max 10 MB; image/* MIME only.
+    /// Max 10 MB; tight MIME allowlist (jpeg/png/webp/gif - SVG explicitly excluded since it
+    /// can carry script payloads and gets rendered inline in many UI surfaces). Beyond the
+    /// declared Content-Type, we verify the file's leading bytes match a known image
+    /// signature - a client that claims `image/png` but sends a script body gets rejected.
     [HttpPost("photo")]
     [RequestSizeLimit(10 * 1024 * 1024)]
     public async Task<IActionResult> UploadPhoto(IFormFile file, CancellationToken ct)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { error = "photo.empty", detail = "File is required." });
-        if (!(file.ContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ?? false))
-            return BadRequest(new { error = "photo.invalid_type", detail = "Only image uploads are accepted." });
+
+        var declared = (file.ContentType ?? string.Empty).ToLowerInvariant();
+        var allowedMimes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif" };
+        if (!allowedMimes.Contains(declared))
+            return BadRequest(new { error = "photo.invalid_type",
+                detail = "Only JPEG, PNG, WebP, or GIF images are accepted." });
+
+        // Sniff the first 12 bytes and confirm they match the declared MIME. Prevents
+        // "rename evil.html to evil.jpg with Content-Type image/jpeg" smuggling.
+        var head = new byte[12];
+        await using var stream = file.OpenReadStream();
+        var read = await stream.ReadAsync(head.AsMemory(0, head.Length), ct);
+        if (read < 4 || !IsAllowedImageSignature(head, declared))
+            return BadRequest(new { error = "photo.bad_signature",
+                detail = "File contents don't match an image of the declared type." });
+        stream.Position = 0;
 
         var memberId = await ResolveCurrentMemberIdAsync(ct);
         if (memberId is null) return NotFound(new { error = "no_member_link", detail = "This account is not linked to a member record." });
 
-        await using var stream = file.OpenReadStream();
-        var url = await photoStorage.StoreAsync(memberId.Value, stream, file.ContentType ?? "image/jpeg", ct);
+        var url = await photoStorage.StoreAsync(memberId.Value, stream, declared, ct);
         var r = await profileSvc.SetPhotoUrlAsync(memberId.Value, new UploadPhotoDto(url), ct);
         return r.IsSuccess ? Ok(new { photoUrl = url }) : ErrorMapper.ToActionResult(this, r.Error);
+    }
+
+    /// Magic-byte signature check for the 4 allowed image formats. Returns true iff the
+    /// leading bytes match the declared content type's signature.
+    private static bool IsAllowedImageSignature(byte[] head, string mime)
+    {
+        // JPEG: FF D8 FF
+        if ((mime is "image/jpeg" or "image/jpg") && head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF) return true;
+        // PNG: 89 50 4E 47 0D 0A 1A 0A
+        if (mime == "image/png" && head[0] == 0x89 && head[1] == 0x50 && head[2] == 0x4E && head[3] == 0x47) return true;
+        // GIF: 47 49 46 38 (GIF8)
+        if (mime == "image/gif" && head[0] == 0x47 && head[1] == 0x49 && head[2] == 0x46 && head[3] == 0x38) return true;
+        // WebP: RIFF????WEBP (52 49 46 46 .. .. .. .. 57 45 42 50)
+        if (mime == "image/webp" && head.Length >= 12
+            && head[0] == 0x52 && head[1] == 0x49 && head[2] == 0x46 && head[3] == 0x46
+            && head[8] == 0x57 && head[9] == 0x45 && head[10] == 0x42 && head[11] == 0x50) return true;
+        return false;
     }
 
     private async Task<IActionResult> SubmitChange(string section, object dto, CancellationToken ct)

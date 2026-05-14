@@ -890,6 +890,14 @@ public sealed class QarzanHasanaService(
         //   matches the signed-in member. Asking for an ITS too would be theatre.
         if (requireItsVerification)
         {
+            // Reject missing/empty ITS up-front as a 400-class validation error rather than
+            // letting it fall through to the mismatch path (which returns 422). Smoke + UI
+            // can distinguish "you forgot to type your ITS" from "you typed the wrong digits".
+            var supplied = (meta.ItsNumberVerification ?? string.Empty).Trim();
+            if (supplied.Length == 0)
+                return Error.Validation("qh_consent.its_required",
+                    "Please enter your 8-digit ITS number to confirm you are the named guarantor.");
+
             var expectedIts = await (from c in db.QarzanHasanaGuarantorConsents.AsNoTracking()
                                      where c.Id == consent.Id
                                      join m in db.Members.AsNoTracking().IgnoreQueryFilters()
@@ -899,7 +907,6 @@ public sealed class QarzanHasanaService(
                                     .FirstOrDefaultAsync(ct);
             if (string.IsNullOrEmpty(expectedIts))
                 return Error.NotFound("qh_consent.guarantor_missing", "Guarantor record not found.");
-            var supplied = (meta.ItsNumberVerification ?? string.Empty).Trim();
             if (!string.Equals(supplied, expectedIts, StringComparison.Ordinal))
                 return Error.Business("qh_consent.its_mismatch",
                     "The ITS number you entered doesn't match the guarantor's. Check the digits and try again.");
