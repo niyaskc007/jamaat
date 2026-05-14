@@ -46,6 +46,7 @@ public sealed class PortalMeController(
     /// users' attempts at the service level - the audit table is tenant-scoped via EF query
     /// filters and we add a second `userId` filter inside ListForUserAsync.
     [HttpGet("login-history")]
+    [Authorize(Policy = "portal.login_history.view.own")]
     public async Task<IActionResult> LoginHistory([FromQuery] int max = 50, CancellationToken ct = default)
     {
         var userId = TryGetUserId(User);
@@ -58,6 +59,7 @@ public sealed class PortalMeController(
 
     /// Phase E3 - own contributions (receipts where the member is the contributor).
     [HttpGet("contributions")]
+    [Authorize(Policy = "portal.contributions.view.own")]
     public async Task<IActionResult> Contributions(CancellationToken ct)
     {
         var (_, memberId) = await CurrentMemberAsync(ct);
@@ -77,6 +79,7 @@ public sealed class PortalMeController(
 
     /// Phase E4 - own commitments (active + past).
     [HttpGet("commitments")]
+    [Authorize(Policy = "portal.commitments.view.own")]
     public async Task<IActionResult> Commitments(CancellationToken ct)
     {
         var (_, memberId) = await CurrentMemberAsync(ct);
@@ -96,6 +99,7 @@ public sealed class PortalMeController(
 
     /// Phase E5 - own QH loans.
     [HttpGet("qarzan-hasana")]
+    [Authorize(Policy = "portal.qh.view.own")]
     public async Task<IActionResult> QarzanHasana(CancellationToken ct)
     {
         var (_, memberId) = await CurrentMemberAsync(ct);
@@ -119,6 +123,7 @@ public sealed class PortalMeController(
     /// just below — they take the consent id (NOT the public token), authenticate via the
     /// portal JWT, and verify ownership before delegating to the existing service.
     [HttpGet("guarantor-inbox")]
+    [Authorize(Policy = "portal.qh.endorse_guarantor")]
     public async Task<IActionResult> GuarantorInbox(CancellationToken ct)
     {
         var (_, memberId) = await CurrentMemberAsync(ct);
@@ -160,6 +165,7 @@ public sealed class PortalMeController(
     /// and verifies the consent row's GuarantorMemberId matches the signed-in member before
     /// recording the decision. <paramref name="decision"/> = "accept" | "decline".
     [HttpPost("guarantor-inbox/{consentId:guid}/{decision}")]
+    [Authorize(Policy = "portal.qh.endorse_guarantor")]
     public async Task<IActionResult> GuarantorAct(
         Guid consentId, string decision,
         [FromServices] Application.QarzanHasana.IQarzanHasanaService qhSvc,
@@ -255,7 +261,11 @@ public sealed class PortalMeController(
     /// Member-friendly search for a guarantor or family member to attach to a Qarzan Hasana
     /// application. Returns minimal fields (id, ITS, full name) so the portal isn't a vector
     /// for member-directory scraping. Capped at 25 hits; min 2 chars to query.
+    ///
+    /// Gated by <c>portal.qh.request</c>: only members who can request a loan need to pick
+    /// guarantors, which limits the directory-scraping vector to a narrower role surface.
     [HttpGet("members/search")]
+    [Authorize(Policy = "portal.qh.request")]
     public async Task<IActionResult> SearchMembers([FromQuery] string q, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
@@ -284,6 +294,7 @@ public sealed class PortalMeController(
 
     /// Phase E7 - own event registrations.
     [HttpGet("events")]
+    [Authorize(Policy = "portal.events.view")]
     public async Task<IActionResult> Events(CancellationToken ct)
     {
         var (_, memberId) = await CurrentMemberAsync(ct);

@@ -986,21 +986,18 @@ export function MemberQhSubmitPage() {
   const watchInstal   = Form.useWatch('instalmentsRequested', form);
 
   function onFinish(v: QhFormShape) {
-    // Final SchemeId: child if a subcategory was picked, otherwise parent.
-    // Legacy int Scheme is derived from the resolved scheme's LegacySchemeValue
-    // so the backend keeps old-report compatibility.
+    // Final SchemeId: child if a subcategory was picked, otherwise parent. The server
+    // derives the legacy int Scheme from this id; we no longer send it in the payload
+    // (it would have been an attacker-controlled spoof vector for non-active schemes).
     const finalSchemeId = (v.schemeId && v.schemeId !== v.schemeParentId) ? v.schemeId : v.schemeParentId;
-    const resolved = allSchemes.find((s) => s.id === finalSchemeId);
-    const legacyScheme = resolved?.legacySchemeValue ?? 0;
     submit.mutate({
+      schemeId: finalSchemeId,
       amountRequested: v.amountRequested,
       instalmentsRequested: v.instalmentsRequested,
       currency: v.currency,
       startDate: v.startDate.format('YYYY-MM-DD'),
       guarantor1MemberId: v.guarantor1MemberId,
       guarantor2MemberId: v.guarantor2MemberId,
-      schemeId: finalSchemeId,
-      scheme: legacyScheme,
       goldAmount:      requiresGold ? v.goldAmount      ?? null : null,
       goldWeightGrams: requiresGold ? v.goldWeightGrams ?? null : null,
       goldPurityKarat: requiresGold ? v.goldPurityKarat ?? null : null,
@@ -1013,7 +1010,6 @@ export function MemberQhSubmitPage() {
       monthlyIncome: v.monthlyIncome ?? null,
       monthlyExpenses: v.monthlyExpenses ?? null,
       monthlyExistingEmis: v.monthlyExistingEmis ?? null,
-      guarantorsAcknowledged: false,
     });
   }
 

@@ -189,11 +189,19 @@ const g2 = await call('POST', '/api/v1/members', adminToken, {
 logProbe('create guarantor 2 (member)', g2.res, g2.body);
 const itsByMember = new Map([[g1.body?.id, g1Its], [g2.body?.id, g2Its]]);
 
+// QH portal-create now requires SchemeId (the legacy int Scheme is server-derived).
+// Fetch the first active scheme to use for both QH submissions below.
+const qhSchemes = await call('GET', '/api/v1/portal/me/qh-schemes', memberToken);
+const activeQhSchemeId = Array.isArray(qhSchemes.body)
+  ? qhSchemes.body.find((s) => s.isActive && !s.parentSchemeId)?.id
+    ?? qhSchemes.body[0]?.id
+  : null;
+logProbe('portal qh-schemes list (need at least one active)', qhSchemes.res,
+  activeQhSchemeId ? `picked schemeId=${activeQhSchemeId}` : 'no active schemes');
+
 const qhFund = aFund; // any active fund - QH doesn't actually use a fund picker but field-level discovery still needs one
 const qh = await call('POST', '/api/v1/portal/me/qarzan-hasana', memberToken, {
-  memberId: '00000000-0000-0000-0000-000000000000', // forced override server-side
-  familyId: null,
-  scheme: 2, // 1=Mohammadi (gold-backed), 2=Hussain (benevolent)
+  schemeId: activeQhSchemeId,
   amountRequested: 5000,
   instalmentsRequested: 10,
   currency: 'INR',
@@ -202,7 +210,6 @@ const qh = await call('POST', '/api/v1/portal/me/qarzan-hasana', memberToken, {
   guarantor2MemberId: g2.body?.id ?? '00000000-0000-0000-0000-000000000000',
   purpose: 'TEST QH for flow validation',
   repaymentPlan: 'TEST monthly repayment from salary',
-  guarantorsAcknowledged: false,
   monthlyIncome: 30000,
   monthlyExpenses: 10000,
   incomeSources: 'SALARY',
@@ -338,6 +345,24 @@ const wealth = await call('GET', `/api/v1/members/${someoneElseId ?? memberLogin
 logProbe(`Member wealth list (member token, expect 403 after perm revoke)`,
   wealth.res, wealth.res?.status);
 
+// B.6 QH spoof: posting the OPERATOR DTO shape with attacker-controlled MemberId /
+// FamilyId / Scheme should be IGNORED server-side. The new PortalCreateQarzanHasanaDto
+// drops those fields; extras are ignored by the model binder. Expected: a 4xx (schemeId
+// is required and we did not pass it) - the key signal is that the request does NOT
+// succeed despite the malicious memberId being in the body.
+const spoofQh = await call('POST', '/api/v1/portal/me/qarzan-hasana', memberToken, {
+  memberId: someoneElseId ?? '00000000-0000-0000-0000-000000000099',
+  familyId: '00000000-0000-0000-0000-000000000098',
+  scheme: 1, // attacker tries to force "Mohammadi" without an active master-data row
+  amountRequested: 1, instalmentsRequested: 1, currency: 'INR',
+  startDate: new Date(Date.now() + 86_400_000).toISOString().slice(0, 10),
+  guarantor1MemberId: g1.body?.id ?? '00000000-0000-0000-0000-000000000000',
+  guarantor2MemberId: g2.body?.id ?? '00000000-0000-0000-0000-000000000000',
+  guarantorsAcknowledged: true, // forced-false server-side
+});
+logProbe(`QH spoof: operator DTO shape (expect 4xx; never accept attacker memberId)`,
+  spoofQh.res, spoofQh.res?.status);
+
 // ============================================================================
 // GUARANTOR DECLINE: probe what happens to the loan when a guarantor declines
 // instead of accepting. We'll create another QH loan with the two test
@@ -348,9 +373,7 @@ logProbe(`Member wealth list (member token, expect 403 after perm revoke)`,
 if (aFund && g1.body?.id && g2.body?.id) {
   console.log('\n=== Guarantor DECLINE probe ===');
   const qh2 = await call('POST', '/api/v1/portal/me/qarzan-hasana', memberToken, {
-    memberId: '00000000-0000-0000-0000-000000000000',
-    familyId: null,
-    scheme: 2,
+    schemeId: activeQhSchemeId,
     amountRequested: 3000,
     instalmentsRequested: 6,
     currency: 'INR',
@@ -359,7 +382,6 @@ if (aFund && g1.body?.id && g2.body?.id) {
     guarantor2MemberId: g2.body.id,
     purpose: 'TEST decline-path QH',
     repaymentPlan: 'TEST monthly',
-    guarantorsAcknowledged: false,
     monthlyIncome: 20000,
     monthlyExpenses: 5000,
     incomeSources: 'SALARY',

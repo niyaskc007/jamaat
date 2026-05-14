@@ -40,6 +40,43 @@ public sealed record QarzanHasanaLoanDetailDto(
     QarzanHasanaLoanDto Loan,
     IReadOnlyList<QarzanHasanaInstallmentDto> Installments);
 
+/// <summary>
+/// Member-portal shape of "create QH application". A deliberate subset of
+/// <see cref="CreateQarzanHasanaDto"/>: drops <c>MemberId</c>, <c>FamilyId</c>,
+/// <c>Scheme</c> (legacy int) and <c>GuarantorsAcknowledged</c> because those are
+/// server-set or server-derived. Members must send <c>SchemeId</c> (master-data lookup),
+/// not the loose <c>Scheme</c> enum that could be spoofed to bypass active-scheme checks.
+///
+/// The controller projects this to a <see cref="CreateQarzanHasanaDto"/> with:
+///   MemberId       = caller's resolved member id (JWT)
+///   FamilyId       = caller's Family.Id (member record lookup)
+///   Scheme         = derived from SchemeId master-data row
+///   GuarantorsAcknowledged = false (member can never self-acknowledge)
+/// before delegating to <c>QarzanHasanaService.CreateDraftAsync</c>.
+/// </summary>
+public sealed record PortalCreateQarzanHasanaDto(
+    Guid SchemeId,
+    decimal AmountRequested,
+    int InstalmentsRequested,
+    string Currency,
+    DateOnly StartDate,
+    Guid Guarantor1MemberId,
+    Guid Guarantor2MemberId,
+    decimal? GoldAmount = null,
+    string? CashflowDocumentUrl = null,
+    string? GoldSlipDocumentUrl = null,
+    string? Purpose = null,
+    string? RepaymentPlan = null,
+    string? SourceOfIncome = null,
+    string? OtherObligations = null,
+    decimal? MonthlyIncome = null,
+    decimal? MonthlyExpenses = null,
+    decimal? MonthlyExistingEmis = null,
+    decimal? GoldWeightGrams = null,
+    int? GoldPurityKarat = null,
+    string? GoldHeldAt = null,
+    string? IncomeSources = null);
+
 public sealed record CreateQarzanHasanaDto(
     Guid MemberId,
     Guid? FamilyId,

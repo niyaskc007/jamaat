@@ -273,30 +273,65 @@ public sealed class PortalMeFinanceController(
         return Ok(rows);
     }
 
-    /// Self-submit a Qarzan Hasana application from the member portal. The body is the same
-    /// CreateQarzanHasanaDto that operators post, BUT we override <c>MemberId</c> to the current
-    /// signed-in member so a member can never apply on behalf of someone else.
+    /// Self-submit a Qarzan Hasana application from the member portal.
     ///
-    /// We do NOT auto-submit. The previous version did, but Submit() requires either an
-    /// operator-witnessed kafalah (which a member can't grant themselves) OR both guarantors
-    /// already accepted via the public consent portal (which can't have happened yet on the
-    /// same call). The auto-submit therefore always failed with qh.consent_required, the
-    /// API returned 400, and the member saw "Submit failed" even though the Draft was
-    /// successfully created. The loan now stays in Draft until both guarantor consents
-    /// arrive; the consent endpoint auto-promotes it to PendingLevel1 when the second
-    /// guarantor accepts.
+    /// Accepts the deliberately narrowed <see cref="PortalCreateQarzanHasanaDto"/> and projects
+    /// it to the full operator-shaped <see cref="CreateQarzanHasanaDto"/> server-side, forcing:
+    ///   - MemberId   = caller's resolved member id (never trust client),
+    ///   - FamilyId   = caller's Family.Id (looked up from the member record),
+    ///   - Scheme     = legacy int derived from the chosen SchemeId master-data row,
+    ///   - GuarantorsAcknowledged = false (only operator-at-counter / consent portal can set true).
+    ///
+    /// We do NOT auto-submit. Submit() requires either an operator-witnessed kafalah or both
+    /// guarantor consents already in - neither can be true at draft-create time. The loan stays
+    /// in Draft until both consent rows resolve; the consent endpoint auto-promotes it.
     [HttpPost("qarzan-hasana")]
     [Authorize(Policy = "portal.qh.request")]
-    public async Task<IActionResult> QhCreate([FromBody] CreateQarzanHasanaDto dto, CancellationToken ct)
+    public async Task<IActionResult> QhCreate([FromBody] PortalCreateQarzanHasanaDto dto, CancellationToken ct)
     {
         var (_, memberId) = await CurrentMemberAsync(ct);
         if (memberId is null) return BadRequest(new { error = "no_member_link", detail = "Sign-in is not linked to a member record." });
 
-        // Force the borrower to be the current member regardless of what the client sent.
-        // Also force guarantorsAcknowledged=false - a borrower cannot acknowledge their own
-        // guarantors; only the operator at the counter or the guarantors themselves (via
-        // the consent portal) can.
-        var safe = dto with { MemberId = memberId.Value, GuarantorsAcknowledged = false };
+        // Resolve the borrower's family + scheme master-data row before delegating - both
+        // are server-derived so a member can't spoof family-linkage or scheme.
+        var familyId = await db.Members.AsNoTracking()
+            .Where(m => m.Id == memberId.Value)
+            .Select(m => m.FamilyId)
+            .FirstOrDefaultAsync(ct);
+        var scheme = await db.QhSchemes.AsNoTracking()
+            .Where(s => s.Id == dto.SchemeId && s.IsActive)
+            .Select(s => new { s.Id, s.LegacySchemeValue })
+            .FirstOrDefaultAsync(ct);
+        if (scheme is null)
+            return ErrorMapper.ToActionResult(this,
+                Jamaat.Domain.Common.Error.NotFound("qh_scheme.not_found", "Scheme not found or inactive."));
+
+        var safe = new CreateQarzanHasanaDto(
+            MemberId: memberId.Value,
+            FamilyId: familyId,
+            Scheme: (QarzanHasanaScheme)scheme.LegacySchemeValue,
+            AmountRequested: dto.AmountRequested,
+            InstalmentsRequested: dto.InstalmentsRequested,
+            Currency: dto.Currency,
+            StartDate: dto.StartDate,
+            Guarantor1MemberId: dto.Guarantor1MemberId,
+            Guarantor2MemberId: dto.Guarantor2MemberId,
+            GoldAmount: dto.GoldAmount,
+            CashflowDocumentUrl: dto.CashflowDocumentUrl,
+            GoldSlipDocumentUrl: dto.GoldSlipDocumentUrl,
+            Purpose: dto.Purpose,
+            RepaymentPlan: dto.RepaymentPlan,
+            SourceOfIncome: dto.SourceOfIncome,
+            OtherObligations: dto.OtherObligations,
+            GuarantorsAcknowledged: false,
+            MonthlyIncome: dto.MonthlyIncome,
+            MonthlyExpenses: dto.MonthlyExpenses,
+            MonthlyExistingEmis: dto.MonthlyExistingEmis,
+            GoldWeightGrams: dto.GoldWeightGrams,
+            GoldPurityKarat: dto.GoldPurityKarat,
+            GoldHeldAt: dto.GoldHeldAt,
+            IncomeSources: dto.IncomeSources,
+            SchemeId: scheme.Id);
         var r = await qhSvc.CreateDraftAsync(safe, ct);
         return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }

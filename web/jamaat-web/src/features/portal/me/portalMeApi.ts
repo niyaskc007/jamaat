@@ -193,21 +193,21 @@ export type PortalQhDetail = {
   installments: QhInstallment[];
 };
 
+/// Member-portal QH submission. Mirror of the server's PortalCreateQarzanHasanaDto -
+/// deliberately narrower than the operator-side `CreateQhPayload` so a member can never
+/// spoof MemberId / FamilyId / Scheme / GuarantorsAcknowledged via the body.
+/// SchemeId is required; the server derives the legacy int from it.
 export type CreateQhPayload = {
+  schemeId: string;
   amountRequested: number;
   instalmentsRequested: number;
   currency: string;
   startDate: string;
   guarantor1MemberId: string;
   guarantor2MemberId: string;
-  /// Legacy int (1=Mohammadi, 2=Hussain, 0=Other). New code populates this
-  /// from the chosen scheme's `legacySchemeValue` so historical reports
-  /// keep working. `schemeId` below is the new source of truth.
-  scheme: number;
-  /// Admin-managed scheme master-data id - drives the gold-collateral
-  /// conditional and what shows up on the loan detail page going forward.
-  schemeId?: string | null;
   goldAmount?: number | null;
+  cashflowDocumentUrl?: string | null;
+  goldSlipDocumentUrl?: string | null;
   purpose?: string | null;
   repaymentPlan?: string | null;
   sourceOfIncome?: string | null;
@@ -220,7 +220,6 @@ export type CreateQhPayload = {
   goldHeldAt?: string | null;
   /// Comma-separated codes from IncomeSourceOptions ('SALARY,BUSINESS' etc.)
   incomeSources?: string | null;
-  guarantorsAcknowledged?: boolean;
 };
 
 /// Mirror of QhSchemeDto from the API. Drives the member-portal QH form's
