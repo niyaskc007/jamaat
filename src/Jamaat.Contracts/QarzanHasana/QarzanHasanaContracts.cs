@@ -229,4 +229,15 @@ public sealed record GuarantorConsentPortalDto(
     DateTimeOffset? RespondedAtUtc,
     string GuarantorName);
 
-public sealed record RecordConsentResponseDto(string? IpAddress, string? UserAgent);
+/// `ItsNumberVerification` is the 8-digit ITS the responder typed into the
+/// consent form. The server cross-checks it against the consent's expected
+/// guarantor before accepting / declining. Without this check the token URL
+/// alone is sufficient to act as the guarantor - a phishing leak (forwarded
+/// SMS, screenshot, intercepted email) would let an attacker accept on
+/// the guarantor's behalf. `DeclineReason` is optional context the borrower
+/// + admins see on the rejected-loan page.
+public sealed record RecordConsentResponseDto(
+    string? IpAddress,
+    string? UserAgent,
+    string? ItsNumberVerification = null,
+    string? DeclineReason = null);

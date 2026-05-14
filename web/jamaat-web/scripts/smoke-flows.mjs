@@ -171,20 +171,23 @@ if (aFund) {
 console.log('\n=== FLOW B: Qarzan Hasana ===');
 
 // Need two extra members to be guarantors. Create them as admin.
+const g1Its = `88${process.hrtime.bigint().toString().slice(-6)}`;
 const g1 = await call('POST', '/api/v1/members', adminToken, {
-  itsNumber: `88${process.hrtime.bigint().toString().slice(-6)}`,
+  itsNumber: g1Its,
   fullName: `TEST Guarantor 1 ${TAG}`,
   fullNameArabic: null, fullNameHindi: null, fullNameUrdu: null,
   familyId: null, phone: null, email: `TEST_g1_${TAG}@ubrixy.com`, address: null,
 });
 logProbe('create guarantor 1 (member)', g1.res, g1.body);
+const g2Its = `77${process.hrtime.bigint().toString().slice(-6)}`;
 const g2 = await call('POST', '/api/v1/members', adminToken, {
-  itsNumber: `77${process.hrtime.bigint().toString().slice(-6)}`,
+  itsNumber: g2Its,
   fullName: `TEST Guarantor 2 ${TAG}`,
   fullNameArabic: null, fullNameHindi: null, fullNameUrdu: null,
   familyId: null, phone: null, email: `TEST_g2_${TAG}@ubrixy.com`, address: null,
 });
 logProbe('create guarantor 2 (member)', g2.res, g2.body);
+const itsByMember = new Map([[g1.body?.id, g1Its], [g2.body?.id, g2Its]]);
 
 const qhFund = aFund; // any active fund - QH doesn't actually use a fund picker but field-level discovery still needs one
 const qh = await call('POST', '/api/v1/portal/me/qarzan-hasana', memberToken, {
@@ -214,11 +217,13 @@ if (qh.body?.id) {
   // Tokens are on the operator-side consent rows (member can't see them); fetch them as admin.
   const consentRows = await call('GET', `/api/v1/qarzan-hasana/${qh.body.id}/guarantor-consents`, adminToken);
   logProbe('list consent tokens (admin)', consentRows.res, Array.isArray(consentRows.body) ? `${consentRows.body.length} rows` : consentRows.body);
-  const tokens = (consentRows.body ?? []).map(c => c.token).filter(Boolean);
+  const rowsA = consentRows.body ?? [];
 
-  for (let i = 0; i < tokens.length; i++) {
-    const accept = await call('POST', `/api/v1/portal/qh-consent/${tokens[i]}/accept`, null, {
-      ipAddress: '127.0.0.1', userAgent: 'flow-smoke',
+  for (let i = 0; i < rowsA.length; i++) {
+    const r = rowsA[i];
+    const its = itsByMember.get(r.guarantorMemberId) ?? '';
+    const accept = await call('POST', `/api/v1/portal/qh-consent/${r.token}/accept`, null, {
+      ipAddress: '127.0.0.1', userAgent: 'flow-smoke', itsNumberVerification: its,
     });
     logProbe(`guarantor ${i + 1} accepts consent`, accept.res, accept.body && { status: accept.body?.status });
   }
@@ -254,6 +259,101 @@ if (aFund) {
 
     const enrollDetail = await call('GET', `/api/v1/portal/me/fund-enrollments/${enrollId}`, memberToken);
     logProbe('post-approve patronage detail', enrollDetail.res, enrollDetail.body);
+  }
+}
+
+// ============================================================================
+// PRIVACY + SECURITY PROBES — confirm whether a member token can see anyone
+// else's data, whether operator endpoints are properly gated, and whether the
+// guarantor-picker search endpoint works.
+// ============================================================================
+
+console.log('\n=== PRIVACY / SECURITY probes (member token) ===');
+
+const operatorEndpoints = [
+  '/api/v1/qarzan-hasana',
+  '/api/v1/commitments',
+  '/api/v1/fund-enrollments',
+  '/api/v1/members',
+  '/api/v1/receipts',
+  '/api/v1/vouchers',
+];
+for (const ep of operatorEndpoints) {
+  const r = await call('GET', ep, memberToken);
+  logProbe(`operator endpoint ${ep} (member token, expect 403)`, r.res, r.res?.status);
+}
+
+// Guarantor picker — the SPA portal form is supposed to call this; confirm
+// the endpoint exists and returns results for a member token.
+const memberSearch = await call('GET', '/api/v1/portal/me/members/search?q=TEST&limit=10', memberToken);
+logProbe('portal member-search (guarantor picker, expect 200 + rows)', memberSearch.res,
+  Array.isArray(memberSearch.body) ? `${memberSearch.body.length} rows` : memberSearch.body);
+
+// Cross-member privacy: try to read a commitment / QH / enrollment belonging to
+// someone else. We'll grab IDs that the admin can see, then probe as the member.
+const allCommits = await call('GET', '/api/v1/commitments?pageSize=5', adminToken);
+const otherCommitId = allCommits.body?.items?.find(c => c.memberId !== memberLogin.body?.user?.id)?.id;
+if (otherCommitId) {
+  const probe = await call('GET', `/api/v1/portal/me/commitments/${otherCommitId}`, memberToken);
+  logProbe(`portal-me commitment for someone else's id (expect 404)`, probe.res, probe.res?.status);
+}
+
+// ============================================================================
+// GUARANTOR DECLINE: probe what happens to the loan when a guarantor declines
+// instead of accepting. We'll create another QH loan with the two test
+// guarantors, then have ONE accept and the OTHER decline. Expect the loan to
+// move out of Draft to some terminal/rejected state.
+// ============================================================================
+
+if (aFund && g1.body?.id && g2.body?.id) {
+  console.log('\n=== Guarantor DECLINE probe ===');
+  const qh2 = await call('POST', '/api/v1/portal/me/qarzan-hasana', memberToken, {
+    memberId: '00000000-0000-0000-0000-000000000000',
+    familyId: null,
+    scheme: 2,
+    amountRequested: 3000,
+    instalmentsRequested: 6,
+    currency: 'INR',
+    startDate: new Date(Date.now() + 86_400_000).toISOString().slice(0, 10),
+    guarantor1MemberId: g1.body.id,
+    guarantor2MemberId: g2.body.id,
+    purpose: 'TEST decline-path QH',
+    repaymentPlan: 'TEST monthly',
+    guarantorsAcknowledged: false,
+    monthlyIncome: 20000,
+    monthlyExpenses: 5000,
+    incomeSources: 'SALARY',
+  });
+  logProbe('create 2nd QH (for decline probe)', qh2.res, qh2.body?.id && { id: qh2.body.id, status: qh2.body.status });
+
+  if (qh2.body?.id) {
+    const consents2 = await call('GET', `/api/v1/qarzan-hasana/${qh2.body.id}/guarantor-consents`, adminToken);
+    const rows2 = consents2.body ?? [];
+    // Also probe: missing ITS should now reject the consent call (security fix).
+    if (rows2[0]) {
+      const noIts = await call('POST', `/api/v1/portal/qh-consent/${rows2[0].token}/accept`, null, {
+        ipAddress: '127.0.0.1', userAgent: 'flow-smoke', itsNumberVerification: '',
+      });
+      logProbe('accept WITHOUT ITS verification (expect 400)', noIts.res, noIts.res?.status);
+    }
+    if (rows2[0]) {
+      const accept = await call('POST', `/api/v1/portal/qh-consent/${rows2[0].token}/accept`, null, {
+        ipAddress: '127.0.0.1', userAgent: 'flow-smoke',
+        itsNumberVerification: itsByMember.get(rows2[0].guarantorMemberId) ?? '',
+      });
+      logProbe('guarantor 1 accepts (with ITS)', accept.res, accept.body?.status);
+    }
+    if (rows2[1]) {
+      const decline = await call('POST', `/api/v1/portal/qh-consent/${rows2[1].token}/decline`, null, {
+        ipAddress: '127.0.0.1', userAgent: 'flow-smoke',
+        itsNumberVerification: itsByMember.get(rows2[1].guarantorMemberId) ?? '',
+        declineReason: 'TEST decline reason',
+      });
+      logProbe('guarantor 2 DECLINES (with ITS)', decline.res, decline.body?.status);
+    }
+    const detail = await call('GET', `/api/v1/portal/me/qarzan-hasana/${qh2.body.id}`, memberToken);
+    logProbe('QH after 1 accept + 1 decline (expect status=8 Rejected)', detail.res,
+      detail.body && { status: detail.body.status, code: detail.body.code, rejectionReason: detail.body.rejectionReason });
   }
 }
 

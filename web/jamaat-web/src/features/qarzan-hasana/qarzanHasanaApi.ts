@@ -249,13 +249,22 @@ export type GuarantorConsentPortal = {
   guarantorName: string;
 };
 
+/// Server-side requires `itsNumberVerification` to match the guarantor's
+/// ITS number before recording the response (defense-in-depth: the token URL
+/// alone is no longer sufficient). `declineReason` is optional context that
+/// the borrower + admin see on the rejected loan.
+export type RecordConsentBody = {
+  itsNumberVerification: string;
+  declineReason?: string;
+};
+
 export const guarantorConsentPortalApi = {
   get: async (token: string): Promise<GuarantorConsentPortal> =>
     (await api.get(`/api/v1/portal/qh-consent/${token}`)).data,
-  accept: async (token: string): Promise<GuarantorConsentPortal> =>
-    (await api.post(`/api/v1/portal/qh-consent/${token}/accept`)).data,
-  decline: async (token: string): Promise<GuarantorConsentPortal> =>
-    (await api.post(`/api/v1/portal/qh-consent/${token}/decline`)).data,
+  accept: async (token: string, body: RecordConsentBody): Promise<GuarantorConsentPortal> =>
+    (await api.post(`/api/v1/portal/qh-consent/${token}/accept`, body)).data,
+  decline: async (token: string, body: RecordConsentBody): Promise<GuarantorConsentPortal> =>
+    (await api.post(`/api/v1/portal/qh-consent/${token}/decline`, body)).data,
 };
 
 // --- Decision-support DTOs ---

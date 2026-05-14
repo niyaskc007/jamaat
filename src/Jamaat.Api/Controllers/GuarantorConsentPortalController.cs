@@ -24,27 +24,38 @@ public sealed class GuarantorConsentPortalController(IQarzanHasanaService svc) :
         return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }
 
-    /// <summary>Record an Accepted response. IP + user-agent captured for the audit trail.</summary>
+    /// <summary>Record an Accepted response. Body carries the guarantor's own
+    /// ITS number for verification + optional context; IP + user-agent are
+    /// stamped server-side from the HTTP connection (clients can't forge them).</summary>
     [HttpPost("{token}/accept")]
     [AllowAnonymous]
-    public async Task<IActionResult> Accept(string token, CancellationToken ct)
+    public async Task<IActionResult> Accept(string token, [FromBody] GuarantorConsentSubmitBody body, CancellationToken ct)
     {
         var meta = new RecordConsentResponseDto(
             HttpContext.Connection.RemoteIpAddress?.ToString(),
-            Request.Headers.UserAgent.ToString());
+            Request.Headers.UserAgent.ToString(),
+            body.ItsNumberVerification,
+            body.DeclineReason);
         var r = await svc.AcceptConsentAsync(token, meta, ct);
         return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }
 
-    /// <summary>Record a Declined response. Same audit metadata as Accept.</summary>
+    /// <summary>Record a Declined response. Same audit + ITS-verification rules as Accept.</summary>
     [HttpPost("{token}/decline")]
     [AllowAnonymous]
-    public async Task<IActionResult> Decline(string token, CancellationToken ct)
+    public async Task<IActionResult> Decline(string token, [FromBody] GuarantorConsentSubmitBody body, CancellationToken ct)
     {
         var meta = new RecordConsentResponseDto(
             HttpContext.Connection.RemoteIpAddress?.ToString(),
-            Request.Headers.UserAgent.ToString());
+            Request.Headers.UserAgent.ToString(),
+            body.ItsNumberVerification,
+            body.DeclineReason);
         var r = await svc.DeclineConsentAsync(token, meta, ct);
         return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }
 }
+
+/// Body of POST /accept and /decline. IP + UA are stamped server-side from the
+/// HTTP connection so the client can't forge them; only the responder-supplied
+/// fields are here.
+public sealed record GuarantorConsentSubmitBody(string? ItsNumberVerification, string? DeclineReason);

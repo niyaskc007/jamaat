@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, Button, Result, Tag, Space, Descriptions, App as AntdApp, Spin, Alert } from 'antd';
+import { Card, Button, Result, Tag, Space, Descriptions, App as AntdApp, Spin, Alert, Input, Form } from 'antd';
 import { CheckCircleFilled, CloseCircleFilled, SafetyCertificateOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { PortalLayout } from './PortalLayout';
@@ -23,13 +24,25 @@ export function PortalGuarantorConsentPage() {
     retry: false,
   });
 
+  // ITS verification + optional decline reason. The token URL alone is no
+  // longer sufficient to act as the guarantor - the server cross-checks
+  // this 8-digit number against the consent row's expected guarantor.
+  const [itsInput, setItsInput] = useState('');
+  const [declineReason, setDeclineReason] = useState('');
+  const itsValid = /^\d{8}$/.test(itsInput.trim());
+
   const acceptMut = useMutation({
-    mutationFn: () => guarantorConsentPortalApi.accept(token),
+    mutationFn: () => guarantorConsentPortalApi.accept(token, {
+      itsNumberVerification: itsInput.trim(),
+    }),
     onSuccess: (data) => { qc.setQueryData(['qh-consent-portal', token], data); message.success('Consent recorded.'); },
     onError: (e) => message.error(extractProblem(e).detail ?? 'Could not record consent'),
   });
   const declineMut = useMutation({
-    mutationFn: () => guarantorConsentPortalApi.decline(token),
+    mutationFn: () => guarantorConsentPortalApi.decline(token, {
+      itsNumberVerification: itsInput.trim(),
+      declineReason: declineReason.trim() || undefined,
+    }),
     onSuccess: (data) => { qc.setQueryData(['qh-consent-portal', token], data); message.info('Decline recorded.'); },
     onError: (e) => message.error(extractProblem(e).detail ?? 'Could not record decline'),
   });
@@ -99,17 +112,43 @@ export function PortalGuarantorConsentPage() {
           </div>
 
           {!responded && (
-            <Space style={{ marginBlockStart: 20, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button danger icon={<CloseCircleFilled />} loading={declineMut.isPending}
-                disabled={acceptMut.isPending} onClick={() => declineMut.mutate()}>
-                Decline
-              </Button>
-              <Button type="primary" icon={<CheckCircleFilled />} loading={acceptMut.isPending}
-                disabled={declineMut.isPending} onClick={() => acceptMut.mutate()}
-                style={{ background: 'var(--portal-primary)', borderColor: 'var(--portal-primary)' }}>
-                I accept this kafalah
-              </Button>
-            </Space>
+            <div style={{ marginBlockStart: 20 }}>
+              <Form layout="vertical">
+                <Form.Item
+                  label="Confirm your 8-digit ITS number"
+                  help={`Type the ITS that belongs to ${d.guarantorName}. We use this to confirm it's actually you responding — anyone holding this link otherwise can't act on your behalf.`}
+                  validateStatus={itsInput && !itsValid ? 'error' : undefined}>
+                  <Input
+                    inputMode="numeric"
+                    maxLength={8}
+                    placeholder="e.g. 40123456"
+                    value={itsInput}
+                    onChange={(e) => setItsInput(e.target.value.replace(/[^\d]/g, ''))}
+                    autoFocus
+                  />
+                </Form.Item>
+                <Form.Item label="Reason (optional, shown to the borrower if you decline)">
+                  <Input.TextArea
+                    rows={2}
+                    maxLength={500}
+                    value={declineReason}
+                    onChange={(e) => setDeclineReason(e.target.value)}
+                    placeholder="e.g. I'm already a kafil on another active loan."
+                  />
+                </Form.Item>
+              </Form>
+              <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button danger icon={<CloseCircleFilled />} loading={declineMut.isPending}
+                  disabled={!itsValid || acceptMut.isPending} onClick={() => declineMut.mutate()}>
+                  Decline
+                </Button>
+                <Button type="primary" icon={<CheckCircleFilled />} loading={acceptMut.isPending}
+                  disabled={!itsValid || declineMut.isPending} onClick={() => acceptMut.mutate()}
+                  style={{ background: 'var(--portal-primary)', borderColor: 'var(--portal-primary)' }}>
+                  I accept this kafalah
+                </Button>
+              </Space>
+            </div>
           )}
 
           {responded && (

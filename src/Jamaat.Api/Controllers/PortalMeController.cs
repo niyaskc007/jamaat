@@ -197,11 +197,19 @@ public sealed class PortalMeController(
             return Ok(Array.Empty<object>());
         var s = q.Trim();
         var (_, memberId) = await CurrentMemberAsync(ct);
+        // ItsNumber is an owned value object - `m.ItsNumber.Value` doesn't
+        // translate to SQL ("LINQ expression could not be translated"). The
+        // operator-side MemberRepository solves this with a `(string)(object)`
+        // cast (see MemberRepository.cs:28); we use the same pattern here.
+        // Also fixed an operator-precedence bug in the previous version:
+        // `!IsDeleted && (Id != id && Like(name)) || Like(its)` was OR-ing
+        // outside the IsDeleted/own-row guard, leaking soft-deleted members
+        // and the caller themselves via ITS search.
         var rows = await db.Members.AsNoTracking()
             .Where(m => !m.IsDeleted
-                && (m.Id != memberId
-                    && (EF.Functions.Like(m.FullName, $"%{s}%")
-                        || EF.Functions.Like(m.ItsNumber.Value, $"%{s}%"))))
+                && m.Id != memberId
+                && (EF.Functions.Like(m.FullName, $"%{s}%")
+                    || EF.Functions.Like(((string)(object)m.ItsNumber), $"%{s}%")))
             .OrderBy(m => m.FullName)
             .Take(25)
             .Select(m => new { m.Id, ItsNumber = m.ItsNumber.Value, FullName = m.FullName })

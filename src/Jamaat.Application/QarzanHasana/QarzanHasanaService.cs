@@ -821,6 +821,33 @@ public sealed class QarzanHasanaService(
             .FirstOrDefaultAsync(c => c.Token == token, ct);
         if (consent is null) return Error.NotFound("qh_consent.not_found", "This consent link is not valid.");
 
+        // Security: ITS-verification gate. The token URL alone is no longer
+        // sufficient - the responder must also type the guarantor's 8-digit
+        // ITS, which we cross-check against the member referenced by the
+        // consent row. Without this, a phishing leak (forwarded SMS,
+        // screenshot, intercepted email) would let anyone act as the kafil.
+        //
+        // EF Core 10 trips on the value-converted record-struct ItsNumber when
+        // it's projected via `Where(...).Select(m => m.ItsNumber.Value)`. The
+        // pattern that works (used in ListGuarantorConsentsAsync above) is a
+        // join+select inside one query expression: EF translates m.ItsNumber.Value
+        // to a direct column read because the optimizer can see the property
+        // access in context. We use the same shape via a join against the
+        // consent's own row.
+        var expectedIts = await (from c in db.QarzanHasanaGuarantorConsents.AsNoTracking()
+                                 where c.Id == consent.Id
+                                 join m in db.Members.AsNoTracking().IgnoreQueryFilters()
+                                     on c.GuarantorMemberId equals m.Id
+                                 where !m.IsDeleted
+                                 select m.ItsNumber.Value)
+                                .FirstOrDefaultAsync(ct);
+        if (string.IsNullOrEmpty(expectedIts))
+            return Error.NotFound("qh_consent.guarantor_missing", "Guarantor record not found.");
+        var supplied = (meta.ItsNumberVerification ?? string.Empty).Trim();
+        if (!string.Equals(supplied, expectedIts, StringComparison.Ordinal))
+            return Error.Business("qh_consent.its_mismatch",
+                "The ITS number you entered doesn't match the guarantor's. Check the digits and try again.");
+
         try
         {
             if (accept) consent.Accept(meta.IpAddress, meta.UserAgent, clock.UtcNow);
@@ -832,29 +859,43 @@ public sealed class QarzanHasanaService(
         }
         await uow.SaveChangesAsync(ct);
 
-        // If this acceptance was the last one needed for the loan (both guarantors now
-        // Accepted and the loan is still Draft + operator-witness flag is false), promote
-        // it to PendingLevel1 immediately. Without this, a member's loan stays stuck in
-        // Draft forever after the consents arrive - which was the symptom the user saw
-        // when "QH full flow not working". Decline never triggers auto-promotion.
-        if (accept)
+        var loan = await db.QarzanHasanaLoans.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(l => l.Id == consent.LoanId, ct);
+
+        // Decline path: any single guarantor decline rejects the whole loan
+        // (the other guarantor's consent is meaningless without two kafils).
+        // This unblocks the previous behaviour where one decline left the
+        // loan stuck in Draft forever, with no signal to the borrower or
+        // the admin. The borrower can re-apply with different guarantors.
+        if (!accept && loan is not null && loan.Status == QarzanHasanaStatus.Draft)
         {
-            var loan = await db.QarzanHasanaLoans.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(l => l.Id == consent.LoanId, ct);
-            if (loan is not null && loan.Status == QarzanHasanaStatus.Draft && !loan.GuarantorsAcknowledged)
+            var who = await db.Members.IgnoreQueryFilters()
+                .Where(m => m.Id == consent.GuarantorMemberId)
+                .Select(m => m.FullName)
+                .FirstOrDefaultAsync(ct) ?? "a guarantor";
+            var reason = string.IsNullOrWhiteSpace(meta.DeclineReason)
+                ? $"{who} declined to act as kafil."
+                : $"{who} declined to act as kafil: {meta.DeclineReason!.Trim()}";
+            try { loan.Reject(reason, clock.UtcNow); }
+            catch (InvalidOperationException) { /* defensive: another path raced */ }
+            await uow.SaveChangesAsync(ct);
+        }
+
+        // Accept path: if both consents are now Accepted on a still-Draft loan
+        // without operator-witness, auto-promote to PendingLevel1.
+        if (accept && loan is not null && loan.Status == QarzanHasanaStatus.Draft && !loan.GuarantorsAcknowledged)
+        {
+            var guarantorIds = new[] { loan.Guarantor1MemberId, loan.Guarantor2MemberId };
+            var consents = await db.QarzanHasanaGuarantorConsents.IgnoreQueryFilters()
+                .Where(c => c.LoanId == loan.Id)
+                .ToListAsync(ct);
+            var allAccepted = guarantorIds.All(gid =>
+                consents.Any(c => c.GuarantorMemberId == gid && c.Status == QhGuarantorConsentStatus.Accepted));
+            if (allAccepted)
             {
-                var guarantorIds = new[] { loan.Guarantor1MemberId, loan.Guarantor2MemberId };
-                var consents = await db.QarzanHasanaGuarantorConsents.IgnoreQueryFilters()
-                    .Where(c => c.LoanId == loan.Id)
-                    .ToListAsync(ct);
-                var allAccepted = guarantorIds.All(gid =>
-                    consents.Any(c => c.GuarantorMemberId == gid && c.Status == QhGuarantorConsentStatus.Accepted));
-                if (allAccepted)
-                {
-                    try { loan.Submit(bothGuarantorsRemoteAccepted: true); }
-                    catch (InvalidOperationException) { /* defensive: another consent path raced - ignore */ }
-                    await uow.SaveChangesAsync(ct);
-                }
+                try { loan.Submit(bothGuarantorsRemoteAccepted: true); }
+                catch (InvalidOperationException) { /* defensive: another consent path raced */ }
+                await uow.SaveChangesAsync(ct);
             }
         }
 
