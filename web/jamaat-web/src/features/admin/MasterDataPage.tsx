@@ -66,7 +66,7 @@ const SECTIONS: Section[] = [
     description: 'Receipt, voucher, journal and other document numbering rules per year.',
     icon: <FieldNumberOutlined />, color: '#475569', render: () => <NumberingSeriesPanel /> },
   { key: 'qh-schemes', title: 'QH Schemes', group: 'Funds & Receipts',
-    description: 'Qarzan Hasana scheme catalogue. Replaces the legacy two-value enum; subcategories supported. The form\'s gold-collateral panel is driven by each scheme\'s flag.',
+    description: 'Catalogue of Qarzan Hasana loan schemes. Each scheme defines its eligibility, amount limits, and whether gold collateral is required. Supports parent / sub-scheme hierarchy.',
     icon: <BankOutlined />, color: '#C9A34B', render: () => <QhSchemesPanel /> },
 
   // Community

@@ -90,6 +90,12 @@
 
 35. Seed steps must be tenant-scoped and idempotent. `db.X.AnyAsync(predicate)` predicates must filter by `TenantId` explicitly (don't rely on the global query filter — a future change there can silently skip tenant B's defaults because tenant A's rows answered the probe). Existence checks for individual rows must match the unique index columns, not arbitrary fields (e.g. `FinancialPeriod`'s unique index is on `Name`, not `StartDate` — match `Name`). Non-idempotent seeders crashing startup is the most expensive class of bug.
 
+36. The SPA bundle lives at `site/wwwroot/wwwroot/` on the Azure App Service. The API publish output does NOT include the SPA. A zipdeploy with `clean=true` (which we use for API deploys to release file locks) will wipe the SPA and the portal will 404 at the root URL even though the API is healthy. Two safe options when shipping an API change:
+    - **Option A (preferred)**: build the SPA (`npx vite build` in `web/jamaat-web`) and pack the resulting `dist/*` into the same zip at the `wwwroot/` sub-path before zipdeploying. One deploy ships both.
+    - **Option B**: API-only zipdeploy with `clean=true`, then immediately push `dist/*` to `api/zip/site/wwwroot/wwwroot/` via Kudu and touch `web.config` to recycle (the static-files middleware only activates if `wwwroot/wwwroot/index.html` exists at app startup).
+
+    Skipping both = the portal is down until the next manual SPA push.
+
 ---
 
 ## 5. UI/UX Completion
@@ -101,6 +107,8 @@
 36. Always implement proper loading states, empty states, validation states, permission-denied states, failed states, and retry/recovery options where relevant.
 
 37. Do not claim UI/UX is complete unless it has been visually checked and tested through actual frontend execution.
+
+38. User-facing copy (card descriptions, tile blurbs, tooltips, labels, help text, empty-state messages) describes **what the thing is and what it lets the user do**, not its engineering history. Never write "Replaces the legacy X", "Migrated from Y", "Phase B feature", "Now supports Z (was just W before)", or any sentence whose meaning depends on knowing what the product used to be. Refactoring narrative belongs in commit messages and code comments — users only care about the current behaviour.
 
 ---
 
