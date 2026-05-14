@@ -20,6 +20,7 @@ const MemberContributionsPage = lazy(() => import('../features/portal/me/MemberP
 const MemberCommitmentsPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberCommitmentsPage })));
 const MemberQhPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberQhPage })));
 const MemberGuarantorInboxPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberGuarantorInboxPage })));
+const MyFamilyPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MyFamilyPage })));
 const MemberEventsPage = lazy(() => import('../features/portal/me/MemberPortalPages').then((m) => ({ default: m.MemberEventsPage })));
 const MemberContributionDetailPage = lazy(() => import('../features/portal/me/MemberPortalDetailPages').then((m) => ({ default: m.MemberContributionDetailPage })));
 const MemberCommitmentDetailPage = lazy(() => import('../features/portal/me/MemberPortalDetailPages').then((m) => ({ default: m.MemberCommitmentDetailPage })));
@@ -204,6 +205,7 @@ export function App() {
         <Route path="fund-enrollments/new" element={<MemberPatronageSubmitPage />} />
         <Route path="fund-enrollments/:id" element={<MemberPatronageDetailPage />} />
         <Route path="guarantor-inbox" element={<MemberGuarantorInboxPage />} />
+        <Route path="family" element={<MyFamilyPage />} />
         <Route path="events" element={<MemberEventsPage />} />
       </Route>
       <Route

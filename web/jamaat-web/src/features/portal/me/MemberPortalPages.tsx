@@ -1,4 +1,4 @@
-import { Card, Table, Tag, Typography, Empty, Alert, Space, Button, Descriptions, Modal, Skeleton, App as AntdApp, Input, Select } from 'antd';
+import { Card, Table, Tag, Typography, Empty, Alert, Space, Button, Descriptions, Modal, Skeleton, App as AntdApp, Input, Select, Result } from 'antd';
 import { GiftOutlined, HeartOutlined, BankOutlined, TeamOutlined, CalendarOutlined, UserOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -549,3 +549,96 @@ export function MemberEventsPage() {
 
 // Unused export retained to preserve a public surface for older callers.
 export const _icon = UserOutlined;
+
+// ============================================================================
+// My Family — Phase: family-self-view
+// ============================================================================
+
+/// Mirror of Domain.Enums.FamilyRole. Display labels used by MyFamilyPage's
+/// relationship column. Kept here next to the consumer (small + only used in
+/// one place); if a second consumer ever appears we can promote to a shared
+/// label module.
+const FAMILY_ROLE_LABEL: Record<number, string> = {
+  1: 'Head', 2: 'Spouse', 3: 'Father', 4: 'Mother', 5: 'Son', 6: 'Daughter',
+  7: 'Brother', 8: 'Sister', 9: 'Grandfather', 10: 'Grandmother',
+  11: 'Grandson', 12: 'Granddaughter', 13: 'Son-in-law', 14: 'Daughter-in-law',
+  15: 'Uncle', 16: 'Aunt', 17: 'Nephew', 18: 'Niece', 99: 'Other',
+};
+
+const GENDER_LABEL: Record<number, string> = { 1: 'Male', 2: 'Female' };
+
+/// Read-only household view for the signed-in member. Lists the family members
+/// (other people in the same Family record). Gated server-side by
+/// `member.self.view`. The page itself doesn't check the permission - if the
+/// user lacks it the API returns 403 and the catch branch shows a friendly
+/// message. The intent is "show me who's in my household", not edit anything.
+export function MyFamilyPage() {
+  const q = useQuery({ queryKey: ['portal-me-family'], queryFn: portalMeApi.family });
+
+  if (q.isLoading) return <Skeleton active />;
+  if (q.isError) {
+    const status = (q.error as { response?: { status?: number } })?.response?.status;
+    if (status === 404) {
+      return (
+        <div>
+          <PageHeader title="My family"
+            subtitle="Your household composition - the other members linked to your family record." />
+          <Alert
+            type="info" showIcon
+            message="No family linked to your account yet"
+            description="If you believe this is wrong, contact your committee so they can attach your member record to a Family."
+          />
+        </div>
+      );
+    }
+    return <Result status="error" title="Couldn't load your family" subTitle={(q.error as Error)?.message ?? ''} />;
+  }
+  const f = q.data!;
+
+  return (
+    <div>
+      <PageHeader title="My family"
+        subtitle={`Household ${f.code}${f.name ? ' · ' + f.name : ''}. Identity only — financial activity lives on each person's own portal.`} />
+
+      <PortalListCard>
+        <Table
+          rowKey="id" size="middle"
+          dataSource={f.members}
+          scroll={{ x: 'max-content' }}
+          pagination={false}
+          rowClassName={(r) => r.isCurrentUser ? 'jm-portal-row-self' : ''}
+          locale={{ emptyText: <ListEmpty title="No other members on file" sub="You appear to be the only member linked to this family right now." /> }}
+          columns={[
+            {
+              title: 'Name', dataIndex: 'fullName',
+              render: (v: string, r) => (
+                <span>
+                  <strong>{v}</strong>
+                  {r.isCurrentUser && <Tag color="blue" style={{ marginInlineStart: 8 }}>You</Tag>}
+                  {r.isHead && <Tag color="gold" style={{ marginInlineStart: 8 }}>Head</Tag>}
+                </span>
+              ),
+            },
+            { title: 'ITS', dataIndex: 'itsNumber', width: 140,
+              render: (v: string) => <span className="jm-tnum">{v}</span> },
+            {
+              title: 'Relationship', dataIndex: 'familyRole', width: 160,
+              render: (v: number | null) => v ? FAMILY_ROLE_LABEL[v] ?? `Role ${v}` : '—',
+            },
+            { title: 'Gender', dataIndex: 'gender', width: 100,
+              render: (v: number) => GENDER_LABEL[v] ?? '—' },
+            {
+              title: 'Date of birth', dataIndex: 'dateOfBirth', width: 140,
+              render: (v: string | null) => v ? dayjs(v).format('DD MMM YYYY') : '—',
+            },
+            {
+              title: 'Status', dataIndex: 'status', width: 120,
+              render: (s: number) => <StatusTag label={s === 1 ? 'Active' : s === 2 ? 'Inactive' : `Status ${s}`}
+                tone={s === 1 ? 'success' : 'default'} />,
+            },
+          ]}
+        />
+      </PortalListCard>
+    </div>
+  );
+}

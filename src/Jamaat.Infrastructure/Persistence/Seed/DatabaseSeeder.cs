@@ -166,6 +166,12 @@ public static class DatabaseSeeder
                 "portal.dashboard.view.own",
                 "member.self.update",
                 "member.wealth.view",
+                // Read-own-record + read-own-family. Strictly distinct from the
+                // operator perms `member.view` / `family.view` which list ALL
+                // tenants. With this single perm a member can hit the portal
+                // /me/family endpoint to see who else is in their household
+                // (identity only - financial data flows through portal.*.view.own).
+                "member.self.view",
             }),
         };
         foreach (var (roleName, perms) in rolePermissions)
@@ -192,10 +198,16 @@ public static class DatabaseSeeder
         var adminEmail = config["Seed:AdminEmail"] ?? "admin@jamaat.local";
         var adminPassword = config["Seed:AdminPassword"] ?? "Admin@12345";
 
+        // PRIOR BUG: this block used to `return` early when useWizard=true, which
+        // also skipped every master-data + reconciliation pass below (currencies,
+        // fund-types, QH schemes, role-claim reconciliation, member-perm reconciliation).
+        // That's why new master-data seeds didn't fire on the live deployment
+        // (Setup:UseWizard=true in prod). Now we just skip the admin-creation
+        // block and fall through to the rest.
         if (useWizard)
         {
-            logger.LogInformation("Setup:UseWizard=true — skipping seeded admin. First-run wizard will create one.");
-            return;
+            logger.LogInformation("Setup:UseWizard=true — first-run wizard will create the admin user; running master-data + reconcile passes.");
+            goto AfterAdminBlock;
         }
 
         var admin = await userMgr.FindByEmailAsync(adminEmail);
@@ -292,25 +304,45 @@ public static class DatabaseSeeder
             }
         }
 
-        await SeedCurrenciesAndRatesAsync(db, defaultTenantId, logger, ct);
-        await SeedChartOfAccountsAsync(db, defaultTenantId, logger, ct);
-        await SeedFundCategoriesAsync(db, defaultTenantId, logger, ct);
-        await SeedFundTypesAsync(db, defaultTenantId, logger, ct);
-        await SeedQhSchemesAsync(db, defaultTenantId, logger, ct);
-        await BackfillQhSchemeIdAsync(db, logger, ct);
-        await SeedNumberingSeriesAsync(db, defaultTenantId, logger, ct);
-        await SeedFinancialPeriodAsync(db, defaultTenantId, logger, ct);
-        await SeedBankAndExpenseAsync(db, defaultTenantId, logger, ct);
-        await SeedAgreementTemplateAsync(db, defaultTenantId, logger, ct);
-        await SeedLookupsAsync(db, defaultTenantId, logger, ct);
-        await EnsureEventCategoryLookupsAsync(db, defaultTenantId, logger, ct);
-        await SeedSectorsAsync(db, defaultTenantId, logger, ct);
-        await SeedOrganisationsAsync(db, defaultTenantId, logger, ct);
-        await SeedCmsDefaultsAsync(db, logger, ct);
-        await ReconcileAdminUserPermissionsAsync(userMgr, logger);
-        await ReconcileMemberRoleUserPermissionsAsync(userMgr, scope.ServiceProvider, logger);
-        await ReconcileUserTypesAsync(userMgr, logger);
-        await SeedTestUsersAsync(userMgr, defaultTenantId, logger, config);
+        AfterAdminBlock:
+        // Each seed call wrapped so a non-idempotent one can't kill startup.
+        // The early-return that USED to hide this was masking the real bug:
+        // SeedFinancialPeriodAsync's existence check looked at StartDate but
+        // the unique index is on Name - a wizard-installed system hit the
+        // index. We fixed that, but the wrapping below guards future
+        // regressions: an exception in one seeder logs + continues to the
+        // next, so the app comes up and the operator can fix master-data
+        // from the admin UI instead of the box being down.
+        var seeds = new (string Name, Func<Task> Run)[]
+        {
+            ("currencies",         () => SeedCurrenciesAndRatesAsync(db, defaultTenantId, logger, ct)),
+            ("chart-of-accounts",  () => SeedChartOfAccountsAsync(db, defaultTenantId, logger, ct)),
+            ("fund-categories",    () => SeedFundCategoriesAsync(db, defaultTenantId, logger, ct)),
+            ("fund-types",         () => SeedFundTypesAsync(db, defaultTenantId, logger, ct)),
+            ("qh-schemes",         () => SeedQhSchemesAsync(db, defaultTenantId, logger, ct)),
+            ("qh-scheme-backfill", () => BackfillQhSchemeIdAsync(db, logger, ct)),
+            ("numbering-series",   () => SeedNumberingSeriesAsync(db, defaultTenantId, logger, ct)),
+            ("financial-period",   () => SeedFinancialPeriodAsync(db, defaultTenantId, logger, ct)),
+            ("bank-and-expense",   () => SeedBankAndExpenseAsync(db, defaultTenantId, logger, ct)),
+            ("agreement-template", () => SeedAgreementTemplateAsync(db, defaultTenantId, logger, ct)),
+            ("lookups",            () => SeedLookupsAsync(db, defaultTenantId, logger, ct)),
+            ("event-categories",   () => EnsureEventCategoryLookupsAsync(db, defaultTenantId, logger, ct)),
+            ("sectors",            () => SeedSectorsAsync(db, defaultTenantId, logger, ct)),
+            ("organisations",      () => SeedOrganisationsAsync(db, defaultTenantId, logger, ct)),
+            ("cms-defaults",       () => SeedCmsDefaultsAsync(db, logger, ct)),
+            ("admin-user-perms",   () => ReconcileAdminUserPermissionsAsync(userMgr, logger)),
+            ("member-role-perms",  () => ReconcileMemberRoleUserPermissionsAsync(userMgr, scope.ServiceProvider, logger)),
+            ("user-types",         () => ReconcileUserTypesAsync(userMgr, logger)),
+            ("test-users",         () => SeedTestUsersAsync(userMgr, defaultTenantId, logger, config)),
+        };
+        foreach (var (name, run) in seeds)
+        {
+            try { await run(); }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Seed step '{Name}' failed; continuing.", name);
+            }
+        }
 
         // Dev-only bulk data generator - populates members/families/enrollments/commitments/events
         // so every screen has something to render. Off by default; enable via Seed:DevData=true.
@@ -322,9 +354,14 @@ public static class DatabaseSeeder
         }
 
         // Phase A6: backfill - every Member without an ApplicationUser gets one provisioned (with
-        // IsLoginAllowed=false). Idempotent; safe to run on every startup. Gated by Seed:Backfill
-        // so a flagged-off deployment doesn't surprise admins with thousands of new login rows.
-        if (bool.TryParse(config["Seed:BackfillMemberLogins"] ?? "true", out var backfill) && backfill)
+        // IsLoginAllowed=false). Idempotent in spirit, but the per-member ProvisionAsync call is
+        // a SQL roundtrip + UserManager work, so on a tenant with hundreds of members this loop
+        // can blow past the 120s IIS startup timeout. Default flipped to OFF for wizard-managed
+        // installs (prod posture where members are created via runtime flows, not bulk import);
+        // dev/QA still get the default-on behaviour. Operators can force it on with
+        // Seed:BackfillMemberLogins=true if they really do need a bulk pass.
+        var backfillDefault = useWizard ? "false" : "true";
+        if (bool.TryParse(config["Seed:BackfillMemberLogins"] ?? backfillDefault, out var backfill) && backfill)
         {
             try
             {
@@ -892,8 +929,12 @@ Accepted on {{today}}.
         var start = new DateOnly(today.Year, 4, 1);
         if (today < start) start = start.AddYears(-1);
         var end = start.AddYears(1).AddDays(-1);
-        if (await db.FinancialPeriods.AnyAsync(p => p.StartDate == start, ct)) return;
-        db.FinancialPeriods.Add(new FinancialPeriod(Guid.NewGuid(), tenantId, $"FY {start.Year}-{(start.Year + 1) % 100:D2}", start, end));
+        var name = $"FY {start.Year}-{(start.Year + 1) % 100:D2}";
+        // Idempotency: the unique index is on (TenantId, Name), and a wizard-
+        // created install may have inserted a period with this Name but a
+        // different StartDate. Check by Name OR StartDate so we never collide.
+        if (await db.FinancialPeriods.AnyAsync(p => p.StartDate == start || p.Name == name, ct)) return;
+        db.FinancialPeriods.Add(new FinancialPeriod(Guid.NewGuid(), tenantId, name, start, end));
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Seeded financial period {Start}–{End}.", start, end);
     }
@@ -1210,6 +1251,11 @@ Jamaat is a community-finance platform that gives your organisation a single, au
         // Self-edit + verification queue (Phase F). Members get .self.update by default
         // (it's their own data); approvers / data-validators get .changes.approve.
         "member.self.update", "member.changes.approve",
+        // Read-own-record + read-own-family. Granted to the Member role; admin /
+        // operator roles already see everything via member.view + family.view so
+        // they don't need this one, but we keep it in AllPermissions so admins
+        // can grant it via the Roles UI when configuring a custom role.
+        "member.self.view",
         // Self-declared wealth (Phase G). Sensitive - kept tighter than member.view.
         "member.wealth.view",
         // Member self-service portal scope. These are intentionally distinct from the operator

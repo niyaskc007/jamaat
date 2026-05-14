@@ -67,6 +67,7 @@ export function MemberPortalLayout() {
       key: 'account', icon: <ProfileOutlined />, label: 'Account',
       children: [
         { key: '/portal/me/profile', icon: <UserOutlined />, label: t('nav.profile') },
+        { key: '/portal/me/family', icon: <HomeOutlined />, label: 'My family' },
         { key: '/portal/me/login-history', icon: <HistoryOutlined />, label: t('nav.loginHistory') },
       ],
     },

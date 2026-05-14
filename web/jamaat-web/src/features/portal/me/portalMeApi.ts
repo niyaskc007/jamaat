@@ -321,6 +321,26 @@ export type QhPaymentRow = {
   paymentReference: string | null; remarks: string | null;
 };
 
+export type PortalMyFamilyMember = {
+  id: string;
+  itsNumber: string;
+  fullName: string;
+  dateOfBirth: string | null;
+  gender: number;
+  familyRole: number | null;
+  status: number;
+  isHead: boolean;
+  isCurrentUser: boolean;
+};
+
+export type PortalMyFamily = {
+  id: string;
+  code: string;
+  name: string;
+  headMemberId: string | null;
+  members: PortalMyFamilyMember[];
+};
+
 export type MemberDashboard = {
   ytdContributions: number; ytdReceiptCount: number; currency: string;
   activeCommitments: number; commitmentOutstanding: number;
@@ -407,6 +427,10 @@ export const portalMeApi = {
     api.post(`/api/v1/portal/me/guarantor-inbox/${consentId}/${decision}`).then((r) => r.data),
   searchMembers: (q: string) =>
     api.get<Array<{ id: string; itsNumber: string; fullName: string }>>(`/api/v1/portal/me/members/search`, { params: { q } }).then((r) => r.data),
+  /// Read-own-family. Gated server-side by `member.self.view`; returns
+  /// 404 when the signed-in user isn't linked to a member record or has
+  /// no family attached (no-data, not permission errors).
+  family: () => api.get<PortalMyFamily>('/api/v1/portal/me/family').then((r) => r.data),
   events: () => api.get<EventRegistrationRow[]>('/api/v1/portal/me/events').then((r) => r.data),
 
   // Phase B - profile self-edit

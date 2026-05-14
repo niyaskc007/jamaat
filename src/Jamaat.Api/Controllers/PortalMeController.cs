@@ -191,6 +191,67 @@ public sealed class PortalMeController(
     private string? ReadDeclineReasonFromQuery()
         => Request.Query["reason"].ToString() is { Length: > 0 } q ? q : null;
 
+    /// The signed-in member's own household. Returns the family identity (code,
+    /// name, head member) plus the basic identity of every other member in it
+    /// (id, name, ITS, DOB, gender, family role, status). Strictly identity-
+    /// only - financial data (commitments, QH, contributions) lives on its own
+    /// portal-me endpoints, each gated by `portal.X.view.own`.
+    ///
+    /// Permission: <c>member.self.view</c>. Distinct from the operator
+    /// <c>family.view</c> permission that lists every family in the tenant -
+    /// this one is scoped to a single household by ITS-linkage.
+    /// Returns 404 (not 403) when the signed-in user isn't linked to a member
+    /// record OR isn't attached to a family - those are no-data states, not
+    /// permission errors.
+    [HttpGet("family")]
+    [Authorize(Policy = "member.self.view")]
+    public async Task<IActionResult> MyFamily(CancellationToken ct)
+    {
+        var (_, memberId) = await CurrentMemberAsync(ct);
+        if (memberId is null) return NotFound(new { error = "no_member_link" });
+
+        var myFamilyId = await db.Members.AsNoTracking()
+            .Where(m => m.Id == memberId.Value)
+            .Select(m => m.FamilyId)
+            .FirstOrDefaultAsync(ct);
+        if (myFamilyId is null) return NotFound(new { error = "no_family" });
+
+        var family = await db.Families.AsNoTracking()
+            .Where(f => f.Id == myFamilyId.Value)
+            .Select(f => new {
+                f.Id, f.Code, f.FamilyName, f.HeadMemberId,
+            })
+            .FirstOrDefaultAsync(ct);
+        if (family is null) return NotFound(new { error = "no_family" });
+
+        // Load the household members. The members projection avoids the value-
+        // converted ItsNumber.Value pitfall (see SearchMembers above) by
+        // grouping the projection in a join expression - EF translates the
+        // owned property access correctly when used inside a single expression
+        // tree, but not when projected via a chained Where().Select().
+        var members = await (
+            from m in db.Members.AsNoTracking()
+            where m.FamilyId == family.Id && !m.IsDeleted
+            orderby m.FamilyRole, m.FullName
+            select new {
+                m.Id,
+                ItsNumber = m.ItsNumber.Value,
+                m.FullName,
+                m.DateOfBirth,
+                m.Gender,
+                FamilyRole = (int?)m.FamilyRole,
+                Status = (int)m.Status,
+                IsHead = m.Id == family.HeadMemberId,
+                IsCurrentUser = m.Id == memberId.Value,
+            }
+        ).ToListAsync(ct);
+
+        return Ok(new {
+            family.Id, family.Code, name = family.FamilyName, family.HeadMemberId,
+            members,
+        });
+    }
+
     /// Member-friendly search for a guarantor or family member to attach to a Qarzan Hasana
     /// application. Returns minimal fields (id, ITS, full name) so the portal isn't a vector
     /// for member-directory scraping. Capped at 25 hits; min 2 chars to query.

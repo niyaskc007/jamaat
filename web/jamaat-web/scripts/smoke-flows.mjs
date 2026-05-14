@@ -275,6 +275,7 @@ const operatorEndpoints = [
   '/api/v1/commitments',
   '/api/v1/fund-enrollments',
   '/api/v1/members',
+  '/api/v1/families',  // confirm member can't list all families
   '/api/v1/receipts',
   '/api/v1/vouchers',
 ];
@@ -288,6 +289,13 @@ for (const ep of operatorEndpoints) {
 const memberSearch = await call('GET', '/api/v1/portal/me/members/search?q=TEST&limit=10', memberToken);
 logProbe('portal member-search (guarantor picker, expect 200 + rows)', memberSearch.res,
   Array.isArray(memberSearch.body) ? `${memberSearch.body.length} rows` : memberSearch.body);
+
+// My family (member.self.view) - the test member has no Family attached, so
+// the endpoint should return 404 (no_family), not 403 (perm denied) and not
+// 500. That's the "no data" signal vs the "no permission" signal we want.
+const myFamily = await call('GET', '/api/v1/portal/me/family', memberToken);
+logProbe('portal me/family (member.self.view, expect 200 or 404 — never 403)', myFamily.res,
+  myFamily.body && (myFamily.body.code ?? myFamily.body.error ?? myFamily.body));
 
 // Cross-member privacy: try to read a commitment / QH / enrollment belonging to
 // someone else. We'll grab IDs that the admin can see, then probe as the member.
