@@ -39,10 +39,11 @@ import {
   InfoCircleOutlined,
   CloudServerOutlined,
 } from '@ant-design/icons';
-import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate, Link, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { MenuProps } from 'antd';
 import { useAuth } from '../shared/auth/useAuth';
+import { resolveUserType } from '../shared/auth/routing';
 import { Logo } from '../shared/ui/Logo';
 import { LanguageSwitcher } from '../shared/i18n/LanguageSwitcher';
 
@@ -62,6 +63,16 @@ export function AppLayout() {
   const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // A pure Member who lands on an operator route (deep link, refresh after type
+  // flip, leftover bookmark) has no business in the operator chrome - every
+  // panel will 403 and the user will think the app is broken. Mirror the
+  // MemberPortalLayout->Operator redirect: send Members straight to /portal/me.
+  // Hybrid users (Member + Operator both) DO need operator access here, so the
+  // check uses the strict "Member" string only.
+  if (user && resolveUserType(user) === 'Member') {
+    return <Navigate to="/portal/me" replace />;
+  }
   // Below `lg` (992px) the Sider becomes a fixed-position drawer that overlays
   // content instead of consuming horizontal space. The hamburger in the top bar
   // toggles it, and a backdrop tap closes it. On desktop the existing collapsed

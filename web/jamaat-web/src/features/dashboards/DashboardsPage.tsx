@@ -32,6 +32,32 @@ function todayStamp(): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/// Shared loading / error gate for every dashboard panel below. Previously each
+/// panel did `if (q.isLoading || !q.data) return <Spin/>` which silently hung
+/// forever on a 5xx (data stays undefined, no error UI ever renders). Now we
+/// branch on isError first so a backend hiccup surfaces a Retry button instead
+/// of a spinner. Returns the gate node or null to fall through to the panel.
+function PanelGate({ q }: { q: { isLoading: boolean; isError: boolean; error: unknown; refetch: () => void; data: unknown } }) {
+  if (q.isError) {
+    return (
+      <Card style={{ padding: 24, textAlign: 'center' }}>
+        <Alert
+          type="error" showIcon
+          message="Couldn't load this dashboard"
+          description={
+            <Space direction="vertical" size={6} style={{ alignItems: 'center' }}>
+              <span>{(q.error as Error)?.message ?? 'The server returned an error.'}</span>
+              <Button size="small" onClick={() => q.refetch()}>Retry</Button>
+            </Space>
+          }
+        />
+      </Card>
+    );
+  }
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
+  return null;
+}
+
 /// Catalog of every dashboard in the system. The card-grid landing iterates this list and
 /// the slug routes (/dashboards/:slug) render the matching component. New dashboards land
 /// here once and they show up everywhere.
@@ -337,9 +363,7 @@ const ACCENT = {
 
 function QhPortfolioDashboard() {
   const q = useQuery({ queryKey: ['dash', 'qh-portfolio'], queryFn: dashboardApi.qhPortfolio });
-  if (q.isLoading || !q.data) {
-    return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
-  }
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
   const trendData = d.repaymentTrend.map((p) => ({
     label: `${new Date(p.year, p.month - 1, 1).toLocaleString(undefined, { month: 'short' })}`,
@@ -440,7 +464,7 @@ function QhPortfolioDashboard() {
 
 function ReceivablesAgingDashboard() {
   const q = useQuery({ queryKey: ['dash', 'receivables-aging'], queryFn: dashboardApi.receivablesAging });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
 
   const isEmpty = d.commitmentsOutstanding === 0 && d.returnablesOutstanding === 0
@@ -515,7 +539,7 @@ function ReceivablesAgingDashboard() {
 
 function MemberEngagementDashboard() {
   const q = useQuery({ queryKey: ['dash', 'member-engagement'], queryFn: () => dashboardApi.memberEngagement(12) });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
 
   const statusData = [
@@ -624,7 +648,7 @@ function MemberEngagementDashboard() {
 
 function ComplianceDashboard() {
   const q = useQuery({ queryKey: ['dash', 'compliance'], queryFn: dashboardApi.compliance });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
 
   const trendData = d.auditTrend30d.map((p) => ({
@@ -726,7 +750,7 @@ function EventsDashboard() {
     queryKey: ['dash', 'events', months],
     queryFn: () => dashboardApi.events(months),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
 
   const trendData = d.registrationTrend.map((p) => ({
@@ -840,7 +864,7 @@ function EventsDashboard() {
 
 function ChequesDashboard() {
   const q = useQuery({ queryKey: ['dash', 'cheques'], queryFn: dashboardApi.cheques });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
 
   const timelineData = d.maturityTimeline.map((w) => ({
@@ -954,7 +978,7 @@ function FamiliesDashboard() {
     queryKey: ['dash', 'families', months],
     queryFn: () => dashboardApi.families(months),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
 
   const trendData = d.newFamiliesTrend.map((p) => ({
@@ -1050,7 +1074,7 @@ function FundEnrollmentsDashboard() {
     queryKey: ['dash', 'fund-enrollments', months],
     queryFn: () => dashboardApi.fundEnrollments(months),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
 
   const trendData = d.enrollmentTrend.map((p) => ({
@@ -1164,7 +1188,7 @@ function CashflowDashboard() {
     queryKey: ['dash', 'cashflow', days],
     queryFn: () => dashboardApi.cashflow(days),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
 
   const isEmpty = d.totalInflow === 0 && d.totalOutflow === 0;
@@ -1290,7 +1314,7 @@ function QhFunnelDashboard() {
     queryKey: ['dash', 'qh-funnel', months],
     queryFn: () => dashboardApi.qhFunnel(months),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
 
   const trendData = d.monthlyTrend.map((p) => ({
@@ -1378,7 +1402,7 @@ function QhFunnelDashboard() {
 
 function CommitmentTypesDashboard() {
   const q = useQuery({ queryKey: ['dash', 'commitment-types'], queryFn: dashboardApi.commitmentTypes });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
 
   const trendData = d.creationTrend.map((p) => ({
@@ -1478,7 +1502,7 @@ function VouchersDashboard() {
     queryKey: ['dash', 'vouchers', filters.from, filters.to],
     queryFn: () => dashboardApi.vouchers(filters.from, filters.to),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
   const daily = d.dailyOutflow.map((p) => ({ label: p.date.slice(5), Count: p.count, Amount: p.amount }));
   const monthly = d.monthlyVoucherCount.map((p) => ({
@@ -1621,7 +1645,7 @@ function ReceiptsDashboard() {
     queryKey: ['dash', 'receipts', filters.from, filters.to, filters.fundTypeId],
     queryFn: () => dashboardApi.receipts(filters.from, filters.to, filters.fundTypeId),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
   const daily = d.dailyInflow.map((p) => ({ label: p.date.slice(5), Amount: p.amount }));
   const isEmpty = d.totalAmount === 0;
@@ -1740,7 +1764,7 @@ function ReturnablesDashboard() {
     queryKey: ['dash', 'returnables', filters.fundTypeId],
     queryFn: () => dashboardApi.returnables(filters.fundTypeId),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
   const timeline = d.upcomingMaturityTimeline.map((w) => ({ label: w.weekStart.slice(5), Count: w.count, Amount: w.amount }));
   const isEmpty = d.totalReturnable === 0;
@@ -1852,7 +1876,7 @@ function MemberAssetsDashboard() {
     queryKey: ['dash', 'member-assets', filters.sectorId],
     queryFn: () => dashboardApi.memberAssets(filters.sectorId),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
   const trend = d.creationTrend.map((p) => ({
     label: new Date(p.year, p.month - 1, 1).toLocaleString(undefined, { month: 'short' }),
@@ -1943,7 +1967,7 @@ function MemberAssetsDashboard() {
 
 function SectorsDashboard() {
   const q = useQuery({ queryKey: ['dash', 'sectors'], queryFn: dashboardApi.sectors });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
   const isEmpty = d.totalSectors === 0;
 
@@ -1997,7 +2021,7 @@ function NotificationsDashboard() {
     queryKey: ['dash', 'notifications', filters.from, filters.to],
     queryFn: () => dashboardApi.notifications(filters.from, filters.to),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
   const daily = d.dailyVolume.map((p) => ({ label: p.date.slice(5), Events: p.count }));
   const isEmpty = d.total === 0;
@@ -2113,7 +2137,7 @@ function UserActivityDashboard() {
     queryKey: ['dash', 'user-activity', filters.from, filters.to],
     queryFn: () => dashboardApi.userActivity(filters.from, filters.to),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
   const daily = d.dailyVolume.map((p) => ({ label: p.date.slice(5), Events: p.count }));
   const hourly = d.hourOfDayHeatmap.map((p) => ({ label: `${p.hour.toString().padStart(2, '0')}h`, Events: p.count }));
@@ -2234,7 +2258,7 @@ function ChangeRequestsDashboard() {
     queryKey: ['dash', 'change-requests', filters.from, filters.to],
     queryFn: () => dashboardApi.changeRequests(filters.from, filters.to),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
   const daily = d.dailyVolume.map((p) => ({ label: p.date.slice(5), Requests: p.count }));
   const isEmpty = d.total === 0 && d.pending === 0;
@@ -2337,7 +2361,7 @@ function ExpenseTypesDashboard() {
     queryKey: ['dash', 'expense-types', filters.from, filters.to],
     queryFn: () => dashboardApi.expenseTypes(filters.from, filters.to),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
   const trend = d.monthlyTrend.map((p) => ({
     label: new Date(p.year, p.month - 1, 1).toLocaleString(undefined, { month: 'short' }),
@@ -2403,7 +2427,7 @@ const PERIOD_STATUS_LABEL = ['', 'Open', 'Closed', 'Locked'];
 
 function PeriodsDashboard() {
   const q = useQuery({ queryKey: ['dash', 'periods'], queryFn: dashboardApi.periods });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
   const isEmpty = d.totalPeriods === 0;
 
@@ -2477,7 +2501,7 @@ function AnnualSummaryDashboard() {
     queryKey: ['dash', 'annual-summary', year],
     queryFn: () => dashboardApi.annualSummary(year),
   });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
   const monthly = d.monthly.map((p) => ({
     label: new Date(2000, p.month - 1, 1).toLocaleString(undefined, { month: 'short' }),
@@ -2567,7 +2591,7 @@ const ACCOUNT_TYPE_LABEL = ['', 'Asset', 'Liability', 'Income', 'Expense', 'Equi
 
 function ReconciliationDashboard() {
   const q = useQuery({ queryKey: ['dash', 'reconciliation'], queryFn: dashboardApi.reconciliation });
-  if (q.isLoading || !q.data) return <Card style={{ padding: 24, textAlign: 'center' }}><Spin /></Card>;
+  { const _gate = <PanelGate q={q} />; if (q.isError || q.isLoading || !q.data) return _gate; }
   const d = q.data;
   const isEmpty = d.bankAccountCount === 0 && d.coaAccountsCount === 0;
 
