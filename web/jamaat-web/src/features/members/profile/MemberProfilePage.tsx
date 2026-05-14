@@ -89,7 +89,7 @@ export function MemberProfilePage() {
     <div>
       <PageHeader
         title={profile.fullName}
-        subtitle={`ITS ${profile.itsNumber}${profile.tanzeemFileNo ? ` Â· File #${profile.tanzeemFileNo}` : ''}${profile.familyName ? ` Â· ${profile.familyName}` : ''}`}
+        subtitle={`ITS ${profile.itsNumber}${profile.tanzeemFileNo ? ` · File #${profile.tanzeemFileNo}` : ''}${profile.familyName ? ` · ${profile.familyName}` : ''}`}
         actions={<Button onClick={() => navigate('/members')}>Back</Button>}
       />
 
@@ -127,13 +127,13 @@ export function MemberProfilePage() {
                   <Tag>{profile.age != null ? `${profile.age} yrs` : `${profile.ageSnapshot} yrs (snapshot)`}</Tag>
                 )}
                 <Tag color={VerificationStatusColor[profile.dataVerificationStatus]} icon={<SafetyCertificateOutlined />}>
-                  Data Â· {VerificationStatusLabel[profile.dataVerificationStatus]}
+                  Data · {VerificationStatusLabel[profile.dataVerificationStatus]}
                 </Tag>
                 <Tag color={VerificationStatusColor[profile.photoVerificationStatus]} icon={<FileProtectOutlined />}>
-                  Photo Â· {VerificationStatusLabel[profile.photoVerificationStatus]}
+                  Photo · {VerificationStatusLabel[profile.photoVerificationStatus]}
                 </Tag>
-                {profile.sectorCode && <Tag icon={<HomeOutlined />}>{profile.sectorCode}{profile.subSectorCode ? ` Â· ${profile.subSectorCode}` : ''}</Tag>}
-                {profile.jamaat && <Tag icon={<GlobalOutlined />}>{profile.jamaat}{profile.jamiaat ? ` Â· ${profile.jamiaat}` : ''}</Tag>}
+                {profile.sectorCode && <Tag icon={<HomeOutlined />}>{profile.sectorCode}{profile.subSectorCode ? ` · ${profile.subSectorCode}` : ''}</Tag>}
+                {profile.jamaat && <Tag icon={<GlobalOutlined />}>{profile.jamaat}{profile.jamiaat ? ` · ${profile.jamiaat}` : ''}</Tag>}
               </Space>
             </div>
           </Col>

@@ -102,7 +102,7 @@ function LookupDrawer({ open, onClose, lookup, categories }: { open: boolean; on
   });
 
   return (
-    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit lookup Â· ${lookup!.code}` : 'New lookup'} width={460} destroyOnHidden
+    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit lookup · ${lookup!.code}` : 'New lookup'} width={460} destroyOnHidden
       footer={<Space style={{ inlineSize: '100%', justifyContent: 'flex-end' }}><Button onClick={onClose}>Cancel</Button><Button type="primary" loading={mut.isPending} onClick={() => mut.mutate(form.getFieldsValue())}>Save</Button></Space>}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={lookup ?? { isActive: true, sortOrder: 0 }}>
         {!isEdit && (

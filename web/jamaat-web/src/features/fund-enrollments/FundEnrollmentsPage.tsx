@@ -43,7 +43,7 @@ export function FundEnrollmentsPage() {
         '/api/v1/fund-enrollments/bulk/approve',
         { ids: selectedIds }
       );
-      const msg = `Approved ${res.approvedCount}${res.failedCount ? ` Â· ${res.failedCount} failed` : ''}.`;
+      const msg = `Approved ${res.approvedCount}${res.failedCount ? ` · ${res.failedCount} failed` : ''}.`;
       message[res.failedCount === 0 ? 'success' : 'warning'](msg);
       setSelectedIds([]);
       await qc.invalidateQueries({ queryKey: ['enrollments'] });

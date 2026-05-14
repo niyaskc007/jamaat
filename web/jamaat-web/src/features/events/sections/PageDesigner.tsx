@@ -228,7 +228,7 @@ export function PageDesigner({ eventId, eventSlug, primaryColor, accentColor }: 
         width="100vw"
         style={{ top: 0, paddingBlockEnd: 0 }}
         styles={{ body: { padding: 0, blockSize: 'calc(100dvh - 56px)', overflow: 'auto', background: '#F8FAFC' } }}
-        title={<Space><FullscreenOutlined /> Full-page preview Â· {eventSlug}</Space>}
+        title={<Space><FullscreenOutlined /> Full-page preview · {eventSlug}</Space>}
         destroyOnHidden
       >
         <div

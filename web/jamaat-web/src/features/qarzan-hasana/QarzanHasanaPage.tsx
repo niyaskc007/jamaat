@@ -51,7 +51,7 @@ export function QarzanHasanaPage() {
           <Progress percent={Math.min(100, Number(r.progressPercent.toFixed(1)))} size="small"
             status={r.status === 7 ? 'success' : r.status === 8 || r.status === 9 || r.status === 10 ? 'exception' : 'active'} />
           <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>
-            Repaid {money(r.amountRepaid, r.currency)} Â· outstanding {money(r.amountOutstanding, r.currency)}
+            Repaid {money(r.amountRepaid, r.currency)} · outstanding {money(r.amountOutstanding, r.currency)}
           </div>
         </div>
       ) : <span style={{ color: 'var(--jm-gray-400)' }}>-</span>,

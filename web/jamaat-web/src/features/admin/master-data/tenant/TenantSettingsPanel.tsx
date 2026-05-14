@@ -54,8 +54,8 @@ export function TenantSettingsPanel() {
         <Space direction="vertical" size={16} style={{ inlineSize: '100%' }}>
           <Alert type="info" showIcon message={
             <span>
-              Tenant code <Tag>{data.code}</Tag> Â· base currency <Tag>{data.baseCurrency ?? 'AED'}</Tag>
-              {data.jamiaatCode && <> Â· regional group <Tag color="blue">{data.jamiaatCode}</Tag></>}
+              Tenant code <Tag>{data.code}</Tag> · base currency <Tag>{data.baseCurrency ?? 'AED'}</Tag>
+              {data.jamiaatCode && <> · regional group <Tag color="blue">{data.jamiaatCode}</Tag></>}
             </span>
           } />
           <Form layout="vertical" form={form} requiredMark={false}

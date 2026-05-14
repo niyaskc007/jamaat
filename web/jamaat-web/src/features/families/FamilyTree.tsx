@@ -284,7 +284,7 @@ function ExpandedFamilyView({ linkedFamilyId, familyCode, familyName, onOpenMemb
         marginBlockEnd: 8, textAlign: 'center',
       }}>
         <BranchesOutlined style={{ marginInlineEnd: 4 }} />
-        {familyCode}{familyName ? ` Â· ${familyName}` : ''}
+        {familyCode}{familyName ? ` · ${familyName}` : ''}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>

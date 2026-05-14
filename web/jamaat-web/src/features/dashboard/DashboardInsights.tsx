@@ -113,7 +113,7 @@ export function DashboardInsights() {
       {/* Collection trend (last 30 days) - the single most useful chart for spotting */}
       {/* spikes / drops in incoming money. Area + line so the daily shape stands out. */}
       <Card size="small" title="Collections - last 30 days" className="jm-card"
-        extra={<span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>Daily avg <span className="jm-tnum">{money(trendAvg, insights?.currency ?? baseCurrency)}</span> Â· Total <span className="jm-tnum">{money(trendTotal, insights?.currency ?? baseCurrency)}</span></span>}>
+        extra={<span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>Daily avg <span className="jm-tnum">{money(trendAvg, insights?.currency ?? baseCurrency)}</span> · Total <span className="jm-tnum">{money(trendTotal, insights?.currency ?? baseCurrency)}</span></span>}>
         {trend.length === 0 ? <Empty description="No data" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -192,7 +192,7 @@ export function DashboardInsights() {
                     <List.Item.Meta
                       avatar={<span style={{ inlineSize: 24, blockSize: 24, borderRadius: 6, background: 'var(--jm-surface-muted)', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600 }}>{i + 1}</span>}
                       title={<Link to={`/members/${c.memberId}`} style={{ fontSize: 13 }}>{c.fullName}</Link>}
-                      description={<span className="jm-tnum" style={{ fontSize: 11 }}>ITS {c.itsNumber} Â· {c.receiptCount} receipts</span>}
+                      description={<span className="jm-tnum" style={{ fontSize: 11 }}>ITS {c.itsNumber} · {c.receiptCount} receipts</span>}
                     />
                     <span className="jm-tnum" style={{ fontWeight: 600, fontSize: 13 }}>{money(c.amount, c.currency)}</span>
                   </List.Item>
@@ -233,7 +233,7 @@ export function DashboardInsights() {
                         <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(c.amount, c.currency)}</span>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--jm-gray-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {c.memberName} Â· #{c.chequeNumber}
+                        {c.memberName} · #{c.chequeNumber}
                       </div>
                     </div>
                   </List.Item>

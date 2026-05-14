@@ -75,7 +75,7 @@ export function FamilyDetailDrawer({ familyId, onClose }: { familyId: string; on
 
   return (
     <Drawer
-      title={data ? <span><TeamOutlined style={{ marginInlineEnd: 8 }} />{data.family.familyName} <span style={{ color: 'var(--jm-gray-500)', fontWeight: 400 }}>Â· {data.family.code}</span></span> : 'Family'}
+      title={data ? <span><TeamOutlined style={{ marginInlineEnd: 8 }} />{data.family.familyName} <span style={{ color: 'var(--jm-gray-500)', fontWeight: 400 }}>· {data.family.code}</span></span> : 'Family'}
       open
       onClose={onClose}
       width={760}
@@ -188,7 +188,7 @@ export function FamilyDetailDrawer({ familyId, onClose }: { familyId: string; on
                               render: (_: unknown, row) => row.currentFamilyId ? (
                                 <Button type="link" size="small" style={{ padding: 0 }}
                                   onClick={() => navigate(`/families?focus=${row.currentFamilyId}`)}>
-                                  {row.currentFamilyCode}{row.currentFamilyName ? ` Â· ${row.currentFamilyName}` : ''}
+                                  {row.currentFamilyCode}{row.currentFamilyName ? ` · ${row.currentFamilyName}` : ''}
                                 </Button>
                               ) : <span style={{ color: 'var(--jm-gray-400)' }}>-</span>,
                             },

@@ -17,6 +17,7 @@ public interface ICommitmentService
     Task<Result<IReadOnlyList<CommitmentPaymentRowDto>>> ListPaymentsAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<CommitmentScheduleLineDto>> PreviewScheduleAsync(PreviewScheduleRequest req, CancellationToken ct = default);
     Task<Result<CommitmentDto>> CreateDraftAsync(CreateCommitmentDto dto, CancellationToken ct = default);
+    Task<Result<RenderedAgreement>> RenderAgreementAsync(Guid commitmentId, CancellationToken ct = default);
     Task<Result<CommitmentDto>> AcceptAgreementAsync(Guid id, AcceptAgreementDto dto, CancellationToken ct = default);
     Task<Result> PauseAsync(Guid id, CancellationToken ct = default);
     Task<Result> ResumeAsync(Guid id, CancellationToken ct = default);
@@ -241,6 +242,76 @@ public sealed class CommitmentService(
         var detail = await GetAsync(commitment.Id, ct);
         return detail.IsSuccess ? detail.Value!.Commitment : Error.NotFound("commitment.not_found", "Unexpected.");
     }
+
+    /// Resolves the active agreement template for a Draft commitment, builds the
+    /// values dictionary (party name, fund name, totals, etc.) and renders the body.
+    /// Returns a small DTO with the resulting text so both the member-portal and
+    /// the operator UI can preview the agreement in a modal before accepting.
+    /// Falls back to a self-composed sentence if no template is seeded.
+    public async Task<Result<RenderedAgreement>> RenderAgreementAsync(Guid commitmentId, CancellationToken ct = default)
+    {
+        var c = await db.Commitments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == commitmentId, ct);
+        if (c is null) return Error.NotFound("commitment.not_found", "Commitment not found.");
+
+        var tpl = await db.CommitmentAgreementTemplates.AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderByDescending(t => t.Version)
+            .FirstOrDefaultAsync(ct);
+
+        var fund = await db.FundTypes.AsNoTracking()
+            .Where(f => f.Id == c.FundTypeId)
+            .Select(f => new { f.Code, f.NameEnglish })
+            .FirstOrDefaultAsync(ct);
+
+        var jamaatName = await db.Tenants.AsNoTracking()
+            .Where(t => t.Id == c.TenantId)
+            .Select(t => t.JamiaatName ?? t.Name)
+            .FirstOrDefaultAsync(ct) ?? "Jamaat";
+
+        var installmentAmount = c.NumberOfInstallments > 0
+            ? c.TotalAmount / c.NumberOfInstallments
+            : c.TotalAmount;
+
+        var values = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["party_name"]         = c.PartyNameSnapshot ?? "",
+            ["party_type"]         = c.PartyType == CommitmentPartyType.Member ? "Member" : "Family",
+            ["fund_name"]          = fund?.NameEnglish ?? c.FundNameSnapshot ?? "",
+            ["fund_code"]          = fund?.Code ?? "",
+            ["total_amount"]       = c.TotalAmount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture),
+            ["currency"]           = c.Currency ?? "",
+            ["installments"]       = c.NumberOfInstallments.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["frequency"]          = FrequencyLabelInternal(c.Frequency),
+            ["installment_amount"] = installmentAmount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture),
+            ["start_date"]         = c.StartDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture),
+            ["end_date"]           = c.EndDate?.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture) ?? "—",
+            ["today"]              = DateTime.UtcNow.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture),
+            ["jamaat_name"]        = jamaatName,
+        };
+
+        var text = tpl is null
+            ? $"I, **{values["party_name"]}**, accept commitment {c.Code} for **{values["fund_name"]}** totalling {values["total_amount"]} {values["currency"]} over {values["installments"]} {values["frequency"]} installments starting {values["start_date"]}."
+            : AgreementRenderer.Render(tpl.BodyMarkdown, values);
+
+        return new RenderedAgreement(
+            TemplateId: tpl?.Id,
+            TemplateVersion: tpl?.Version,
+            TemplateName: tpl?.Name,
+            RenderedText: text,
+            IsAlreadyAccepted: c.Status != CommitmentStatus.Draft);
+    }
+
+    private static string FrequencyLabelInternal(CommitmentFrequency f) => f switch
+    {
+        CommitmentFrequency.OneTime    => "one-time",
+        CommitmentFrequency.Weekly     => "weekly",
+        CommitmentFrequency.BiWeekly   => "bi-weekly",
+        CommitmentFrequency.Monthly    => "monthly",
+        CommitmentFrequency.Quarterly  => "quarterly",
+        CommitmentFrequency.HalfYearly => "half-yearly",
+        CommitmentFrequency.Yearly     => "yearly",
+        _                              => "custom",
+    };
 
     public async Task<Result<CommitmentDto>> AcceptAgreementAsync(Guid id, AcceptAgreementDto dto, CancellationToken ct = default)
     {

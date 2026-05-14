@@ -117,7 +117,7 @@ export function QarzanHasanaDetailPage() {
 
   return (
     <div>
-      <PageHeader title={`QH Â· ${loan.code}`}
+      <PageHeader title={`QH · ${loan.code}`}
         actions={
           <Space wrap>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/qarzan-hasana')}>Back</Button>
@@ -336,7 +336,7 @@ export function QarzanHasanaDetailPage() {
           <Card size="small" title="Loan details" className="jm-card">
             <Descriptions size="small" column={2} bordered
               items={[
-                { key: 'b', label: 'Borrower', children: `${loan.memberName} Â· ITS ${loan.memberItsNumber}` },
+                { key: 'b', label: 'Borrower', children: `${loan.memberName} · ITS ${loan.memberItsNumber}` },
                 { key: 's', label: 'Scheme', children: QhSchemeLabel[loan.scheme] },
                 { key: 'inst', label: 'Installments', children: `${loan.instalmentsApproved || loan.instalmentsRequested}` },
                 { key: 'gold', label: 'Gold amount', children: loan.goldAmount ? <span className="jm-tnum">{money(loan.goldAmount, loan.currency)}</span> : '-' },
@@ -354,16 +354,16 @@ export function QarzanHasanaDetailPage() {
                   <span>
                     <UserHoverCard userId={loan.level1ApproverUserId ?? null}
                       fallback={loan.level1ApproverName ?? 'â€”'} />
-                    {' Â· '}{formatDateTime(loan.level1ApprovedAtUtc)}
-                    {loan.level1Comments ? ` Â· ${loan.level1Comments}` : ''}
+                    {' · '}{formatDateTime(loan.level1ApprovedAtUtc)}
+                    {loan.level1Comments ? ` · ${loan.level1Comments}` : ''}
                   </span>
                 ) }] : []),
                 ...(loan.level2ApprovedAtUtc ? [{ key: 'l2', label: 'L2 approval', span: 2, children: (
                   <span>
                     <UserHoverCard userId={loan.level2ApproverUserId ?? null}
                       fallback={loan.level2ApproverName ?? 'â€”'} />
-                    {' Â· '}{formatDateTime(loan.level2ApprovedAtUtc)}
-                    {loan.level2Comments ? ` Â· ${loan.level2Comments}` : ''}
+                    {' · '}{formatDateTime(loan.level2ApprovedAtUtc)}
+                    {loan.level2Comments ? ` · ${loan.level2Comments}` : ''}
                   </span>
                 ) }] : []),
                 ...(loan.cashflowDocumentUrl || loan.goldSlipDocumentUrl ? [{ key: 'docs', label: 'Documents', span: 2, children: (

@@ -106,7 +106,7 @@ function SectorDrawer({ open, onClose, sector }: { open: boolean; onClose: () =>
   });
 
   return (
-    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit sector Â· ${sector!.code}` : 'New sector'} width={520} destroyOnHidden
+    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit sector · ${sector!.code}` : 'New sector'} width={520} destroyOnHidden
       footer={<Space style={{ inlineSize: '100%', justifyContent: 'flex-end' }}><Button onClick={onClose}>Cancel</Button><Button type="primary" loading={mut.isPending} onClick={() => mut.mutate(form.getFieldsValue())}>Save</Button></Space>}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={sector ?? { isActive: true }}>
         {!isEdit && <Form.Item label="Code" name="code" rules={[{ required: true }]}><Input placeholder="e.g., HATEMI" /></Form.Item>}
@@ -215,7 +215,7 @@ function SubSectorDrawer({ open, onClose, sub, sectors }: { open: boolean; onClo
   });
 
   return (
-    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit sub-sector Â· ${sub!.code}` : 'New sub-sector'} width={520} destroyOnHidden
+    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit sub-sector · ${sub!.code}` : 'New sub-sector'} width={520} destroyOnHidden
       footer={<Space style={{ inlineSize: '100%', justifyContent: 'flex-end' }}><Button onClick={onClose}>Cancel</Button><Button type="primary" loading={mut.isPending} onClick={() => mut.mutate(form.getFieldsValue())}>Save</Button></Space>}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={sub ?? { isActive: true }}>
         {!isEdit && (

@@ -176,6 +176,19 @@ export const commitmentsApi = {
     const { data } = await api.post(`/api/v1/commitments/${id}/accept-agreement`, body);
     return data;
   },
+  /// Server-rendered preview of the agreement text for a Draft commitment. The
+  /// operator UI shows this in a modal before clicking Accept so the cashier
+  /// can read it back to the member.
+  agreementPreview: async (id: string): Promise<{
+    templateId: string | null;
+    templateVersion: number | null;
+    templateName: string | null;
+    renderedText: string;
+    isAlreadyAccepted: boolean;
+  }> => {
+    const { data } = await api.get(`/api/v1/commitments/${id}/agreement-preview`);
+    return data;
+  },
   pause: (id: string) => api.post(`/api/v1/commitments/${id}/pause`),
   resume: (id: string) => api.post(`/api/v1/commitments/${id}/resume`),
   cancel: (id: string, reason: string) => api.post(`/api/v1/commitments/${id}/cancel`, { reason }),

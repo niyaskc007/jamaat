@@ -175,7 +175,7 @@ function EventDrawer({ open, onClose, event, categoryOptions }: {
   });
 
   return (
-    <Drawer open={open} onClose={onClose} width={520} destroyOnHidden title={isEdit ? `Edit Â· ${event!.name}` : 'New event'}
+    <Drawer open={open} onClose={onClose} width={520} destroyOnHidden title={isEdit ? `Edit · ${event!.name}` : 'New event'}
       footer={<Space style={{ inlineSize: '100%', justifyContent: 'flex-end' }}><Button onClick={onClose}>Cancel</Button><Button type="primary" loading={mut.isPending} onClick={() => mut.mutate(form.getFieldsValue())}>Save</Button></Space>}>
       <Form layout="vertical" form={form} requiredMark={false}
         initialValues={event
@@ -214,7 +214,7 @@ function ScanModal({ event, onClose }: { event: Event; onClose: () => void }) {
     onError: (e) => message.error(extractProblem(e).detail ?? 'Scan failed'),
   });
   return (
-    <Modal title={`Scan Â· ${event.name}`} open onCancel={onClose} footer={<Button onClick={onClose}>Close</Button>} destroyOnClose>
+    <Modal title={`Scan · ${event.name}`} open onCancel={onClose} footer={<Button onClick={onClose}>Close</Button>} destroyOnClose>
       <Space direction="vertical" style={{ inlineSize: '100%' }}>
         <Input autoFocus placeholder="ITS number (8 digits)" maxLength={8} value={its}
           onChange={(e) => setIts(e.target.value)} onPressEnter={() => its.length === 8 && mut.mutate()} />
@@ -229,7 +229,7 @@ function ScanModal({ event, onClose }: { event: Event; onClose: () => void }) {
 function ScansModal({ event, onClose }: { event: Event; onClose: () => void }) {
   const { data } = useQuery({ queryKey: ['event-scans', event.id], queryFn: () => eventsApi.listScans({ eventId: event.id, pageSize: 200 }) });
   return (
-    <Modal title={`Attendees Â· ${event.name}`} open onCancel={onClose} footer={<Button onClick={onClose}>Close</Button>} width={720}>
+    <Modal title={`Attendees · ${event.name}`} open onCancel={onClose} footer={<Button onClick={onClose}>Close</Button>} width={720}>
       <Table<EventScan> rowKey="id" size="small" pagination={false} dataSource={data?.items ?? []}
         columns={[
           { title: 'ITS', dataIndex: 'memberItsNumber', width: 110 },

@@ -162,24 +162,16 @@ public sealed class PortalMeFinanceController(
 
     /// Render the agreement text for a Draft commitment WITHOUT accepting it. The portal
     /// shows this text in a modal so the member can read what they're agreeing to before
-    /// they click Accept. Same template-resolution path as <see cref="CommitmentAcceptAgreement"/>.
+    /// they click Accept. Delegates to the shared CommitmentService.RenderAgreementAsync.
     [HttpGet("commitments/{id:guid}/agreement-preview")]
     public async Task<IActionResult> CommitmentAgreementPreview(Guid id, CancellationToken ct)
     {
         var (_, memberId) = await CurrentMemberAsync(ct);
         if (memberId is null) return NotFound();
-        var c = await db.Commitments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
-        if (c is null || c.MemberId != memberId.Value) return NotFound();
-
-        var rendered = await RenderAgreementForCommitmentAsync(c, ct);
-        return Ok(new
-        {
-            templateId = rendered.TemplateId,
-            templateVersion = rendered.TemplateVersion,
-            templateName = rendered.TemplateName,
-            renderedText = rendered.Text,
-            isAlreadyAccepted = c.Status != Domain.Enums.CommitmentStatus.Draft,
-        });
+        var owns = await db.Commitments.AsNoTracking().AnyAsync(x => x.Id == id && x.MemberId == memberId.Value, ct);
+        if (!owns) return NotFound();
+        var r = await commitmentSvc.RenderAgreementAsync(id, ct);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }
 
     /// Member-self acceptance of a Draft commitment's agreement, moving it Draft → Active.
@@ -192,63 +184,14 @@ public sealed class PortalMeFinanceController(
     {
         var (_, memberId) = await CurrentMemberAsync(ct);
         if (memberId is null) return NotFound();
-        var c = await db.Commitments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
-        if (c is null || c.MemberId != memberId.Value) return NotFound();
+        var owns = await db.Commitments.AsNoTracking().AnyAsync(x => x.Id == id && x.MemberId == memberId.Value, ct);
+        if (!owns) return NotFound();
 
-        var rendered = await RenderAgreementForCommitmentAsync(c, ct);
-        var dto = new AcceptAgreementDto(rendered.TemplateId, rendered.Text, AcceptedByAdmin: false);
+        var rendered = await commitmentSvc.RenderAgreementAsync(id, ct);
+        if (!rendered.IsSuccess) return ErrorMapper.ToActionResult(this, rendered.Error);
+        var dto = new AcceptAgreementDto(rendered.Value!.TemplateId, rendered.Value.RenderedText, AcceptedByAdmin: false);
         var r = await commitmentSvc.AcceptAgreementAsync(id, dto, ct);
         return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
-    }
-
-    /// Resolves the active agreement template + builds the values dictionary the operator
-    /// path uses (party_name / fund_name / total_amount / installment_amount / start_date /
-    /// jamaat_name / etc.) and runs them through the shared <see cref="AgreementRenderer"/>.
-    /// Falls back to a self-composed sentence only when no template is seeded - members must
-    /// never be blocked from accepting just because master-data is missing.
-    private async Task<(Guid? TemplateId, int? TemplateVersion, string? TemplateName, string Text)>
-        RenderAgreementForCommitmentAsync(Domain.Entities.Commitment c, CancellationToken ct)
-    {
-        var tpl = await db.CommitmentAgreementTemplates.AsNoTracking()
-            .Where(t => t.IsActive)
-            .OrderByDescending(t => t.Version)
-            .FirstOrDefaultAsync(ct);
-
-        var fund = await db.FundTypes.AsNoTracking()
-            .Where(f => f.Id == c.FundTypeId)
-            .Select(f => new { f.Code, f.NameEnglish })
-            .FirstOrDefaultAsync(ct);
-
-        var jamaatName = await db.Tenants.AsNoTracking()
-            .Where(t => t.Id == c.TenantId)
-            .Select(t => t.JamiaatName ?? t.Name)
-            .FirstOrDefaultAsync(ct) ?? "Jamaat";
-
-        var installmentAmount = c.NumberOfInstallments > 0
-            ? c.TotalAmount / c.NumberOfInstallments
-            : c.TotalAmount;
-
-        var values = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["party_name"]         = c.PartyNameSnapshot ?? "",
-            ["party_type"]         = c.PartyType == CommitmentPartyType.Member ? "Member" : "Family",
-            ["fund_name"]          = fund?.NameEnglish ?? c.FundNameSnapshot ?? "",
-            ["fund_code"]          = fund?.Code ?? "",
-            ["total_amount"]       = c.TotalAmount.ToString("N2", CultureInfo.InvariantCulture),
-            ["currency"]           = c.Currency ?? "",
-            ["installments"]       = c.NumberOfInstallments.ToString(CultureInfo.InvariantCulture),
-            ["frequency"]          = FrequencyLabel(c.Frequency),
-            ["installment_amount"] = installmentAmount.ToString("N2", CultureInfo.InvariantCulture),
-            ["start_date"]         = c.StartDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture),
-            ["end_date"]           = c.EndDate?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "—",
-            ["today"]              = DateTime.UtcNow.ToString("dd MMM yyyy", CultureInfo.InvariantCulture),
-            ["jamaat_name"]        = jamaatName,
-        };
-
-        var text = tpl is null
-            ? $"I, **{values["party_name"]}**, accept commitment {c.Code} for **{values["fund_name"]}** totalling {values["total_amount"]} {values["currency"]} over {values["installments"]} {values["frequency"]} installments starting {values["start_date"]}."
-            : AgreementRenderer.Render(tpl.BodyMarkdown, values);
-        return (tpl?.Id, tpl?.Version, tpl?.Name, text);
     }
 
     private static string FrequencyLabel(CommitmentFrequency f) => f switch
@@ -323,6 +266,15 @@ public sealed class PortalMeFinanceController(
     /// Self-submit a Qarzan Hasana application from the member portal. The body is the same
     /// CreateQarzanHasanaDto that operators post, BUT we override <c>MemberId</c> to the current
     /// signed-in member so a member can never apply on behalf of someone else.
+    ///
+    /// We do NOT auto-submit. The previous version did, but Submit() requires either an
+    /// operator-witnessed kafalah (which a member can't grant themselves) OR both guarantors
+    /// already accepted via the public consent portal (which can't have happened yet on the
+    /// same call). The auto-submit therefore always failed with qh.consent_required, the
+    /// API returned 400, and the member saw "Submit failed" even though the Draft was
+    /// successfully created. The loan now stays in Draft until both guarantor consents
+    /// arrive; the consent endpoint auto-promotes it to PendingLevel1 when the second
+    /// guarantor accepts.
     [HttpPost("qarzan-hasana")]
     [Authorize(Policy = "portal.qh.request")]
     public async Task<IActionResult> QhCreate([FromBody] CreateQarzanHasanaDto dto, CancellationToken ct)
@@ -331,14 +283,12 @@ public sealed class PortalMeFinanceController(
         if (memberId is null) return BadRequest(new { error = "no_member_link", detail = "Sign-in is not linked to a member record." });
 
         // Force the borrower to be the current member regardless of what the client sent.
-        var safe = dto with { MemberId = memberId.Value };
+        // Also force guarantorsAcknowledged=false - a borrower cannot acknowledge their own
+        // guarantors; only the operator at the counter or the guarantors themselves (via
+        // the consent portal) can.
+        var safe = dto with { MemberId = memberId.Value, GuarantorsAcknowledged = false };
         var r = await qhSvc.CreateDraftAsync(safe, ct);
-        if (!r.IsSuccess) return ErrorMapper.ToActionResult(this, r.Error);
-
-        // Auto-submit so the application immediately enters L1 review (operators do this in
-        // two clicks; a member shouldn't have to come back to a separate page to confirm).
-        var submit = await qhSvc.SubmitAsync(r.Value.Id, ct);
-        return submit.IsSuccess ? Ok(submit.Value) : ErrorMapper.ToActionResult(this, submit.Error);
+        return r.IsSuccess ? Ok(r.Value) : ErrorMapper.ToActionResult(this, r.Error);
     }
 
     // ----- Fund enrollments (patronages) -------------------------------------

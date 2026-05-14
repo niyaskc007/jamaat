@@ -120,6 +120,15 @@ public sealed record AcceptAgreementDto(
     string RenderedText,
     bool AcceptedByAdmin = true);
 
+/// Returned by /commitments/{id}/agreement-preview (operator + member-portal both use it).
+/// `IsAlreadyAccepted` lets the client disable the Accept CTA without a separate status fetch.
+public sealed record RenderedAgreement(
+    Guid? TemplateId,
+    int? TemplateVersion,
+    string? TemplateName,
+    string RenderedText,
+    bool IsAlreadyAccepted);
+
 public sealed record WaiveInstallmentDto(Guid InstallmentId, string Reason);
 
 public sealed record CancelCommitmentDto(string Reason);

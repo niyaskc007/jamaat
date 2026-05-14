@@ -38,7 +38,7 @@ export function AgreementTemplatesPanel() {
       render: (v: string, row) => (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontWeight: 500 }}>{v}{row.isDefault && <Tag color="gold" style={{ marginInlineStart: 8 }}>Default</Tag>}</span>
-          <span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>v{row.version} Â· {row.language}</span>
+          <span style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>v{row.version} · {row.language}</span>
         </div>
       ),
     },
@@ -178,7 +178,7 @@ function TemplateFormDrawer({ open, onClose, template, placeholders }: {
 
   return (
     <Drawer
-      title={isEdit ? `Edit template Â· ${template!.code}` : 'New agreement template'}
+      title={isEdit ? `Edit template · ${template!.code}` : 'New agreement template'}
       open={open}
       onClose={onClose}
       width={760}

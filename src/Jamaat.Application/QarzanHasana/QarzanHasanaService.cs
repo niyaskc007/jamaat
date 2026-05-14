@@ -831,6 +831,33 @@ public sealed class QarzanHasanaService(
             return Error.Business("qh_consent.already_responded", ex.Message);
         }
         await uow.SaveChangesAsync(ct);
+
+        // If this acceptance was the last one needed for the loan (both guarantors now
+        // Accepted and the loan is still Draft + operator-witness flag is false), promote
+        // it to PendingLevel1 immediately. Without this, a member's loan stays stuck in
+        // Draft forever after the consents arrive - which was the symptom the user saw
+        // when "QH full flow not working". Decline never triggers auto-promotion.
+        if (accept)
+        {
+            var loan = await db.QarzanHasanaLoans.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(l => l.Id == consent.LoanId, ct);
+            if (loan is not null && loan.Status == QarzanHasanaStatus.Draft && !loan.GuarantorsAcknowledged)
+            {
+                var guarantorIds = new[] { loan.Guarantor1MemberId, loan.Guarantor2MemberId };
+                var consents = await db.QarzanHasanaGuarantorConsents.IgnoreQueryFilters()
+                    .Where(c => c.LoanId == loan.Id)
+                    .ToListAsync(ct);
+                var allAccepted = guarantorIds.All(gid =>
+                    consents.Any(c => c.GuarantorMemberId == gid && c.Status == QhGuarantorConsentStatus.Accepted));
+                if (allAccepted)
+                {
+                    try { loan.Submit(bothGuarantorsRemoteAccepted: true); }
+                    catch (InvalidOperationException) { /* defensive: another consent path raced - ignore */ }
+                    await uow.SaveChangesAsync(ct);
+                }
+            }
+        }
+
         return await GetConsentPortalAsync(token, ct);
     }
 

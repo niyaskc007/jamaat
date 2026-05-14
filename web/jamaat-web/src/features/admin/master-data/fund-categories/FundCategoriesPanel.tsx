@@ -99,7 +99,7 @@ function CategoryModal({ open, onClose, entity }: { open: boolean; onClose: () =
   });
 
   return (
-    <Modal title={isEdit ? `Edit category Â· ${entity!.name}` : 'New fund category'} open={open} onCancel={onClose} destroyOnHidden
+    <Modal title={isEdit ? `Edit category · ${entity!.name}` : 'New fund category'} open={open} onCancel={onClose} destroyOnHidden
       onOk={() => form.submit()} okText={isEdit ? 'Save' : 'Create'} confirmLoading={mut.isPending}>
       <Form form={form} layout="vertical" requiredMark={false}
         initialValues={entity ? { ...entity } : { kind: 1, sortOrder: 0, isActive: true }}
@@ -151,7 +151,7 @@ function SubCategoriesTab() {
         <Table<FundSubCategory>
           rowKey="id" size="middle" loading={subs.isLoading} dataSource={subs.data ?? []} pagination={false}
           columns={[
-            { title: 'Category', dataIndex: 'fundCategoryName', width: 200, render: (v: string, row) => <span style={{ fontWeight: 500 }}>{v} <span style={{ color: 'var(--jm-gray-400)', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>Â· {row.fundCategoryCode}</span></span> },
+            { title: 'Category', dataIndex: 'fundCategoryName', width: 200, render: (v: string, row) => <span style={{ fontWeight: 500 }}>{v} <span style={{ color: 'var(--jm-gray-400)', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>· {row.fundCategoryCode}</span></span> },
             { title: 'Code', dataIndex: 'code', width: 140, render: (v) => <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontWeight: 500 }}>{v}</span> },
             { title: 'Name', dataIndex: 'name', render: (v) => <span style={{ fontWeight: 500 }}>{v}</span> },
             { title: 'Description', dataIndex: 'description', render: (v?: string | null) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
@@ -197,7 +197,7 @@ function SubCategoryModal({ open, onClose, entity, categories }: { open: boolean
   });
 
   return (
-    <Modal title={isEdit ? `Edit sub-category Â· ${entity!.name}` : 'New fund sub-category'} open={open} onCancel={onClose} destroyOnHidden
+    <Modal title={isEdit ? `Edit sub-category · ${entity!.name}` : 'New fund sub-category'} open={open} onCancel={onClose} destroyOnHidden
       onOk={() => form.submit()} okText={isEdit ? 'Save' : 'Create'} confirmLoading={mut.isPending}>
       <Form form={form} layout="vertical" requiredMark={false}
         initialValues={entity ? { ...entity } : { sortOrder: 0, isActive: true }}

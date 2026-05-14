@@ -52,6 +52,30 @@ export function CommitmentDetailPage() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [agreementOpen, setAgreementOpen] = useState(false);
+  // Separate state for the Draft-only "Accept agreement on behalf of member" flow.
+  // We fetch a server-rendered preview on open, show it in the modal, and post it
+  // back to /accept-agreement with acceptedByAdmin=true if the cashier clicks Accept.
+  const [acceptingDraft, setAcceptingDraft] = useState(false);
+  const previewQ = useQuery({
+    queryKey: ['commitment-agreement-preview', id],
+    queryFn: () => commitmentsApi.agreementPreview(id),
+    enabled: !!id && acceptingDraft,
+  });
+  const acceptMut = useMutation({
+    mutationFn: () =>
+      commitmentsApi.acceptAgreement(id, {
+        templateId: previewQ.data?.templateId ?? undefined,
+        renderedText: previewQ.data?.renderedText ?? '',
+        acceptedByAdmin: true,
+      }),
+    onSuccess: () => {
+      message.success('Agreement accepted. Commitment is now active.');
+      setAcceptingDraft(false);
+      void refetch();
+      void qc.invalidateQueries({ queryKey: ['commitments'] });
+    },
+    onError: (err) => message.error(extractProblem(err).detail ?? 'Could not accept the agreement.'),
+  });
   // Drill-down filter for the Payments panel: when set, only payments tied to this instalment
   // are shown. Set by clicking the "View" button on a schedule row; cleared by the panel itself.
   const [paymentsFilterInstNo, setPaymentsFilterInstNo] = useState<number | null>(null);
@@ -175,7 +199,7 @@ export function CommitmentDetailPage() {
   return (
     <div>
       <PageHeader
-        title={`Commitment Â· ${c.code}`}
+        title={`Commitment · ${c.code}`}
         actions={
           <Space wrap>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/commitments')}>Back</Button>
@@ -227,11 +251,48 @@ export function CommitmentDetailPage() {
         <Card size="small" style={{ marginBlockEnd: 16, borderColor: 'var(--jm-warning)' }}>
           <Space align="center">
             <strong>Draft.</strong>
-            <span>This commitment is not yet active. Accept the agreement to activate and allow payments.</span>
-            <Button type="primary" onClick={() => navigate(`/commitments/new`)}>Accept agreement</Button>
+            <span>This commitment is not yet active. Read the agreement back to the member and accept on their behalf to activate.</span>
+            <Button type="primary" onClick={() => setAcceptingDraft(true)}>Review and accept agreement</Button>
           </Space>
         </Card>
       )}
+
+      {/* Operator-side accept modal: fetches a server-rendered preview, shows it,
+          and on confirm posts to /accept-agreement with acceptedByAdmin=true. */}
+      <Modal
+        title="Accept agreement on behalf of member"
+        open={acceptingDraft}
+        onCancel={() => setAcceptingDraft(false)}
+        width={720}
+        footer={[
+          <Button key="cancel" onClick={() => setAcceptingDraft(false)}>Cancel</Button>,
+          <Button
+            key="accept"
+            type="primary"
+            loading={acceptMut.isPending}
+            disabled={previewQ.isLoading || !!previewQ.data?.isAlreadyAccepted || !previewQ.data?.renderedText}
+            onClick={() => acceptMut.mutate()}>
+            I confirm — accept on behalf of member
+          </Button>,
+        ]}>
+        {previewQ.isLoading ? <Spin />
+          : previewQ.isError ? (
+            <span className="jm-agreement-preview-error">
+              Couldn&apos;t load the agreement preview: {extractProblem(previewQ.error).detail ?? 'unknown error'}
+            </span>
+          )
+          : previewQ.data ? (
+            <div>
+              {previewQ.data.templateName && (
+                <div className="jm-agreement-preview-template-label">
+                  Template: {previewQ.data.templateName}
+                  {previewQ.data.templateVersion ? ` v${previewQ.data.templateVersion}` : ''}
+                </div>
+              )}
+              <AgreementMarkdown source={previewQ.data.renderedText} />
+            </div>
+          ) : null}
+      </Modal>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
         <Card size="small" className="jm-card">
@@ -309,7 +370,7 @@ export function CommitmentDetailPage() {
       >
         <Space direction="vertical" style={{ inlineSize: '100%' }}>
           {waiving && <div>
-            Waiving installment <strong>#{waiving.installmentNo}</strong> - due {formatDate(waiving.dueDate)} Â· {money(waiving.scheduledAmount, c.currency)}
+            Waiving installment <strong>#{waiving.installmentNo}</strong> - due {formatDate(waiving.dueDate)} · {money(waiving.scheduledAmount, c.currency)}
           </div>}
           <Input.TextArea
             rows={3}
@@ -365,7 +426,7 @@ export function CommitmentDetailPage() {
       </Modal>
 
       <Modal
-        title={`Agreement Â· v${data.agreementTemplateVersion ?? '-'}`}
+        title={`Agreement · v${data.agreementTemplateVersion ?? '-'}`}
         open={agreementOpen}
         onCancel={() => setAgreementOpen(false)}
         footer={<Button onClick={() => setAgreementOpen(false)}>Close</Button>}

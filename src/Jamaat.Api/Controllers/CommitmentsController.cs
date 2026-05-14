@@ -90,6 +90,18 @@ public sealed class CommitmentsController(ICommitmentService svc, IExcelExporter
         return r.IsSuccess ? Ok(r.Value) : Problem(r.Error);
     }
 
+    /// Server-rendered preview of the agreement text for a Draft commitment. The
+    /// operator UI shows this in a modal so a cashier can read it back to the
+    /// member and then click Accept (which posts the same renderedText to
+    /// /accept-agreement with acceptedByAdmin=true).
+    [HttpGet("{id:guid}/agreement-preview")]
+    [Authorize(Policy = "commitment.view")]
+    public async Task<IActionResult> AgreementPreview(Guid id, CancellationToken ct)
+    {
+        var r = await svc.RenderAgreementAsync(id, ct);
+        return r.IsSuccess ? Ok(r.Value) : Problem(r.Error);
+    }
+
     [HttpPost("{id:guid}/pause")]
     [Authorize(Policy = "commitment.update")]
     public async Task<IActionResult> Pause(Guid id, CancellationToken ct)

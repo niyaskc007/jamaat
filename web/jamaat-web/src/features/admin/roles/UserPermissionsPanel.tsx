@@ -92,14 +92,14 @@ export function UserPermissionsPanel() {
             optionFilterProp="label"
             options={(usersQ.data?.items ?? []).map((u) => ({
               value: u.id,
-              label: `${u.fullName || u.userName} Â· ${u.userName}${u.isActive ? '' : ' (inactive)'}`,
+              label: `${u.fullName || u.userName} · ${u.userName}${u.isActive ? '' : ' (inactive)'}`,
             }))}
           />
           {detailQ.data && (
             <Space size={4}>
               <UserOutlined style={{ color: 'var(--jm-gray-500)' }} />
               <Typography.Text>{detailQ.data.fullName ?? detailQ.data.userName}</Typography.Text>
-              <span style={{ color: 'var(--jm-gray-400)' }}>Â·</span>
+              <span style={{ color: 'var(--jm-gray-400)' }}>·</span>
               {detailQ.data.roles.map((r) => <Tag key={r} color={r === 'Administrator' ? 'gold' : 'blue'}>{r}</Tag>)}
             </Space>
           )}

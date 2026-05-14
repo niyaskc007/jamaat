@@ -58,7 +58,7 @@ export function EventDetailPage() {
     <div>
       <PageHeader
         title={event.name}
-        subtitle={`${event.categoryName ?? categoryLabelOf(categoriesQ.data, event.category) ?? EventCategoryLabel[event.category] ?? `Category ${event.category}`} Â· ${formatDate(event.eventDate)}${event.eventDateHijri ? ` Â· ${event.eventDateHijri}` : ''}${event.place ? ` Â· ${event.place}` : ''}`}
+        subtitle={`${event.categoryName ?? categoryLabelOf(categoriesQ.data, event.category) ?? EventCategoryLabel[event.category] ?? `Category ${event.category}`} · ${formatDate(event.eventDate)}${event.eventDateHijri ? ` · ${event.eventDateHijri}` : ''}${event.place ? ` · ${event.place}` : ''}`}
         actions={
           <Space>
             <Button icon={<LinkOutlined />}
@@ -297,7 +297,7 @@ function BrandingTab({ event, onSaved }: { event: Event; onSaved: (e: Event) => 
               <div style={{ fontSize: 28, fontWeight: 600, marginBlockStart: 6 }}>{event.name}</div>
               {event.tagline && <div style={{ fontSize: 14, opacity: 0.9, marginBlockStart: 4 }}>{event.tagline}</div>}
               <div style={{ marginBlockStart: 12, fontSize: 13, opacity: 0.85 }}>
-                <CalendarOutlined /> {formatDate(event.eventDate)}{event.place ? ` Â· ${event.place}` : ''}
+                <CalendarOutlined /> {formatDate(event.eventDate)}{event.place ? ` · ${event.place}` : ''}
               </div>
             </div>
           </Card>
@@ -437,8 +437,8 @@ function RegistrationsTab({ event }: { event: Event }) {
           <div style={{ fontWeight: 500 }}>{v}</div>
           <div style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>
             {r.attendeeItsNumber ? `ITS ${r.attendeeItsNumber}` : 'Guest'}
-            {r.attendeeEmail ? ` Â· ${r.attendeeEmail}` : ''}
-            {r.attendeePhone ? ` Â· ${r.attendeePhone}` : ''}
+            {r.attendeeEmail ? ` · ${r.attendeeEmail}` : ''}
+            {r.attendeePhone ? ` · ${r.attendeePhone}` : ''}
           </div>
         </div>
       ),

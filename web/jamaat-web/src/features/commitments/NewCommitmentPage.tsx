@@ -404,7 +404,7 @@ function AcceptanceStep({ commitmentId }: { commitmentId: string }) {
             placeholder="Select agreement template"
             options={(templatesQ.data?.items ?? []).map((t) => ({
               value: t.id,
-              label: `${t.name}${t.fundTypeCode ? ` (${t.fundTypeCode})` : ''}${t.isDefault ? ' Â· default' : ''}`,
+              label: `${t.name}${t.fundTypeCode ? ` (${t.fundTypeCode})` : ''}${t.isDefault ? ' · default' : ''}`,
             }))}
           />
         </Form.Item>

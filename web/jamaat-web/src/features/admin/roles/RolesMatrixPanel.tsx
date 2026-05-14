@@ -77,7 +77,7 @@ export function RolesMatrixPanel() {
           <ul style={{ margin: 0, paddingInlineStart: 18 }}>
             <li>Toggling a permission on a role updates every user currently in that role - they'll see the change at their next login.</li>
             <li>The <b>Administrator</b> role always has every permission and cannot be modified here.</li>
-            <li>To grant a one-off permission to a single user without changing their role, use the <b>Users Â· cross-functional</b> tab.</li>
+            <li>To grant a one-off permission to a single user without changing their role, use the <b>Users · cross-functional</b> tab.</li>
           </ul>
         }
       />

@@ -78,7 +78,7 @@ export function ReliabilityTab({ memberId }: { memberId: string }) {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 500 }}>{l.description}</div>
                 <div style={{ fontSize: 11, color: 'var(--jm-gray-500)' }}>
-                  Ref <span className="jm-tnum">{l.reference}</span> Â· {dayjs(l.occurredOn).format('DD MMM YYYY')}
+                  Ref <span className="jm-tnum">{l.reference}</span> · {dayjs(l.occurredOn).format('DD MMM YYYY')}
                 </div>
               </div>
             </div>

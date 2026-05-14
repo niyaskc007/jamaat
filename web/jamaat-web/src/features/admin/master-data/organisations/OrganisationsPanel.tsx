@@ -90,7 +90,7 @@ function OrganisationDrawer({ open, onClose, org }: { open: boolean; onClose: ()
   });
 
   return (
-    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit Â· ${org!.code}` : 'New organisation'} width={500} destroyOnHidden
+    <Drawer open={open} onClose={onClose} title={isEdit ? `Edit · ${org!.code}` : 'New organisation'} width={500} destroyOnHidden
       footer={<Space style={{ inlineSize: '100%', justifyContent: 'flex-end' }}><Button onClick={onClose}>Cancel</Button><Button type="primary" loading={mut.isPending} onClick={() => mut.mutate(form.getFieldsValue())}>Save</Button></Space>}>
       <Form layout="vertical" form={form} requiredMark={false} initialValues={org ?? { isActive: true }}>
         {!isEdit && <Form.Item label="Code" name="code" rules={[{ required: true }]}><Input placeholder="e.g., SHABABIL" /></Form.Item>}

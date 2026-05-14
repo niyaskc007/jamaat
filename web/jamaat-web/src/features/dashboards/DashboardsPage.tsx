@@ -408,7 +408,7 @@ function QhPortfolioDashboard() {
           <Card title="Top borrowers by outstanding" size="small" className="jm-card">
             <Table rowKey="memberId" size="small" pagination={false} dataSource={d.topBorrowers}
               columns={[
-                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> Â· {r.fullName}</span> },
+                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> · {r.fullName}</span> },
                 { title: 'Loans', dataIndex: 'loanCount', key: 'l', align: 'right', width: 70, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Outstanding', dataIndex: 'outstanding', key: 'o', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, d.currency)}</span> },
               ]}
@@ -1016,7 +1016,7 @@ function FamiliesDashboard() {
           <Card title="Top families by contribution (YTD)" size="small" className="jm-card">
             <Table rowKey="familyId" size="small" pagination={false} dataSource={d.topFamiliesByContribution}
               columns={[
-                { title: 'Family', key: 'f', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.code}</span> Â· {r.familyName}</span> },
+                { title: 'Family', key: 'f', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.code}</span> · {r.familyName}</span> },
                 { title: 'Members', dataIndex: 'memberCount', key: 'm', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'YTD total', dataIndex: 'totalAmount', key: 't', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, d.currency)}</span> },
               ]}
@@ -1028,7 +1028,7 @@ function FamiliesDashboard() {
           <Card title="Largest families" size="small" className="jm-card">
             <Table rowKey="familyId" size="small" pagination={false} dataSource={d.largestFamilies}
               columns={[
-                { title: 'Family', key: 'f', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.code}</span> Â· {r.familyName}</span> },
+                { title: 'Family', key: 'f', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.code}</span> · {r.familyName}</span> },
                 { title: 'Members', dataIndex: 'memberCount', key: 'm', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{v}</span> },
                 { title: 'YTD total', dataIndex: 'totalAmount', key: 't', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum">{money(v, d.currency)}</span> },
               ]}
@@ -1128,7 +1128,7 @@ function FundEnrollmentsDashboard() {
           <Card title="Top funds by active enrollments" size="small" className="jm-card">
             <Table rowKey="fundTypeId" size="small" pagination={false} dataSource={d.topFundsByActiveCount}
               columns={[
-                { title: 'Fund', key: 'f', render: (_, r) => <Link to={`/dashboards/fund-types/${r.fundTypeId}`}><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.fundCode}</span> Â· {r.fundName}</Link> },
+                { title: 'Fund', key: 'f', render: (_, r) => <Link to={`/dashboards/fund-types/${r.fundTypeId}`}><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.fundCode}</span> · {r.fundName}</Link> },
                 { title: 'Active', dataIndex: 'activeEnrollments', key: 'a', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{v}</span> },
                 { title: 'Total', dataIndex: 'totalEnrollments', key: 't', align: 'right', width: 80, render: (v: number) => <span className="jm-tnum">{v}</span> },
               ]}
@@ -1361,7 +1361,7 @@ function QhFunnelDashboard() {
           <Card title="Top borrowers by current outstanding" size="small" className="jm-card">
             <Table rowKey="memberId" size="small" pagination={false} dataSource={d.topBorrowers}
               columns={[
-                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> Â· {r.fullName}</span> },
+                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> · {r.fullName}</span> },
                 { title: 'Loans', dataIndex: 'loanCount', key: 'l', align: 'right', width: 80, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Outstanding', dataIndex: 'outstanding', key: 'o', align: 'right', width: 160, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, d.currency)}</span> },
               ]}
@@ -1456,7 +1456,7 @@ function CommitmentTypesDashboard() {
           <Card title="By fund (top 8 by committed)" size="small" className="jm-card">
             <Table rowKey="fundTypeId" size="small" pagination={false} dataSource={d.byFund}
               columns={[
-                { title: 'Fund', key: 'f', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.fundCode}</span> Â· {r.fundName}</span> },
+                { title: 'Fund', key: 'f', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.fundCode}</span> · {r.fundName}</span> },
                 { title: 'Count', dataIndex: 'count', key: 'c', align: 'right', width: 80, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Committed', dataIndex: 'committed', key: 'co', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum">{money(v, d.currency)}</span> },
                 { title: 'Paid', dataIndex: 'paid', key: 'p', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 500 }}>{money(v, d.currency)}</span> },
@@ -1719,7 +1719,7 @@ function ReceiptsDashboard() {
           <Card title="Top contributors" size="small" className="jm-card">
             <Table rowKey="memberId" size="small" pagination={false} dataSource={d.topContributors}
               columns={[
-                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> Â· {r.fullName}</span> },
+                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> · {r.fullName}</span> },
                 { title: 'Receipts', dataIndex: 'receiptCount', align: 'right', width: 100, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Total', dataIndex: 'amount', align: 'right', width: 160, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, d.currency)}</span> },
               ]}
@@ -1830,7 +1830,7 @@ function ReturnablesDashboard() {
           <Card title="Top holders by outstanding" size="small" className="jm-card">
             <Table rowKey="memberId" size="small" pagination={false} dataSource={d.topHolders}
               columns={[
-                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> Â· {r.memberName}</span> },
+                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> · {r.memberName}</span> },
                 { title: 'Receipts', dataIndex: 'receiptCount', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Issued', dataIndex: 'totalIssued', align: 'right', width: 140, render: (v: number) => <span className="jm-tnum">{money(v, d.currency)}</span> },
                 { title: 'Outstanding', dataIndex: 'outstanding', align: 'right', width: 160, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, d.currency)}</span> },
@@ -1912,7 +1912,7 @@ function MemberAssetsDashboard() {
           <Card title="Top members by value" size="small" className="jm-card">
             <Table rowKey="memberId" size="small" pagination={false} dataSource={d.topMembersByValue}
               columns={[
-                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> Â· {r.fullName}</span> },
+                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> · {r.fullName}</span> },
                 { title: 'Assets', dataIndex: 'assetCount', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Total value', dataIndex: 'totalValue', align: 'right', width: 160, render: (v: number) => <span className="jm-tnum" style={{ fontWeight: 600 }}>{money(v, d.currency)}</span> },
               ]}
@@ -1966,7 +1966,7 @@ function SectorsDashboard() {
           <Card title="Per-sector summary" size="small" className="jm-card">
             <Table rowKey="sectorId" size="small" pagination={{ pageSize: 25 }} dataSource={d.sectors}
               columns={[
-                { title: 'Sector', key: 's', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.code}</span> Â· {r.name}</span> },
+                { title: 'Sector', key: 's', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.code}</span> · {r.name}</span> },
                 { title: 'Active?', dataIndex: 'isActive', align: 'center', width: 80, render: (v: boolean) => v ? <Tag color="green">Yes</Tag> : <Tag>No</Tag> },
                 { title: 'Members', dataIndex: 'memberCount', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum">{v}</span> },
                 { title: 'Active', dataIndex: 'activeMembers', align: 'right', width: 90, render: (v: number) => <span className="jm-tnum">{v}</span> },
@@ -2313,7 +2313,7 @@ function ChangeRequestsDashboard() {
           <Card title="Oldest pending requests (worklist)" size="small" className="jm-card">
             <Table rowKey="id" size="small" pagination={false} dataSource={d.oldestPending}
               columns={[
-                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> Â· <Link to={`/dashboards/members/${r.memberId}`}>{r.memberName}</Link></span> },
+                { title: 'Member', key: 'm', render: (_, r) => <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.itsNumber}</span> · <Link to={`/dashboards/members/${r.memberId}`}>{r.memberName}</Link></span> },
                 { title: 'Section', dataIndex: 'section', width: 130, render: (v: string) => <Tag>{v}</Tag> },
                 { title: 'Requested by', dataIndex: 'requestedByUserName', width: 200,
                   render: (v: string, r) => <UserHoverCard userId={r.requestedByUserId ?? null} fallback={v} /> },
@@ -2599,7 +2599,7 @@ function ReconciliationDashboard() {
                   </span>
                 ) },
                 { title: 'COA link', key: 'l', width: 200, render: (_, r) => r.accountingAccountId
-                  ? <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.accountingAccountCode}</span> Â· {r.accountingAccountName}</span>
+                  ? <span><span className="jm-tnum" style={{ fontSize: 12, color: 'var(--jm-gray-500)' }}>{r.accountingAccountCode}</span> · {r.accountingAccountName}</span>
                   : <Tag color="red">Not linked</Tag>
                 },
                 { title: 'Currency', dataIndex: 'currency', width: 80, render: (v: string) => <Tag>{v}</Tag> },
