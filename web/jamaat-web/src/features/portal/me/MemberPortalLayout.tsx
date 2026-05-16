@@ -31,14 +31,16 @@ export function MemberPortalLayout() {
   const user = authStore.getUser();
   const { t } = useTranslation('portal');
 
-  // A pure Operator who somehow lands on /portal/me (deep link, refresh after
-  // type-flip, etc.) has no business here - they don't have a member record
-  // to view. Send them back to the operator dashboard. Hybrid users (Member +
-  // Operator both) DO have a member record AND can switch back, so they keep
-  // access here. The check on userType excludes Hybrid by matching only the
-  // strict "Operator" string.
+  // Gate: members + hybrids + operators with portal.access (e.g. an accountant who
+  // also needs to inspect a member's portal view) get to render here. A pure operator
+  // with NO portal.access has no business on /portal/me - send them back to /dashboard
+  // so they don't see an empty shell. The previous version kicked anyone with
+  // userType === 'Operator', which made it impossible for an operator who happened to
+  // hold portal.access (because the perm was granted to them in the admin UI) to view
+  // the portal at all.
   const userType = user ? resolveUserType(user) : null;
-  if (userType === 'Operator') {
+  const hasPortalAccess = (user?.permissions ?? []).some((p) => p.toLowerCase() === 'portal.access');
+  if (userType === 'Operator' && !hasPortalAccess) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -157,11 +159,15 @@ export function MemberPortalLayout() {
                 items: [
                   { key: 'profile', icon: <UserOutlined />, label: t('menu.profile'), onClick: () => navigate('/portal/me/profile') },
                   { key: 'change-pw', icon: <LockOutlined />, label: t('menu.changePassword'), onClick: () => navigate('/change-password?returnTo=/portal/me') },
-                  // Hybrid users (Member + Operator both) get a quick way back to
-                  // the operator dashboard - mirrors the "Switch to member portal"
-                  // entry on AppLayout's avatar menu. Pure-Member users never see
-                  // this since they have no operator side to switch to.
-                  ...(userType === 'Hybrid' ? [
+                  // Show the "Switch to operator dashboard" entry to anyone who has
+                  // operator-side perms: Hybrid users always do, and so does an Operator
+                  // who got into the portal via portal.access (the relaxed redirect gate
+                  // above). Pure Members have no operator perms so they never see it.
+                  // Gate uses member.view as the canonical operator-presence indicator -
+                  // every operator persona in the seed (Counter / Accountant / Approver /
+                  // EventCoordinator / Auditor) holds it.
+                  ...((userType !== 'Member'
+                       && (user?.permissions ?? []).some((p) => p.toLowerCase() === 'member.view')) ? [
                     { type: 'divider' as const },
                     {
                       key: 'switch-operator',
