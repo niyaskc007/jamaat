@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text.Json;
 using Jamaat.Application.Admin;
 using Jamaat.Application.Common;
@@ -9,6 +11,7 @@ using Jamaat.Domain.Common;
 using Jamaat.Domain.Entities;
 using Jamaat.Domain.Enums;
 using Jamaat.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -25,10 +28,40 @@ public sealed class DeletionService(
     JamaatDbContext db,
     ITenantContext tenant,
     ICurrentUser currentUser,
+    IHttpContextAccessor httpAccessor,
     IClock clock,
     ILogger<DeletionService> logger) : IDeletionService
 {
     private static readonly JsonSerializerOptions SnapshotOptions = new() { WriteIndented = false };
+
+    /// Resolve the calling user's id at call time (not ctor time). ICurrentUser captures
+    /// in its constructor; if it's resolved before the auth pipeline finishes (or in any
+    /// other quirky scope timing), UserId comes back null. Reading the HttpContext fresh
+    /// per call avoids that whole class of issue. Walks every plausible claim type
+    /// because JwtBearer's inbound mapping has varied across .NET versions.
+    private Guid? CurrentUserId()
+    {
+        if (currentUser.UserId is Guid id) return id;
+        var user = httpAccessor.HttpContext?.User;
+        if (user?.Identity?.IsAuthenticated != true) return null;
+        string?[] candidates = {
+            user.FindFirstValue(ClaimTypes.NameIdentifier),
+            user.FindFirstValue(JwtRegisteredClaimNames.Sub),
+            user.FindFirstValue("sub"),
+            user.FindFirstValue("nameid"),
+        };
+        foreach (var v in candidates) if (Guid.TryParse(v, out var g)) return g;
+        return null;
+    }
+
+    private string? CurrentUserName()
+    {
+        if (!string.IsNullOrEmpty(currentUser.UserName)) return currentUser.UserName;
+        var user = httpAccessor.HttpContext?.User;
+        return user?.FindFirstValue(ClaimTypes.Name)
+            ?? user?.FindFirstValue(JwtRegisteredClaimNames.UniqueName)
+            ?? user?.FindFirstValue(ClaimTypes.Email);
+    }
 
     /// Retention window for new soft-deletes. 30d by default; admin can purge-now any
     /// time. Pre-existing legacy `IsDeleted=1` rows that get migrated in keep a NULL
@@ -80,8 +113,9 @@ public sealed class DeletionService(
                 $"Cannot delete: {blockers.Count} blocker(s). Clear them via the relevant per-feature workflow first."));
 
         var now = clock.UtcNow;
+        var actorId = CurrentUserId();
         entity.DeletedAtUtc = now;
-        entity.DeletedByUserId = currentUser.UserId;
+        entity.DeletedByUserId = actorId;
         entity.DeletionReason = reason.Trim();
         entity.RetentionUntilUtc = now + RetentionWindow;
 
@@ -90,7 +124,7 @@ public sealed class DeletionService(
         foreach (var child in await LoadCascadeChildrenAsync(entityType, id, ct))
         {
             child.DeletedAtUtc = now;
-            child.DeletedByUserId = currentUser.UserId;
+            child.DeletedByUserId = actorId;
             child.DeletionReason = $"Cascaded from {entityType} {id}";
             child.RetentionUntilUtc = now + RetentionWindow;
         }
@@ -98,7 +132,7 @@ public sealed class DeletionService(
         await WriteAuditAsync("soft-delete", entityType, id, reason, entity, ct);
         await db.SaveChangesAsync(ct);
         logger.LogInformation("SoftDelete: {EntityType} {Id} by {ActorId} reason={Reason}",
-            entityType, id, currentUser.UserId, reason);
+            entityType, id, actorId, reason);
         return Result.Success();
     }
 
@@ -126,7 +160,7 @@ public sealed class DeletionService(
 
         await WriteAuditAsync("restore", entityType, id, "restored by SuperAdmin", entity, ct);
         await db.SaveChangesAsync(ct);
-        logger.LogInformation("Restore: {EntityType} {Id} by {ActorId}", entityType, id, currentUser.UserId);
+        logger.LogInformation("Restore: {EntityType} {Id} by {ActorId}", entityType, id, CurrentUserId());
         return Result.Success();
     }
 
@@ -164,7 +198,7 @@ public sealed class DeletionService(
                 "Cannot purge: another row still references this. Resolve the dependency first.\n" + ex.InnerException?.Message));
         }
 
-        logger.LogInformation("Purge: {EntityType} {Id} by {ActorId}", entityType, id, currentUser.UserId);
+        logger.LogInformation("Purge: {EntityType} {Id} by {ActorId}", entityType, id, CurrentUserId());
         return Result.Success();
     }
 
@@ -432,8 +466,8 @@ public sealed class DeletionService(
 
         db.AuditLogs.Add(new AuditLog(
             tenantId: tenant.TenantId,
-            userId: currentUser.UserId,
-            userName: currentUser.UserName ?? "system",
+            userId: CurrentUserId(),
+            userName: CurrentUserName() ?? "system",
             correlationId: Guid.NewGuid().ToString("N"),
             action: $"superadmin.{action}",
             entityName: entityType,

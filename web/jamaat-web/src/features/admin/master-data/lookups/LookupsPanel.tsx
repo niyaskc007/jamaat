@@ -5,6 +5,8 @@ import { PlusOutlined, SearchOutlined, ReloadOutlined, EditOutlined, DeleteOutli
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { api } from '../../../../shared/api/client';
 import { extractProblem } from '../../../../shared/api/client';
+import { authStore } from '../../../../shared/auth/authStore';
+import { DeletionImpactModal } from '../../trash/DeletionImpactModal';
 
 type Lookup = {
   id: string; category: string; code: string; name: string; nameArabic?: string | null;
@@ -27,6 +29,11 @@ export function LookupsPanel() {
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Lookup | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // SuperAdmin soft-delete state (one row at a time). The modal handles its
+  // own fetch + delete; we just track which row triggered it. Separate from
+  // the legacy hard-delete below so admins can see both options side by side.
+  const [softDeleteRow, setSoftDeleteRow] = useState<Lookup | null>(null);
+  const canSoftDelete = authStore.hasPermission('admin.delete.master');
 
   const categoriesQ = useQuery({ queryKey: ['lookup-categories'], queryFn: lookupsApi.categories });
   const { data, isLoading, refetch, isFetching } = useQuery({
@@ -54,8 +61,12 @@ export function LookupsPanel() {
         const items: MenuProps['items'] = [
           { key: 'edit', icon: <EditOutlined />, label: 'Edit', onClick: () => { setEditing(row); setDrawerOpen(true); } },
           { type: 'divider' },
-          { key: 'del', icon: <DeleteOutlined />, danger: true, label: 'Delete',
-            onClick: () => modal.confirm({ title: 'Delete lookup?', onOk: () => delMut.mutateAsync(row.id) }) },
+          { key: 'del', icon: <DeleteOutlined />, danger: true, label: 'Delete (legacy)',
+            onClick: () => modal.confirm({ title: 'Delete lookup?', content: 'Legacy hard-delete. No retention window, no impact preview.', onOk: () => delMut.mutateAsync(row.id) }) },
+          ...(canSoftDelete ? [{
+            key: 'soft-del', icon: <DeleteOutlined />, danger: true, label: 'Delete (SuperAdmin)',
+            onClick: () => setSoftDeleteRow(row),
+          }] : []),
         ];
         return <Dropdown menu={{ items }} trigger={['click']}><Button type="text" icon={<MoreOutlined />} /></Dropdown>;
       }
@@ -77,6 +88,16 @@ export function LookupsPanel() {
         onChange={(p) => setPage(p.current ?? 1)}
         pagination={{ current: page, pageSize: 50, total: data?.total ?? 0 }} />
       <LookupDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} lookup={editing} categories={categoriesQ.data ?? []} />
+      {softDeleteRow && (
+        <DeletionImpactModal
+          open={!!softDeleteRow}
+          entityType="Lookup"
+          id={softDeleteRow.id}
+          labelHint={`${softDeleteRow.category} / ${softDeleteRow.code}`}
+          onClose={() => setSoftDeleteRow(null)}
+          onDeleted={() => { void qc.invalidateQueries({ queryKey: ['lookups'] }); }}
+        />
+      )}
     </Card>
   );
 }

@@ -196,6 +196,25 @@ RecurringJob.AddOrUpdate<MemberNotificationsScanService>(
     methodCall: x => x.ScanOnceAsync(),
     cronExpression: Cron.Daily(6, 0));
 
+// Daily at 03:00 UTC: drain expired soft-deletes. Gated by Jobs:AutoPurge:Enabled
+// (default false). The first release of the destructive-delete feature lives with
+// manual purges only - operators use the Trash UI's "Purge now" button. Flip the
+// flag on once we've observed a clean week of manual operations + the audit trail
+// confirms nothing is being purged that shouldn't be.
+if (builder.Configuration.GetValue<bool>("Jobs:AutoPurge:Enabled"))
+{
+    RecurringJob.AddOrUpdate<Jamaat.Application.Admin.IDeletionService>(
+        recurringJobId: "superadmin-auto-purge-expired",
+        methodCall: x => x.PurgeExpiredAsync(default),
+        cronExpression: Cron.Daily(3, 0));
+}
+else
+{
+    // Make sure a stale recurring-job row from a previous "enabled" deploy doesn't keep
+    // firing after we flip the flag back off. Idempotent if the row doesn't exist.
+    Hangfire.RecurringJob.RemoveIfExists("superadmin-auto-purge-expired");
+}
+
 app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {

@@ -71,6 +71,7 @@ const MasterDataPage = lazy(() => import('../features/admin/MasterDataPage').the
 const IntegrationsPage = lazy(() => import('../features/admin/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })));
 const AuditPage = lazy(() => import('../features/admin/AuditPage').then((m) => ({ default: m.AuditPage })));
 const ErrorLogsPage = lazy(() => import('../features/admin/error-logs/ErrorLogsPage').then((m) => ({ default: m.ErrorLogsPage })));
+const TrashPage = lazy(() => import('../features/admin/trash/TrashPage').then((m) => ({ default: m.TrashPage })));
 const NotificationLogPage = lazy(() => import('../features/admin/notifications/NotificationLogPage').then((m) => ({ default: m.NotificationLogPage })));
 const AdministrationPage = lazy(() => import('../features/admin/AdministrationPage').then((m) => ({ default: m.AdministrationPage })));
 const ReliabilityDashboard = lazy(() => import('../features/admin/reliability/ReliabilityDashboard').then((m) => ({ default: m.ReliabilityDashboard })));
@@ -255,6 +256,7 @@ export function App() {
         <Route path="admin/integrations" element={<Gate anyOf={['admin.integration']}><IntegrationsPage /></Gate>} />
         <Route path="admin/audit" element={<Gate anyOf={['admin.audit']}><AuditPage /></Gate>} />
         <Route path="admin/error-logs" element={<Gate anyOf={['admin.errorlogs']}><ErrorLogsPage /></Gate>} />
+        <Route path="admin/trash" element={<Gate anyOf={['admin.delete.master', 'admin.restore', 'admin.purge.now']}><TrashPage /></Gate>} />
         <Route path="admin/notifications" element={<Gate anyOf={['admin.audit']}><NotificationLogPage /></Gate>} />
         <Route path="admin/reliability" element={<Gate anyOf={['admin.reliability']}><ReliabilityDashboard /></Gate>} />
         <Route path="admin/change-requests" element={<Gate anyOf={['member.changes.approve']}><ChangeRequestsPage /></Gate>} />

@@ -17,6 +17,7 @@ import {
   DatabaseOutlined,
   ApiOutlined,
   BugOutlined,
+  DeleteOutlined,
   UserSwitchOutlined,
   BellOutlined,
   SearchOutlined,
@@ -167,6 +168,8 @@ export function AppLayout() {
     if (any('admin.audit')) adm.push({ key: '/admin/audit', icon: <SafetyOutlined />, label: t('nav.audit') });
     if (any('admin.errorlogs'))
       adm.push({ key: '/admin/error-logs', icon: <BugOutlined />, label: t('nav.errorLogs') });
+    if (any('admin.delete.master', 'admin.restore', 'admin.purge.now'))
+      adm.push({ key: '/admin/trash', icon: <DeleteOutlined />, label: 'Trash' });
     if (any('admin.audit'))
       adm.push({ key: '/admin/notifications', icon: <BellOutlined />, label: 'Notifications' });
     if (any('admin.reliability'))
@@ -440,7 +443,7 @@ function resolveActiveKey(path: string): string {
   const known = [
     '/dashboards', '/dashboard', '/members', '/families', '/events', '/commitments', '/fund-enrollments', '/qarzan-hasana',
     '/receipts', '/cheques', '/vouchers', '/ledger', '/reports', '/accounting', '/help',
-    '/admin/users', '/admin/master-data', '/admin/integrations', '/admin/audit', '/admin/error-logs', '/admin/notifications', '/admin/reliability', '/admin/cms', '/admin/applications',
+    '/admin/users', '/admin/master-data', '/admin/integrations', '/admin/audit', '/admin/error-logs', '/admin/trash', '/admin/notifications', '/admin/reliability', '/admin/cms', '/admin/applications',
     '/admin',
   ];
   return known.find((k) => path === k || path.startsWith(k + '/')) ?? '/dashboard';
