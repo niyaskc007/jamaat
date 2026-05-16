@@ -139,6 +139,9 @@ public sealed class UsersController(
             foreach (var c in claims.Where(x => x.Type == "permission"))
                 await userMgr.AddClaimAsync(user, new Claim("permission", c.Value));
         }
+        // Stamp UserType so the SPA's post-login redirect + portal/operator switchers
+        // have the right answer from the first login forward.
+        await RecomputeUserTypeAsync(user, dto.Roles.ToHashSet());
         return Ok(user.Id);
     }
 
@@ -157,7 +160,36 @@ public sealed class UsersController(
         var desired = dto.Roles.ToHashSet();
         foreach (var r in existing.Except(desired)) await userMgr.RemoveFromRoleAsync(u, r);
         foreach (var r in desired.Except(existing)) await userMgr.AddToRoleAsync(u, r);
+
+        // Recompute UserType from the now-current role set. Without this the user's
+        // userType claim stays stale until the next startup-time ReconcileUserTypesAsync,
+        // which would have hidden the "Switch to operator dashboard" affordance and
+        // misrouted the post-login landing for users whose roles were just changed here.
+        await RecomputeUserTypeAsync(u, desired);
         return NoContent();
+    }
+
+    /// Sets <c>ApplicationUser.UserType</c> from the supplied role set. Member-role
+    /// only -> Member; any operator role only -> Operator; both -> Hybrid. Used by
+    /// Create + Update + the per-role Add/Remove endpoints so role edits made in the
+    /// admin UI propagate to the userType claim atomically. Idempotent: re-running
+    /// with the same roles is a no-op.
+    private async Task RecomputeUserTypeAsync(ApplicationUser u, IReadOnlySet<string> roles)
+    {
+        var hasMember = roles.Contains("Member");
+        var hasOperator = roles.Any(r => !string.Equals(r, "Member", StringComparison.Ordinal));
+        var resolved = (hasMember, hasOperator) switch
+        {
+            (true, true)   => UserType.Hybrid,
+            (true, false)  => UserType.Member,
+            (false, true)  => UserType.Operator,
+            _              => u.UserType, // no roles at all - leave whatever was there
+        };
+        if (u.UserType != resolved)
+        {
+            u.UserType = resolved;
+            await userMgr.UpdateAsync(u);
+        }
     }
 
     [HttpPost("{id:guid}/reset-password")]

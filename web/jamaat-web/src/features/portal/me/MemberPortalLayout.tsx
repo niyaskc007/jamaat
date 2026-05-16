@@ -159,15 +159,15 @@ export function MemberPortalLayout() {
                 items: [
                   { key: 'profile', icon: <UserOutlined />, label: t('menu.profile'), onClick: () => navigate('/portal/me/profile') },
                   { key: 'change-pw', icon: <LockOutlined />, label: t('menu.changePassword'), onClick: () => navigate('/change-password?returnTo=/portal/me') },
-                  // Show the "Switch to operator dashboard" entry to anyone who has
-                  // operator-side perms: Hybrid users always do, and so does an Operator
-                  // who got into the portal via portal.access (the relaxed redirect gate
-                  // above). Pure Members have no operator perms so they never see it.
-                  // Gate uses member.view as the canonical operator-presence indicator -
-                  // every operator persona in the seed (Counter / Accountant / Approver /
-                  // EventCoordinator / Auditor) holds it.
-                  ...((userType !== 'Member'
-                       && (user?.permissions ?? []).some((p) => p.toLowerCase() === 'member.view')) ? [
+                  // Show "Switch to operator dashboard" to anyone holding member.view -
+                  // every seeded operator persona (Counter / Accountant / Approver /
+                  // EventCoordinator / Auditor) has it. Earlier this also gated on
+                  // `userType !== 'Member'`, but the userType claim is only re-derived
+                  // at app startup via ReconcileUserTypesAsync; a member who was JUST
+                  // granted an operator role still showed userType=Member in their JWT
+                  // and the switcher stayed hidden. Permission claims are the
+                  // authoritative gate; userType is a hint, not authority.
+                  ...((user?.permissions ?? []).some((p) => p.toLowerCase() === 'member.view') ? [
                     { type: 'divider' as const },
                     {
                       key: 'switch-operator',
