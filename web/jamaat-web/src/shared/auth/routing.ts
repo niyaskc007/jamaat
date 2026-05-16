@@ -1,13 +1,17 @@
 import type { AuthUser } from './authStore';
 
-/// Decide where a freshly-logged-in user should land. Drives off the new `userType`
-/// claim once it's present; falls back to permission-shape inference for tokens issued
-/// before the 2026-05 migration. Operator-side `from` (e.g. a returnTo URL after a 401
-/// redirect) wins for operators and hybrids; members are always sent to /portal/me
-/// because returnTo into an admin URL would land them on a permission-denied screen.
+/// Decide where a freshly-logged-in user should land. Gates on permission claims
+/// rather than the userType hint: a user with no operator-side perm (member.view)
+/// goes straight to /portal/me; everyone else gets the operator-side default
+/// (the `from` returnTo URL after a 401 redirect, falling back to /dashboard).
+///
+/// Why perms not userType: the userType claim is server-stamped at login time
+/// and at role-change time, but a user whose JWT is still the pre-flip version
+/// would otherwise be misrouted. Perms in the JWT are the actual capability
+/// truth; userType is a routing hint that can lag.
 export function defaultLandingFor(user: AuthUser, from: string): string {
-  const type = resolveUserType(user);
-  if (type === 'Member') return '/portal/me';
+  const hasOperatorPerm = (user.permissions ?? []).some((p) => p.toLowerCase() === 'member.view');
+  if (!hasOperatorPerm) return '/portal/me';
   return from && from !== '/login' ? from : '/dashboard';
 }
 

@@ -161,6 +161,28 @@ public sealed class UsersController(
         foreach (var r in existing.Except(desired)) await userMgr.RemoveFromRoleAsync(u, r);
         foreach (var r in desired.Except(existing)) await userMgr.AddToRoleAsync(u, r);
 
+        // Copy the newly-added roles' permission claims onto the user. Identity stamps
+        // role-claims at provisioning time; without this step, a role added through the
+        // admin UI doesn't grant its perms to the user until either (a) they re-login
+        // (the JWT issuer reads role claims), or (b) the next startup reconcile fires.
+        // Mirror the same per-claim copy Create already does so role grants take effect
+        // on the next request the user makes, not the next deploy.
+        var existingUserPerms = (await userMgr.GetClaimsAsync(u))
+            .Where(c => c.Type == "permission")
+            .Select(c => c.Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var roleName in desired.Except(existing))
+        {
+            var role = await roleMgr.FindByNameAsync(roleName);
+            if (role is null) continue;
+            var roleClaims = await roleMgr.GetClaimsAsync(role);
+            foreach (var c in roleClaims.Where(x => x.Type == "permission"))
+            {
+                if (existingUserPerms.Add(c.Value))
+                    await userMgr.AddClaimAsync(u, new Claim("permission", c.Value));
+            }
+        }
+
         // Recompute UserType from the now-current role set. Without this the user's
         // userType claim stays stale until the next startup-time ReconcileUserTypesAsync,
         // which would have hidden the "Switch to operator dashboard" affordance and

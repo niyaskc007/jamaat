@@ -64,13 +64,19 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // A pure Member who lands on an operator route (deep link, refresh after type
-  // flip, leftover bookmark) has no business in the operator chrome - every
-  // panel will 403 and the user will think the app is broken. Mirror the
-  // MemberPortalLayout->Operator redirect: send Members straight to /portal/me.
-  // Hybrid users (Member + Operator both) DO need operator access here, so the
-  // check uses the strict "Member" string only.
-  if (user && resolveUserType(user) === 'Member') {
+  // A user with no operator capability has no business in the operator chrome -
+  // every panel will 403 and the app looks broken. Bounce them to /portal/me.
+  //
+  // Gate uses the perm claim `member.view` rather than the resolveUserType()
+  // hint: a member who just got an operator role added (admin flipped roles in
+  // the UI) still carries the stale userType='Member' in their JWT until they
+  // re-login, but their perm claims already include member.view. Gating on
+  // userType would re-route them to /portal/me even though they have legitimate
+  // operator access - the redirect loop you'd see when clicking "Switch to
+  // operator dashboard" from the portal. Perms are authoritative; userType is
+  // a routing hint, not the access gate.
+  const hasOperatorPerm = (user?.permissions ?? []).some((p) => p.toLowerCase() === 'member.view');
+  if (user && !hasOperatorPerm) {
     return <Navigate to="/portal/me" replace />;
   }
   // Below `lg` (992px) the Sider becomes a fixed-position drawer that overlays
