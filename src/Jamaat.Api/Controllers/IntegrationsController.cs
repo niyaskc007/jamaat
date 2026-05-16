@@ -6,6 +6,7 @@ using Jamaat.Infrastructure.Identity;
 using Jamaat.Infrastructure.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace Jamaat.Api.Controllers;
@@ -107,6 +108,41 @@ public sealed class IntegrationsController(
         if (string.IsNullOrWhiteSpace(ip)) return BadRequest(new { error = "ip_required" });
         var hit = await geoIface.LookupAsync(ip, ct);
         return Ok(new { ip, country = hit?.Country, city = hit?.City, found = hit is not null });
+    }
+
+    /// One-shot backfill of LoginAttempt rows captured BEFORE the geolocation DB became
+    /// available. Iterates rows with non-null IP + null GeoCountry, runs the active lookup,
+    /// and saves the enriched country/city. Capped at <paramref name="max"/> rows so a giant
+    /// historical table doesn't tie up the connection. Returns counts so the admin can re-run
+    /// until processed=0.
+    [HttpPost("geolocation/backfill")]
+    public async Task<IActionResult> BackfillGeolocation(
+        [FromServices] Jamaat.Infrastructure.Persistence.JamaatDbContext db,
+        [FromQuery] int max = 500,
+        CancellationToken ct = default)
+    {
+        if (!geoIface.IsConfigured)
+            return BadRequest(new { error = "geo_not_configured", detail = "Upload a MaxMind .mmdb first." });
+
+        var batch = Math.Clamp(max, 1, 5000);
+        var rows = await db.LoginAttempts
+            .Where(r => r.IpAddress != null && r.GeoCountry == null)
+            .OrderByDescending(r => r.AttemptedAtUtc)
+            .Take(batch)
+            .ToListAsync(ct);
+
+        var enriched = 0;
+        foreach (var r in rows)
+        {
+            var hit = await geoIface.LookupAsync(r.IpAddress, ct);
+            if (hit is null) continue;
+            r.EnrichGeo(hit.Country, hit.City);
+            enriched++;
+        }
+        if (enriched > 0) await db.SaveChangesAsync(ct);
+        var remaining = await db.LoginAttempts
+            .CountAsync(r => r.IpAddress != null && r.GeoCountry == null, ct);
+        return Ok(new { processed = rows.Count, enriched, remaining });
     }
 
     /// Upload a fresh MaxMind GeoLite2 database. Accepts either a raw .mmdb file or the official

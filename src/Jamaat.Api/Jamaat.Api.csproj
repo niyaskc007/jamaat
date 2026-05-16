@@ -33,4 +33,16 @@
     <ProjectReference Include="..\Jamaat.Contracts\Jamaat.Contracts.csproj" />
   </ItemGroup>
 
+  <!--
+    Include the MaxMind GeoLite2 .mmdb files (if a developer has dropped them under
+    src/Jamaat.Api/Maxmind locally) in the publish output. The files themselves are NOT
+    tracked in git (licensed binaries, ~3 MB each, change weekly) but bundling them at
+    publish time means clean=true zipdeploys to Azure don't wipe the geolocation database
+    out from under us. The admin upload endpoint at /api/v1/integrations/geolocation/upload
+    remains the canonical way to refresh the DB at runtime without a redeploy.
+  -->
+  <ItemGroup>
+    <Content Include="Maxmind\**\*.mmdb" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+
 </Project>
