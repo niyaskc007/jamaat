@@ -170,6 +170,8 @@ export function AppLayout() {
       adm.push({ key: '/admin/error-logs', icon: <BugOutlined />, label: t('nav.errorLogs') });
     if (any('admin.delete.master', 'admin.restore', 'admin.purge.now'))
       adm.push({ key: '/admin/trash', icon: <DeleteOutlined />, label: 'Trash' });
+    if (any('admin.delete.transaction', 'admin.delete.approve'))
+      adm.push({ key: '/admin/transaction-deletions', icon: <SafetyOutlined />, label: 'Pending deletions' });
     if (any('admin.audit'))
       adm.push({ key: '/admin/notifications', icon: <BellOutlined />, label: 'Notifications' });
     if (any('admin.reliability'))
@@ -443,7 +445,7 @@ function resolveActiveKey(path: string): string {
   const known = [
     '/dashboards', '/dashboard', '/members', '/families', '/events', '/commitments', '/fund-enrollments', '/qarzan-hasana',
     '/receipts', '/cheques', '/vouchers', '/ledger', '/reports', '/accounting', '/help',
-    '/admin/users', '/admin/master-data', '/admin/integrations', '/admin/audit', '/admin/error-logs', '/admin/trash', '/admin/notifications', '/admin/reliability', '/admin/cms', '/admin/applications',
+    '/admin/users', '/admin/master-data', '/admin/integrations', '/admin/audit', '/admin/error-logs', '/admin/trash', '/admin/transaction-deletions', '/admin/notifications', '/admin/reliability', '/admin/cms', '/admin/applications',
     '/admin',
   ];
   return known.find((k) => path === k || path.startsWith(k + '/')) ?? '/dashboard';

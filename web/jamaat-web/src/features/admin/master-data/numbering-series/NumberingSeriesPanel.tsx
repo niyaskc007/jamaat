@@ -10,6 +10,7 @@ import { extractProblem } from '../../../../shared/api/client';
 import { NumberingScopeLabel } from '../shared';
 import { numberingSeriesApi, type NumberingSeries, type NumberingSeriesQuery } from './numberingSeriesApi';
 import { NumberingSeriesFormDrawer } from './NumberingSeriesFormDrawer';
+import { useSuperAdminDelete } from '../../trash/useSuperAdminDelete';
 
 export function NumberingSeriesPanel() {
   const qc = useQueryClient();
@@ -19,6 +20,11 @@ export function NumberingSeriesPanel() {
   const [search, setSearch] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<NumberingSeries | null>(null);
+  const sa = useSuperAdminDelete<NumberingSeries>({
+    entityType: 'NumberingSeries',
+    invalidateKey: ['numberingSeries'],
+    labelFor: (r) => `${r.name} (${r.prefix})`,
+  });
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['numberingSeries', query],
@@ -57,6 +63,7 @@ export function NumberingSeriesPanel() {
             label: row.isActive ? 'Deactivate' : 'Already inactive', disabled: !row.isActive,
             onClick: () => modal.confirm({ title: 'Deactivate series?', okButtonProps: { danger: true }, onOk: () => deleteMut.mutateAsync(row.id) }),
           },
+          ...sa.menuItemFor(row),
         ];
         return <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight"><Button type="text" icon={<MoreOutlined />} /></Dropdown>;
       },
@@ -100,6 +107,7 @@ export function NumberingSeriesPanel() {
         />
       </Card>
       <NumberingSeriesFormDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} entity={editing} />
+      {sa.modal}
     </>
   );
 }

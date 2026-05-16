@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { extractProblem } from '../../../../shared/api/client';
 import { formatDateTime } from '../../../../shared/format/format';
 import { fundCategoriesApi, FundCategoryKindLabel, type FundCategory, type FundCategoryKind, type FundSubCategory } from './fundCategoriesApi';
+import { useSuperAdminDelete } from '../../trash/useSuperAdminDelete';
 
 /// Master-data panel for the new admin-managed fund classification.
 /// Two tabs:
@@ -29,6 +30,11 @@ function CategoriesTab() {
   const { data, isLoading } = useQuery({ queryKey: ['fund-categories'], queryFn: () => fundCategoriesApi.list() });
   const [editing, setEditing] = useState<FundCategory | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const sa = useSuperAdminDelete<FundCategory>({
+    entityType: 'FundCategory',
+    invalidateKey: ['fund-categories'],
+    labelFor: (r) => `${r.code} - ${r.name}`,
+  });
 
   const remove = useMutation({
     mutationFn: (id: string) => fundCategoriesApi.remove(id),
@@ -58,7 +64,7 @@ function CategoriesTab() {
             { title: 'Subs', dataIndex: 'subCategoryCount', width: 80, align: 'right', render: (v: number) => <span className="jm-tnum">{v}</span> },
             { title: 'Status', dataIndex: 'isActive', width: 100, render: (a: boolean) => a ? <Tag color="green" style={{ margin: 0 }}>Active</Tag> : <Tag style={{ margin: 0 }}>Inactive</Tag> },
             { title: 'Created', dataIndex: 'createdAtUtc', width: 180, render: (v: string) => formatDateTime(v) },
-            { title: '', key: 'a', width: 110, render: (_, row) => (
+            { title: '', key: 'a', width: 150, render: (_, row) => (
               <Space size={4}>
                 <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(row)} />
                 <Button size="small" icon={<DeleteOutlined />} danger
@@ -70,6 +76,11 @@ function CategoriesTab() {
                     okText: 'Delete', okButtonProps: { danger: true },
                     onOk: () => remove.mutateAsync(row.id),
                   })} />
+                {sa.canSoftDelete && (
+                  <Button size="small" icon={<DeleteOutlined />} danger
+                    title="SuperAdmin delete (with impact preview + 30-day retention)"
+                    onClick={() => sa.trigger(row)}>SA</Button>
+                )}
               </Space>
             ) },
           ]}
@@ -79,6 +90,7 @@ function CategoriesTab() {
 
       <CategoryModal open={createOpen} onClose={() => setCreateOpen(false)} />
       <CategoryModal open={!!editing} onClose={() => setEditing(null)} entity={editing} />
+      {sa.modal}
     </>
   );
 }
@@ -128,6 +140,11 @@ function SubCategoriesTab() {
   const subs = useQuery({ queryKey: ['fund-sub-categories'], queryFn: () => fundCategoriesApi.listSubs() });
   const [editing, setEditing] = useState<FundSubCategory | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const sa = useSuperAdminDelete<FundSubCategory>({
+    entityType: 'FundSubCategory',
+    invalidateKey: ['fund-sub-categories'],
+    labelFor: (r) => `${r.code} - ${r.name}`,
+  });
 
   const remove = useMutation({
     mutationFn: (id: string) => fundCategoriesApi.removeSub(id),
@@ -157,7 +174,7 @@ function SubCategoriesTab() {
             { title: 'Description', dataIndex: 'description', render: (v?: string | null) => v ?? <span style={{ color: 'var(--jm-gray-400)' }}>-</span> },
             { title: 'Fund types', dataIndex: 'fundTypeCount', width: 110, align: 'right', render: (v: number) => <span className="jm-tnum">{v}</span> },
             { title: 'Status', dataIndex: 'isActive', width: 100, render: (a: boolean) => a ? <Tag color="green" style={{ margin: 0 }}>Active</Tag> : <Tag style={{ margin: 0 }}>Inactive</Tag> },
-            { title: '', key: 'a', width: 110, render: (_, row) => (
+            { title: '', key: 'a', width: 150, render: (_, row) => (
               <Space size={4}>
                 <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(row)} />
                 <Button size="small" icon={<DeleteOutlined />} danger
@@ -168,6 +185,11 @@ function SubCategoriesTab() {
                     okText: 'Delete', okButtonProps: { danger: true },
                     onOk: () => remove.mutateAsync(row.id),
                   })} />
+                {sa.canSoftDelete && (
+                  <Button size="small" icon={<DeleteOutlined />} danger
+                    title="SuperAdmin delete (impact preview + 30-day retention)"
+                    onClick={() => sa.trigger(row)}>SA</Button>
+                )}
               </Space>
             ) },
           ]}
@@ -177,6 +199,7 @@ function SubCategoriesTab() {
 
       <SubCategoryModal open={createOpen} onClose={() => setCreateOpen(false)} categories={cats.data ?? []} />
       <SubCategoryModal open={!!editing} onClose={() => setEditing(null)} entity={editing} categories={cats.data ?? []} />
+      {sa.modal}
     </>
   );
 }

@@ -11,6 +11,7 @@ import { paymentModeFlagsToLabels } from '../shared';
 import { fundTypesApi, FundCategoryLabel, FundCategoryColor, type FundType, type FundTypeQuery, type FundCategory } from './fundTypesApi';
 import { FundTypeFormDrawer } from './FundTypeFormDrawer';
 import { CustomFieldsDrawer } from './CustomFieldsDrawer';
+import { useSuperAdminDelete } from '../../trash/useSuperAdminDelete';
 
 export function FundTypesPanel() {
   const qc = useQueryClient();
@@ -21,6 +22,11 @@ export function FundTypesPanel() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<FundType | null>(null);
   const [customFieldsFor, setCustomFieldsFor] = useState<FundType | null>(null);
+  const sa = useSuperAdminDelete<FundType>({
+    entityType: 'FundType',
+    invalidateKey: ['fundTypes'],
+    labelFor: (r) => `${r.code} - ${r.nameEnglish}`,
+  });
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['fundTypes', query],
@@ -114,6 +120,7 @@ export function FundTypesPanel() {
               onOk: () => deleteMut.mutateAsync(row.id),
             }),
           },
+          ...sa.menuItemFor(row),
         ];
         return <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight"><Button type="text" icon={<MoreOutlined />} /></Dropdown>;
       },
@@ -187,6 +194,7 @@ export function FundTypesPanel() {
       <FundTypeFormDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} fundType={editing} />
       <CustomFieldsDrawer open={!!customFieldsFor} onClose={() => setCustomFieldsFor(null)}
         fundTypeId={customFieldsFor?.id ?? null} fundTypeCode={customFieldsFor?.code} />
+      {sa.modal}
     </>
   );
 }

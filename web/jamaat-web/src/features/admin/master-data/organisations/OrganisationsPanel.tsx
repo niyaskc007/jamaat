@@ -5,6 +5,7 @@ import { PlusOutlined, SearchOutlined, ReloadOutlined, EditOutlined, DeleteOutli
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { organisationsApi, type Organisation } from '../../../organisations/organisationsApi';
 import { extractProblem } from '../../../../shared/api/client';
+import { useSuperAdminDelete } from '../../trash/useSuperAdminDelete';
 
 export function OrganisationsPanel() {
   const qc = useQueryClient();
@@ -13,6 +14,11 @@ export function OrganisationsPanel() {
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Organisation | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const sa = useSuperAdminDelete<Organisation>({
+    entityType: 'Organisation',
+    invalidateKey: ['orgs'],
+    labelFor: (r) => `${r.code} - ${r.name}`,
+  });
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['orgs', page, search],
@@ -40,6 +46,7 @@ export function OrganisationsPanel() {
           { type: 'divider' },
           { key: 'del', icon: <DeleteOutlined />, danger: true, label: 'Deactivate',
             onClick: () => modal.confirm({ title: 'Deactivate organisation?', onOk: () => delMut.mutateAsync(row.id) }) },
+          ...sa.menuItemFor(row),
         ];
         return <Dropdown menu={{ items }} trigger={['click']}><Button type="text" icon={<MoreOutlined />} /></Dropdown>;
       }
@@ -60,6 +67,7 @@ export function OrganisationsPanel() {
         pagination={{ current: page, pageSize: 25, total: data?.total ?? 0 }}
         locale={{ emptyText: <Empty image={<HeartOutlined style={{ fontSize: 40, color: 'var(--jm-gray-300)' }} />} description="No organisations yet" /> }} />
       <OrganisationDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} org={editing} />
+      {sa.modal}
     </Card>
   );
 }

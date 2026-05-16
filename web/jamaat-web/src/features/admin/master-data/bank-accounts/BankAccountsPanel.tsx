@@ -9,6 +9,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { extractProblem } from '../../../../shared/api/client';
 import { bankAccountsApi, type BankAccount, type BankAccountQuery } from './bankAccountsApi';
 import { BankAccountFormDrawer } from './BankAccountFormDrawer';
+import { useSuperAdminDelete } from '../../trash/useSuperAdminDelete';
 
 export function BankAccountsPanel() {
   const qc = useQueryClient();
@@ -18,6 +19,11 @@ export function BankAccountsPanel() {
   const [search, setSearch] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<BankAccount | null>(null);
+  const sa = useSuperAdminDelete<BankAccount>({
+    entityType: 'BankAccount',
+    invalidateKey: ['bankAccounts'],
+    labelFor: (r) => `${r.name} / ${r.bankName}`,
+  });
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['bankAccounts', query],
@@ -58,6 +64,7 @@ export function BankAccountsPanel() {
             label: row.isActive ? 'Deactivate' : 'Already inactive', disabled: !row.isActive,
             onClick: () => modal.confirm({ title: 'Deactivate bank account?', okButtonProps: { danger: true }, onOk: () => deleteMut.mutateAsync(row.id) }),
           },
+          ...sa.menuItemFor(row),
         ];
         return <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight"><Button type="text" icon={<MoreOutlined />} /></Dropdown>;
       },
@@ -101,6 +108,7 @@ export function BankAccountsPanel() {
         />
       </Card>
       <BankAccountFormDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} entity={editing} />
+      {sa.modal}
     </>
   );
 }

@@ -11,6 +11,7 @@ import { extractProblem } from '../../shared/api/client';
 import { receiptsApi, PaymentModeLabel, ReceiptStatusLabel, type ReceiptStatus, type Receipt, type PaymentMode } from './receiptsApi';
 import { useAuth } from '../../shared/auth/useAuth';
 import { bankAccountsApi } from '../admin/master-data/bank-accounts/bankAccountsApi';
+import { transactionDeletionApi } from '../admin/trash/transactionDeletionApi';
 
 export function ReceiptDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,6 +25,7 @@ export function ReceiptDetailPage() {
   const canApprove = hasPermission('receipt.approve');
   const canReturn = hasPermission('receipt.return');
   const canReturnEarly = hasPermission('receipt.return.early');
+  const canRequestDeletion = hasPermission('admin.delete.transaction');
   const [returnOpen, setReturnOpen] = useState(false);
   const { data, isLoading, isError } = useQuery({
     queryKey: ['receipt', id], queryFn: () => receiptsApi.get(id!),
@@ -47,6 +49,13 @@ export function ReceiptDetailPage() {
       void qc.invalidateQueries({ queryKey: ['receipts'] });
     },
     onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to reverse'),
+  });
+  // SuperAdmin two-person deletion: filed for a second approver to act on. Distinct from
+  // Reverse - this also retires the document with a 30-day retention window.
+  const requestDeletionMut = useMutation({
+    mutationFn: (reason: string) => transactionDeletionApi.request('Receipt', id!, reason),
+    onSuccess: () => message.success('Deletion request filed. A second SuperAdmin must approve at /admin/transaction-deletions.'),
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to file deletion request'),
   });
   const approveMut = useMutation({
     mutationFn: () => receiptsApi.approve(id!),
@@ -311,6 +320,17 @@ export function ReceiptDetailPage() {
                   onClick={() => promptReason(modal, 'Reverse receipt', 'Reason for reversal', (r) => reverseMut.mutate(r))}
                 >
                   Reverse receipt
+                </Button>
+              )}
+              {canRequestDeletion && (
+                <Button
+                  danger
+                  icon={<StopOutlined />}
+                  disabled={data.status !== 2 || requestDeletionMut.isPending}
+                  loading={requestDeletionMut.isPending}
+                  onClick={() => promptReason(modal, 'Request deletion (SuperAdmin)', 'Reason - visible to the second approver and logged. Min 10 chars.', (r) => requestDeletionMut.mutate(r))}
+                >
+                  Request deletion
                 </Button>
               )}
             </Space>

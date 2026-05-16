@@ -75,6 +75,7 @@ public class JamaatDbContext : IdentityDbContext<ApplicationUser, ApplicationRol
     public DbSet<CmsBlock> CmsBlocks => Set<CmsBlock>();
     public DbSet<MemberApplication> MemberApplications => Set<MemberApplication>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+    public DbSet<TransactionDeletionRequest> TransactionDeletionRequests => Set<TransactionDeletionRequest>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

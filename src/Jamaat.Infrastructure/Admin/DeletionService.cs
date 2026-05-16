@@ -75,10 +75,14 @@ public sealed class DeletionService(
 
     public IReadOnlyList<string> SupportedEntityTypes { get; } = new[]
     {
+        // Phase 1 master data
         "Lookup", "Sector", "SubSector", "Organisation",
         "FundType", "FundCategory", "FundSubCategory",
         "BankAccount", "ExpenseType", "NumberingSeries",
         "QhScheme", "AgreementTemplate",
+        // Phase 2 identity. Transactions (Receipt/Voucher) are NOT in this list - they
+        // go through the two-person SuperAdminTransactionDeletionService instead.
+        "Member", "Family",
     };
 
     public async Task<Result<DeletionImpactDto>> ImpactAsync(string entityType, Guid id, CancellationToken ct = default)
@@ -118,6 +122,9 @@ public sealed class DeletionService(
         entity.DeletedByUserId = actorId;
         entity.DeletionReason = reason.Trim();
         entity.RetentionUntilUtc = now + RetentionWindow;
+        // Member carries a legacy IsDeleted bool that pre-dates ISoftDeletable. Keep both
+        // in sync for the one-release deprecation window (RULES.md §34 additive-migration).
+        if (entity is Member memberToDelete) memberToDelete.IsDeleted = true;
 
         // Cascade children (e.g. SubSectors for a Sector). They share the same
         // RetentionUntilUtc so a restore brings the whole tree back.
@@ -150,6 +157,7 @@ public sealed class DeletionService(
         entity.DeletedByUserId = null;
         entity.DeletionReason = null;
         entity.RetentionUntilUtc = null;
+        if (entity is Member memberToRestore) memberToRestore.IsDeleted = false;
         foreach (var child in await LoadCascadeChildrenAsync(entityType, id, ct, includeDeleted: true))
         {
             child.DeletedAtUtc = null;
@@ -257,6 +265,8 @@ public sealed class DeletionService(
         "NumberingSeries"   => await db.NumberingSeries.IgnoreQueryFilters().Where(x => x.Id == id).Select(x => x.Name + " (" + x.Prefix + ")").FirstOrDefaultAsync(ct),
         "QhScheme"          => await db.QhSchemes.IgnoreQueryFilters().Where(x => x.Id == id).Select(x => x.Code + " - " + x.Name).FirstOrDefaultAsync(ct),
         "AgreementTemplate" => await db.CommitmentAgreementTemplates.IgnoreQueryFilters().Where(x => x.Id == id).Select(x => x.Code + " - " + x.Name).FirstOrDefaultAsync(ct),
+        "Member"            => await db.Members.IgnoreQueryFilters().Where(x => x.Id == id).Select(x => x.FullName + " (" + x.ItsNumber.Value + ")").FirstOrDefaultAsync(ct),
+        "Family"            => await db.Families.IgnoreQueryFilters().Where(x => x.Id == id).Select(x => x.Code + " - " + x.FamilyName).FirstOrDefaultAsync(ct),
         _ => null,
     };
 
@@ -275,6 +285,8 @@ public sealed class DeletionService(
         "NumberingSeries"   => await db.NumberingSeries.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == id, ct),
         "QhScheme"          => await db.QhSchemes.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == id, ct),
         "AgreementTemplate" => await db.CommitmentAgreementTemplates.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == id, ct),
+        "Member"            => await db.Members.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == id, ct),
+        "Family"            => await db.Families.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == id, ct),
         _ => null,
     };
 
@@ -294,6 +306,8 @@ public sealed class DeletionService(
         "NumberingSeries"   => await db.NumberingSeries.FirstOrDefaultAsync(x => x.Id == id, ct),
         "QhScheme"          => await db.QhSchemes.FirstOrDefaultAsync(x => x.Id == id, ct),
         "AgreementTemplate" => await db.CommitmentAgreementTemplates.FirstOrDefaultAsync(x => x.Id == id, ct),
+        "Member"            => await db.Members.FirstOrDefaultAsync(x => x.Id == id, ct),
+        "Family"            => await db.Families.FirstOrDefaultAsync(x => x.Id == id, ct),
         _ => null,
     };
 
@@ -335,6 +349,52 @@ public sealed class DeletionService(
                     .CountAsync(f => f.FundCategoryId == id && f.DeletedAtUtc == null, ct);
                 if (fundTypesInCategory > 0) lines.Add(new("fund-type", fundTypesInCategory,
                     $"{fundTypesInCategory} live fund type(s) classify under this category."));
+                break;
+
+            case "Member":
+                // Active financial obligations that would break audit/repayment trails.
+                var memberActiveCommits = await db.Commitments.IgnoreQueryFilters()
+                    .CountAsync(c => c.MemberId == id && c.Status != CommitmentStatus.Cancelled, ct);
+                if (memberActiveCommits > 0) lines.Add(new("active-commitment", memberActiveCommits,
+                    $"{memberActiveCommits} non-cancelled commitment(s) belong to this member."));
+
+                var memberActiveLoans = await db.QarzanHasanaLoans.IgnoreQueryFilters()
+                    .CountAsync(l => l.MemberId == id
+                        && l.Status != QarzanHasanaStatus.Cancelled
+                        && l.Status != QarzanHasanaStatus.Rejected
+                        && l.Status != QarzanHasanaStatus.Completed, ct);
+                if (memberActiveLoans > 0) lines.Add(new("active-qh-loan", memberActiveLoans,
+                    $"{memberActiveLoans} non-terminal Qarzan Hasana loan(s) belong to this member."));
+
+                var memberAsGuarantor = await db.QarzanHasanaLoans.IgnoreQueryFilters()
+                    .CountAsync(l => (l.Guarantor1MemberId == id || l.Guarantor2MemberId == id)
+                        && l.Status != QarzanHasanaStatus.Cancelled
+                        && l.Status != QarzanHasanaStatus.Rejected
+                        && l.Status != QarzanHasanaStatus.Completed, ct);
+                if (memberAsGuarantor > 0) lines.Add(new("active-qh-guarantor", memberAsGuarantor,
+                    $"{memberAsGuarantor} active QH loan(s) list this member as a guarantor. Replace the guarantor before deleting."));
+
+                var memberActiveEnrollments = await db.FundEnrollments.IgnoreQueryFilters()
+                    .CountAsync(e => e.MemberId == id && e.Status != FundEnrollmentStatus.Cancelled, ct);
+                if (memberActiveEnrollments > 0) lines.Add(new("active-enrollment", memberActiveEnrollments,
+                    $"{memberActiveEnrollments} non-cancelled fund enrollment(s) belong to this member."));
+
+                var memberPendingConsents = await db.QarzanHasanaGuarantorConsents.IgnoreQueryFilters()
+                    .CountAsync(c => c.GuarantorMemberId == id && c.Status == QhGuarantorConsentStatus.Pending, ct);
+                if (memberPendingConsents > 0) lines.Add(new("pending-consent", memberPendingConsents,
+                    $"{memberPendingConsents} pending guarantor-consent request(s) await this member's response."));
+                // Historical receipts/vouchers are intentionally NOT listed: they live in the ledger
+                // post-soft-delete (the member name + ITS snapshot is preserved on the receipt row
+                // itself, so audit reads stay intact). Listing them as an "informational" blocker
+                // muddied the UX - admins can see the member's history on the Member page already.
+                break;
+
+            case "Family":
+                // Active members in the family block deletion - delete or reassign them first.
+                var familyActiveMembers = await db.Members.IgnoreQueryFilters()
+                    .CountAsync(m => m.FamilyId == id && !m.IsDeleted, ct);
+                if (familyActiveMembers > 0) lines.Add(new("active-member", familyActiveMembers,
+                    $"{familyActiveMembers} active member(s) belong to this family. Reassign or delete them first."));
                 break;
 
             // Phase 1 minimal: other entities have no hand-wired blockers; SQL FK
@@ -425,6 +485,14 @@ public sealed class DeletionService(
                                     .Select(x => new TrashRowDto(entityType, x.Id, x.Code + " - " + x.Name,
                                         x.DeletedAtUtc!.Value, x.DeletedByUserId, null, x.DeletionReason, x.RetentionUntilUtc))
                                     .ToListAsync(ct),
+            "Member"            => await db.Members.IgnoreQueryFilters().Where(x => x.DeletedAtUtc != null)
+                                    .Select(x => new TrashRowDto(entityType, x.Id, x.FullName + " (" + x.ItsNumber.Value + ")",
+                                        x.DeletedAtUtc!.Value, x.DeletedByUserId, null, x.DeletionReason, x.RetentionUntilUtc))
+                                    .ToListAsync(ct),
+            "Family"            => await db.Families.IgnoreQueryFilters().Where(x => x.DeletedAtUtc != null)
+                                    .Select(x => new TrashRowDto(entityType, x.Id, x.Code + " - " + x.FamilyName,
+                                        x.DeletedAtUtc!.Value, x.DeletedByUserId, null, x.DeletionReason, x.RetentionUntilUtc))
+                                    .ToListAsync(ct),
             _ => new List<TrashRowDto>(),
         };
 
@@ -450,6 +518,8 @@ public sealed class DeletionService(
         "NumberingSeries"   => await db.NumberingSeries.IgnoreQueryFilters().Where(x => x.DeletedAtUtc != null && x.RetentionUntilUtc != null && x.RetentionUntilUtc < now).Select(x => x.Id).ToListAsync(ct),
         "QhScheme"          => await db.QhSchemes.IgnoreQueryFilters().Where(x => x.DeletedAtUtc != null && x.RetentionUntilUtc != null && x.RetentionUntilUtc < now).Select(x => x.Id).ToListAsync(ct),
         "AgreementTemplate" => await db.CommitmentAgreementTemplates.IgnoreQueryFilters().Where(x => x.DeletedAtUtc != null && x.RetentionUntilUtc != null && x.RetentionUntilUtc < now).Select(x => x.Id).ToListAsync(ct),
+        "Member"            => await db.Members.IgnoreQueryFilters().Where(x => x.DeletedAtUtc != null && x.RetentionUntilUtc != null && x.RetentionUntilUtc < now).Select(x => x.Id).ToListAsync(ct),
+        "Family"            => await db.Families.IgnoreQueryFilters().Where(x => x.DeletedAtUtc != null && x.RetentionUntilUtc != null && x.RetentionUntilUtc < now).Select(x => x.Id).ToListAsync(ct),
         _ => new List<Guid>(),
     };
 

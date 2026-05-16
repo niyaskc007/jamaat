@@ -2,7 +2,7 @@ using Jamaat.Domain.Common;
 
 namespace Jamaat.Domain.Entities;
 
-public sealed class Family : AggregateRoot<Guid>, ITenantScoped, IAuditable
+public sealed class Family : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISoftDeletable
 {
     private Family() { }
 
@@ -36,6 +36,11 @@ public sealed class Family : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
+
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
 
     public void UpdateDetails(string familyName, string? phone, string? email, string? address, string? notes)
     {

@@ -3,7 +3,7 @@ using Jamaat.Domain.Enums;
 
 namespace Jamaat.Domain.Entities;
 
-public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
+public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISoftDeletable
 {
     private readonly List<ReceiptLine> _lines = [];
 
@@ -106,6 +106,11 @@ public sealed class Receipt : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
+
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
 
     public IReadOnlyCollection<ReceiptLine> Lines => _lines.AsReadOnly();
 

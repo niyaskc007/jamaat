@@ -7,6 +7,7 @@ import { extractProblem } from '../../../../shared/api/client';
 import { money } from '../../../../shared/format/format';
 import { expenseTypesApi, type ExpenseType } from './expenseTypesApi';
 import { accountsApi } from '../chart-of-accounts/accountsApi';
+import { useSuperAdminDelete } from '../../trash/useSuperAdminDelete';
 
 export function ExpenseTypesPanel() {
   const qc = useQueryClient();
@@ -15,6 +16,11 @@ export function ExpenseTypesPanel() {
   const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseType | null>(null);
+  const sa = useSuperAdminDelete<ExpenseType>({
+    entityType: 'ExpenseType',
+    invalidateKey: ['expenseTypes'],
+    labelFor: (r) => `${r.code} - ${r.name}`,
+  });
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['expenseTypes', page, search],
@@ -53,6 +59,7 @@ export function ExpenseTypesPanel() {
           { key: 'edit', icon: <EditOutlined />, label: 'Edit', onClick: () => { setEditing(row); setDrawerOpen(true); } },
           { key: 'delete', icon: <DeleteOutlined />, danger: true, label: row.isActive ? 'Deactivate' : 'Already inactive', disabled: !row.isActive,
             onClick: () => modal.confirm({ title: 'Deactivate?', okButtonProps: { danger: true }, onOk: () => deleteMut.mutateAsync(row.id) }) },
+          ...sa.menuItemFor(row),
         ];
         return <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight"><Button type="text" icon={<MoreOutlined />} /></Dropdown>;
       } },
@@ -77,6 +84,7 @@ export function ExpenseTypesPanel() {
       <ExpenseTypeDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} et={editing}
         accounts={accountsQuery.data?.items ?? []}
         onSaved={() => { void qc.invalidateQueries({ queryKey: ['expenseTypes'] }); }} message={message} />
+      {sa.modal}
     </>
   );
 }

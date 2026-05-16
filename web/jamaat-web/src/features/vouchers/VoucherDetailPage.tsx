@@ -14,6 +14,7 @@ import { extractProblem } from '../../shared/api/client';
 import { vouchersApi, PaymentModeLabel, VoucherStatusLabel, type VoucherStatus } from './vouchersApi';
 import { useAuth } from '../../shared/auth/useAuth';
 import { ledgerApi } from '../ledger/ledgerApi';
+import { transactionDeletionApi } from '../admin/trash/transactionDeletionApi';
 
 /// Voucher detail page (uplifted UX) - mirrors the CommitmentDetailPage pattern:
 /// header KPIs + 2-col main + lines table + ledger impact + sticky-feeling action bar.
@@ -27,6 +28,7 @@ export function VoucherDetailPage() {
   const canApprove = hasPermission('voucher.approve');
   const canCancel = hasPermission('voucher.cancel');
   const canReverse = hasPermission('voucher.reverse');
+  const canRequestDeletion = hasPermission('admin.delete.transaction');
 
   const approveMut = useMutation({
     mutationFn: () => vouchersApi.approve(id!),
@@ -42,6 +44,11 @@ export function VoucherDetailPage() {
     mutationFn: (reason: string) => vouchersApi.reverse(id!, reason),
     onSuccess: () => { message.success('Voucher reversed.'); void qc.invalidateQueries({ queryKey: ['voucher', id] }); void qc.invalidateQueries({ queryKey: ['vouchers'] }); },
     onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to reverse'),
+  });
+  const requestDeletionMut = useMutation({
+    mutationFn: (reason: string) => transactionDeletionApi.request('Voucher', id!, reason),
+    onSuccess: () => message.success('Deletion request filed. A second SuperAdmin must approve at /admin/transaction-deletions.'),
+    onError: (e) => message.error(extractProblem(e).detail ?? 'Failed to file deletion request'),
   });
   const { data, isLoading, isError } = useQuery({ queryKey: ['voucher', id], queryFn: () => vouchersApi.get(id!), enabled: !!id });
 
@@ -330,7 +337,7 @@ export function VoucherDetailPage() {
         )}
       </Card>
 
-      {(canApprove || canCancel || canReverse) && (
+      {(canApprove || canCancel || canReverse || canRequestDeletion) && (
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           {canApprove && (
             <Button type="primary" icon={<CheckCircleFilled />} loading={approveMut.isPending}
@@ -351,6 +358,13 @@ export function VoucherDetailPage() {
               disabled={data.status !== 4 || reverseMut.isPending}
               onClick={() => promptReason(modal, 'Reverse voucher', 'Reason for reversal', (r) => reverseMut.mutate(r))}>
               Reverse
+            </Button>
+          )}
+          {canRequestDeletion && (
+            <Button danger icon={<StopOutlined />} loading={requestDeletionMut.isPending}
+              disabled={data.status !== 4 || requestDeletionMut.isPending}
+              onClick={() => promptReason(modal, 'Request deletion (SuperAdmin)', 'Reason - visible to the second approver and logged. Min 10 chars.', (r) => requestDeletionMut.mutate(r))}>
+              Request deletion
             </Button>
           )}
         </div>

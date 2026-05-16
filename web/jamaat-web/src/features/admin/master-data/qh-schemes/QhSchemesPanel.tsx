@@ -5,6 +5,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, BankOutlined } from '@ant-d
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { extractProblem } from '../../../../shared/api/client';
 import { qhSchemesApi, type QhScheme, type CreateQhScheme, type UpdateQhScheme } from './qhSchemesApi';
+import { useSuperAdminDelete } from '../../trash/useSuperAdminDelete';
 
 /// Admin master-data CRUD for Qarzan Hasana schemes. Replaces the legacy
 /// two-value enum so a Jamaat can author 10+ schemes (with one level of
@@ -17,6 +18,11 @@ export function QhSchemesPanel() {
   const { data, isLoading } = useQuery({ queryKey: ['qh-schemes'], queryFn: () => qhSchemesApi.list(true) });
   const [editing, setEditing] = useState<QhScheme | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const sa = useSuperAdminDelete<QhScheme>({
+    entityType: 'QhScheme',
+    invalidateKey: ['qh-schemes'],
+    labelFor: (r) => `${r.code} - ${r.name}`,
+  });
 
   // Top-level schemes only (no parent). Used to populate the parent picker on
   // create/edit and to derive an indented display order for the table.
@@ -75,7 +81,7 @@ export function QhSchemesPanel() {
       render: (v: boolean) => v ? <Tag color="green">Active</Tag> : <Tag color="default">Inactive</Tag>,
     },
     {
-      title: '', key: 'actions', width: 110, align: 'right',
+      title: '', key: 'actions', width: 150, align: 'right',
       render: (_, r) => (
         <Space size="small">
           <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(r)} aria-label="Edit" />
@@ -85,6 +91,11 @@ export function QhSchemesPanel() {
               content: 'Hard-delete only works if no loans exist under this scheme and it has no subcategories. Toggle inactive otherwise.',
               okType: 'danger', okText: 'Delete', onOk: () => remove.mutate(r.id),
             })} aria-label="Delete" />
+          {sa.canSoftDelete && (
+            <Button size="small" danger icon={<DeleteOutlined />}
+              title="SuperAdmin delete (impact preview + 30-day retention)"
+              onClick={() => sa.trigger(r)}>SA</Button>
+          )}
         </Space>
       ),
     },
@@ -119,6 +130,7 @@ export function QhSchemesPanel() {
           onClose={() => { setCreateOpen(false); setEditing(null); }}
         />
       )}
+      {sa.modal}
     </>
   );
 }

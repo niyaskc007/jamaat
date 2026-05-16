@@ -7,12 +7,18 @@ import { agreementTemplatesApi, type AgreementTemplate } from '../../../commitme
 import { fundTypesApi } from '../fund-types/fundTypesApi';
 import { extractProblem } from '../../../../shared/api/client';
 import { formatDate } from '../../../../shared/format/format';
+import { useSuperAdminDelete } from '../../trash/useSuperAdminDelete';
 
 export function AgreementTemplatesPanel() {
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState({ page: 1, pageSize: 25 });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<AgreementTemplate | null>(null);
+  const sa = useSuperAdminDelete<AgreementTemplate>({
+    entityType: 'AgreementTemplate',
+    invalidateKey: ['agreement-templates'],
+    labelFor: (r) => `${r.code} - ${r.name}`,
+  });
 
   const qc = useQueryClient();
   const { message, modal } = AntdApp.useApp();
@@ -68,6 +74,7 @@ export function AgreementTemplatesPanel() {
               onOk: () => removeMut.mutateAsync(row.id),
             }),
           },
+          ...sa.menuItemFor(row),
         ];
         return <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight"><Button type="text" icon={<MoreOutlined />} /></Dropdown>;
       },
@@ -123,6 +130,7 @@ export function AgreementTemplatesPanel() {
         template={editing}
         placeholders={placeholdersQ.data ?? []}
       />
+      {sa.modal}
     </Card>
   );
 }

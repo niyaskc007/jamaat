@@ -40,3 +40,44 @@ public sealed record TrashRowDto(
     string? DeletedByUserName,
     string? DeletionReason,
     DateTimeOffset? RetentionUntilUtc);
+
+// -----------------------------------------------------------------------
+// Two-person Transaction (Receipt / Voucher) deletion. The two-step flow lives in a
+// separate request/approval workflow rather than the generic /admin/soft-delete path
+// because a single SuperAdmin must NOT be able to wipe a posted financial document.
+// -----------------------------------------------------------------------
+
+/// Body for POST /admin/transaction-deletion-requests. Caller picks a target
+/// (Receipt or Voucher) and provides a reason.
+public sealed record RequestTransactionDeletionDto(
+    /// "Receipt" or "Voucher". Validated server-side.
+    string TargetType,
+    Guid TargetId,
+    /// Required, min 10 chars. Visible to the second approver and on the audit row.
+    string Reason);
+
+/// Body for POST /admin/transaction-deletion-requests/{id}/approve. The optional note
+/// is appended to the audit trail alongside the original reason.
+public sealed record ApproveTransactionDeletionDto(string? Note);
+
+/// Body for POST /admin/transaction-deletion-requests/{id}/reject. The note explains
+/// to the requester why the deletion was rejected; min 10 chars.
+public sealed record RejectTransactionDeletionDto(string Note);
+
+/// View of a pending or terminal-state transaction-deletion request. Powers both the
+/// inbox list and the per-request detail view.
+public sealed record TransactionDeletionRequestDto(
+    Guid Id,
+    string TargetType,
+    Guid TargetId,
+    string TargetCode,
+    string Status,
+    string Reason,
+    Guid? RequesterUserId,
+    string RequesterUserName,
+    DateTimeOffset RequestedAtUtc,
+    DateTimeOffset ExpiresAtUtc,
+    Guid? ApproverUserId,
+    string? ApproverUserName,
+    DateTimeOffset? ApprovedAtUtc,
+    string? DecisionNote);

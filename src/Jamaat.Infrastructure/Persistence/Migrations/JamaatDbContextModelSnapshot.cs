@@ -1285,6 +1285,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("FamilyItsNumber")
                         .HasMaxLength(8)
                         .HasColumnType("nvarchar(8)");
@@ -1307,6 +1316,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("TanzeemFileNo")
                         .HasMaxLength(32)
@@ -3636,6 +3648,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<string>("CustomFieldsJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("DrawnOnBank")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -3709,6 +3730,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<string>("Remarks")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("ReversalReason")
                         .HasMaxLength(500)
@@ -4147,6 +4171,84 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.ToTable("Tenant", "dbo");
                 });
 
+            modelBuilder.Entity("Jamaat.Domain.Entities.TransactionDeletionRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ApprovedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ApproverUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ApproverUserName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("RequestedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("RequesterUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RequesterUserName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TargetCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("TargetType")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("TenantId", "Status");
+
+                    b.HasIndex("TenantId", "TargetType", "TargetId", "Status");
+
+                    b.ToTable("TransactionDeletionRequest", "admin");
+                });
+
             modelBuilder.Entity("Jamaat.Domain.Entities.TransactionLabel", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4315,6 +4417,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("nvarchar(3)");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("DrawnOnBank")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -4364,6 +4475,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<string>("Remarks")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("ReversalReason")
                         .HasMaxLength(500)

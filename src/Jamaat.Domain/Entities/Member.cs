@@ -181,8 +181,9 @@ public sealed class Member : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISo
 
     // Legacy bool kept in sync with DeletedAtUtc.HasValue for one release per RULES.md §34
     // (additive-migration rule). New code reads DeletedAtUtc.HasValue; this column will be
-    // dropped in a follow-up migration.
-    public bool IsDeleted { get; private set; }
+    // dropped in a follow-up migration. Public setter so the cross-cutting SuperAdmin
+    // DeletionService can keep both flags in sync without a per-entity domain method.
+    public bool IsDeleted { get; set; }
 
     // ISoftDeletable. Public setters because SoftDeleteService is the cross-cutting mutator
     // and EF needs them for column mapping. The domain-level SoftDelete() method below is

@@ -26,6 +26,7 @@ import { useAuth } from '../../shared/auth/useAuth';
 import { api } from '../../shared/api/client';
 import { downloadServerXlsx } from '../../shared/export/server';
 import { ImportDialog } from '../../shared/export/ImportDialog';
+import { useSuperAdminDelete } from '../admin/trash/useSuperAdminDelete';
 
 const VerificationLabel: Record<VerificationStatus, string> = { 0: 'Not started', 1: 'Pending', 2: 'Verified', 3: 'Rejected' };
 const VerificationColor: Record<VerificationStatus, string> = { 0: 'default', 1: 'gold', 2: 'green', 3: 'red' };
@@ -62,6 +63,17 @@ export function MembersPage() {
     mutationFn: (id: string) => membersApi.remove(id),
     onSuccess: () => { message.success('Member deactivated'); void qc.invalidateQueries({ queryKey: ['members'] }); },
     onError: (err) => { const p = extractProblem(err); message.error(p.detail ?? 'Failed to deactivate'); },
+  });
+
+  // SuperAdmin destructive-delete: distinct from the Deactivate above. Deactivate just flips
+  // MemberStatus; this soft-deletes the row entirely (hidden from the directory, 30d retention,
+  // restore-able from /admin/trash). Gated by admin.delete.identity so a regular member.update
+  // admin doesn't accidentally see the option.
+  const sa = useSuperAdminDelete<Member>({
+    entityType: 'Member',
+    invalidateKey: ['members'],
+    labelFor: (r) => `${r.fullName} (${r.itsNumber})`,
+    permission: 'admin.delete.identity',
   });
 
   const columns: TableProps<Member>['columns'] = useMemo(() => [
@@ -139,6 +151,7 @@ export function MembersPage() {
               });
             },
           },
+          ...sa.menuItemFor(row),
         ];
         return (
           <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight">
@@ -339,6 +352,7 @@ export function MembersPage() {
           <span style={{ color: 'var(--jm-danger)' }}>Failed to load members: {(error as Error).message}</span>
         </Card>
       )}
+      {sa.modal}
     </div>
   );
 }

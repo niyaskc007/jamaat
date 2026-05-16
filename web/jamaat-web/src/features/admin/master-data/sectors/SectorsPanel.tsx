@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { sectorsApi, subSectorsApi, type Sector, type SubSector } from '../../../sectors/sectorsApi';
 import { MemberPicker } from '../../../families/FamilyFormDrawer';
 import { extractProblem } from '../../../../shared/api/client';
+import { useSuperAdminDelete } from '../../trash/useSuperAdminDelete';
 
 export function SectorsPanel() {
   const [tab, setTab] = useState<'sectors' | 'sub'>('sectors');
@@ -27,6 +28,11 @@ function SectorsList() {
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Sector | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const sa = useSuperAdminDelete<Sector>({
+    entityType: 'Sector',
+    invalidateKey: ['sectors'],
+    labelFor: (r) => `${r.code} - ${r.name}`,
+  });
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['sectors', page, search],
@@ -56,6 +62,7 @@ function SectorsList() {
           { type: 'divider' },
           { key: 'del', icon: <DeleteOutlined />, danger: true, label: 'Deactivate',
             onClick: () => modal.confirm({ title: 'Deactivate sector?', onOk: () => delMut.mutateAsync(row.id) }) },
+          ...sa.menuItemFor(row),
         ];
         return <Dropdown menu={{ items }} trigger={['click']}><Button type="text" icon={<MoreOutlined />} /></Dropdown>;
       }
@@ -77,6 +84,7 @@ function SectorsList() {
         locale={{ emptyText: <Empty image={<HomeOutlined style={{ fontSize: 40, color: 'var(--jm-gray-300)' }} />} description="No sectors yet" /> }}
       />
       <SectorDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} sector={editing} />
+      {sa.modal}
     </Card>
   );
 }
@@ -136,6 +144,11 @@ function SubSectorsList() {
   const [sectorFilter, setSectorFilter] = useState<string>();
   const [editing, setEditing] = useState<SubSector | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const sa = useSuperAdminDelete<SubSector>({
+    entityType: 'SubSector',
+    invalidateKey: ['subs'],
+    labelFor: (r) => `${r.code} - ${r.name}`,
+  });
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['subs', page, search, sectorFilter],
@@ -166,6 +179,7 @@ function SubSectorsList() {
           { type: 'divider' },
           { key: 'del', icon: <DeleteOutlined />, danger: true, label: 'Deactivate',
             onClick: () => modal.confirm({ title: 'Deactivate sub-sector?', onOk: () => delMut.mutateAsync(row.id) }) },
+          ...sa.menuItemFor(row),
         ] }} trigger={['click']}><Button type="text" icon={<MoreOutlined />} /></Dropdown>
       )
     },
@@ -186,6 +200,7 @@ function SubSectorsList() {
         onChange={(p) => setPage(p.current ?? 1)}
         pagination={{ current: page, pageSize: 25, total: data?.total ?? 0 }} />
       <SubSectorDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} sub={editing} sectors={sectorsQ.data?.items ?? []} />
+      {sa.modal}
     </Card>
   );
 }
