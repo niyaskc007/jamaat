@@ -6,7 +6,7 @@ namespace Jamaat.Domain.Entities;
 /// A geographic/community grouping within a Jamaat (e.g., HATEMI sector).
 /// Each sector has a male and female incharge.
 /// </summary>
-public sealed class Sector : AggregateRoot<Guid>, ITenantScoped, IAuditable
+public sealed class Sector : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISoftDeletable
 {
     private Sector() { }
 
@@ -34,6 +34,11 @@ public sealed class Sector : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
 
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
+
     public void Update(string name, Guid? maleInchargeMemberId, Guid? femaleInchargeMemberId, string? notes, bool isActive)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Name required.", nameof(name));
@@ -45,7 +50,7 @@ public sealed class Sector : AggregateRoot<Guid>, ITenantScoped, IAuditable
     }
 }
 
-public sealed class SubSector : AggregateRoot<Guid>, ITenantScoped, IAuditable
+public sealed class SubSector : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISoftDeletable
 {
     private SubSector() { }
 
@@ -74,6 +79,11 @@ public sealed class SubSector : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
+
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
 
     public void Update(string name, Guid? maleInchargeMemberId, Guid? femaleInchargeMemberId, string? notes, bool isActive)
     {

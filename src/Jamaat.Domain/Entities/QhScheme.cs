@@ -18,7 +18,7 @@ namespace Jamaat.Domain.Entities;
 /// column has been added and is the source of truth for new loans. The seeder
 /// backfills SchemeId on existing rows from the int Scheme value.
 /// </remarks>
-public sealed class QhScheme : AggregateRoot<Guid>, ITenantScoped, IAuditable
+public sealed class QhScheme : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISoftDeletable
 {
     private QhScheme() { }
 
@@ -64,6 +64,11 @@ public sealed class QhScheme : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
+
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
 
     public void Update(string name, string? description, Guid? parentSchemeId, bool requiresGoldCollateral, int sortOrder, bool isActive, int legacySchemeValue)
     {

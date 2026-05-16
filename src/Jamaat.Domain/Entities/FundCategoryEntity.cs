@@ -13,7 +13,7 @@ namespace Jamaat.Domain.Entities;
 /// Named with the <c>Entity</c> suffix to avoid colliding with the existing <see cref="FundCategory"/> enum
 /// during the transition. Once the enum is fully retired (a later migration), this can be renamed.
 /// </remarks>
-public sealed class FundCategoryEntity : AggregateRoot<Guid>, ITenantScoped, IAuditable
+public sealed class FundCategoryEntity : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISoftDeletable
 {
     private FundCategoryEntity() { }
 
@@ -42,6 +42,11 @@ public sealed class FundCategoryEntity : AggregateRoot<Guid>, ITenantScoped, IAu
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
+
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
 
     public void Update(string name, FundCategoryKind kind, string? description, int sortOrder, bool isActive)
     {

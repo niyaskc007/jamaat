@@ -184,6 +184,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("nvarchar(3)");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Ifsc")
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
@@ -195,6 +204,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("SwiftCode")
                         .HasMaxLength(32)
@@ -473,6 +485,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid?>("FundTypeId")
                         .HasColumnType("uniqueidentifier");
 
@@ -491,6 +512,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
@@ -1186,6 +1210,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("DebitAccountId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -1200,6 +1233,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("RequiresApproval")
                         .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
@@ -1417,6 +1453,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -1431,6 +1476,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
@@ -1554,6 +1602,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -1568,6 +1625,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
@@ -1619,6 +1679,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("DefaultTemplateId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
@@ -1686,6 +1755,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("RequiresPeriodReference")
                         .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("RulesJson")
                         .HasColumnType("nvarchar(max)");
@@ -1883,6 +1955,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -1898,6 +1979,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
@@ -1989,6 +2073,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Email")
                         .HasMaxLength(200)
@@ -2221,6 +2308,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("RaudatTaheraZiyarat")
                         .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<Guid?>("SectorId")
                         .HasColumnType("uniqueidentifier");
@@ -2680,6 +2770,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateOnly?>("EndDate")
                         .HasColumnType("date");
 
@@ -2695,6 +2794,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("OrganisationId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -2809,6 +2911,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<int>("CurrentYear")
                         .HasColumnType("int");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid?>("FundTypeId")
                         .HasColumnType("uniqueidentifier");
 
@@ -2827,6 +2938,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<int>("Scope")
                         .HasColumnType("int");
@@ -2875,6 +2989,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -2890,6 +3013,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
@@ -3370,6 +3496,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -3396,6 +3531,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<int>("SortOrder")
                         .ValueGeneratedOnAdd()
@@ -3689,6 +3827,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid?>("FemaleInchargeMemberId")
                         .HasColumnType("uniqueidentifier");
 
@@ -3706,6 +3853,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
@@ -3747,6 +3897,15 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid?>("FemaleInchargeMemberId")
                         .HasColumnType("uniqueidentifier");
 
@@ -3764,6 +3923,9 @@ namespace Jamaat.Infrastructure.Persistence.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("RetentionUntilUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<Guid>("SectorId")
                         .HasColumnType("uniqueidentifier");

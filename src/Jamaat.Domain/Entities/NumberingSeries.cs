@@ -6,7 +6,7 @@ namespace Jamaat.Domain.Entities;
 /// Generates sequential numbers for Receipts / Vouchers / Journals.
 /// When assigning a number, the generator must take a SQL UPDLOCK on the row in
 /// the same transaction to avoid gaps or dupes under concurrency.
-public sealed class NumberingSeries : AggregateRoot<Guid>, ITenantScoped, IAuditable
+public sealed class NumberingSeries : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISoftDeletable
 {
     private NumberingSeries() { }
 
@@ -42,6 +42,11 @@ public sealed class NumberingSeries : AggregateRoot<Guid>, ITenantScoped, IAudit
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
+
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
 
     public void Update(string name, string prefix, int padLength, bool yearReset, bool isActive)
     {

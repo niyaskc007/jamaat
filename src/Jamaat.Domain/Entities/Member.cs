@@ -179,9 +179,18 @@ public sealed class Member : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISo
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
 
+    // Legacy bool kept in sync with DeletedAtUtc.HasValue for one release per RULES.md §34
+    // (additive-migration rule). New code reads DeletedAtUtc.HasValue; this column will be
+    // dropped in a follow-up migration.
     public bool IsDeleted { get; private set; }
-    public DateTimeOffset? DeletedAtUtc { get; private set; }
-    public Guid? DeletedByUserId { get; private set; }
+
+    // ISoftDeletable. Public setters because SoftDeleteService is the cross-cutting mutator
+    // and EF needs them for column mapping. The domain-level SoftDelete() method below is
+    // still the preferred entry point for the legacy code paths.
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
 
     // --- Behaviour ---------------------------------------------------------
 

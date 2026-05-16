@@ -1402,6 +1402,26 @@ Jamaat is a community-finance platform that gives your organisation a single, au
         // help articles, FAQ, etc. Reads are anonymous (the login page hits /api/v1/cms/blocks
         // pre-auth) so there is no separate cms.view permission - only the write side is gated.
         "cms.manage",
+        // SuperAdmin destructive-delete perms (Phase 1 of the soft-delete + retention plan).
+        // Held by the SuperAdmin role only by default - regular Administrators can NOT
+        // soft-delete master data / identity / transactions through this surface; they go
+        // through the existing per-feature flows (member.delete, voucher.cancel, etc.).
+        //
+        //   admin.delete.master   - soft-delete a master-data row (Lookup, Sector, FundType, ...)
+        //   admin.delete.identity - soft-delete a Member / Family / ApplicationUser (Phase 2)
+        //   admin.delete.transaction - initiate reverse-and-retire on a Receipt / Voucher (Phase 2)
+        //   admin.delete.approve  - second-approver for transaction reversals (two-person rule)
+        //   admin.restore         - restore a soft-deleted row before its retention deadline
+        //   admin.purge.now       - bypass the 30d retention timer and hard-delete immediately
+        //
+        // Lazy permission policies (PermissionPolicyProvider) make `[Authorize(Policy="admin.delete.master")]`
+        // and friends Just Work without any other wiring.
+        "admin.delete.master",
+        "admin.delete.identity",
+        "admin.delete.transaction",
+        "admin.delete.approve",
+        "admin.restore",
+        "admin.purge.now",
     ];
 
     /// <summary>System-scope permissions. Distinct from <see cref="AllPermissions"/> so that

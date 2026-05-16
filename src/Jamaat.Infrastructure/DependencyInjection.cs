@@ -142,6 +142,7 @@ public static class DependencyInjection
         // Application services
         services.AddScoped<IMemberService, MemberService>();
         services.AddScoped<IErrorLogService, ErrorLogService>();
+        services.AddScoped<Application.Admin.IDeletionService, Admin.DeletionService>();
         services.AddScoped<IFundTypeService, FundTypeService>();
         services.AddScoped<Application.FundCategories.IFundCategoryService, Application.FundCategories.FundCategoryService>();
         services.AddScoped<Application.FundTypes.IFundTypeCustomFieldService, Application.FundTypes.FundTypeCustomFieldService>();

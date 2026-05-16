@@ -7,7 +7,7 @@ namespace Jamaat.Domain.Entities;
 /// (e.g. Permanent Income) carry many distinct schemes (Mohammedi Scheme, Sabil, etc.) without
 /// proliferating top-level categories.
 /// </summary>
-public sealed class FundSubCategory : AggregateRoot<Guid>, ITenantScoped, IAuditable
+public sealed class FundSubCategory : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISoftDeletable
 {
     private FundSubCategory() { }
 
@@ -37,6 +37,11 @@ public sealed class FundSubCategory : AggregateRoot<Guid>, ITenantScoped, IAudit
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
+
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
 
     public void Update(string name, string? description, int sortOrder, bool isActive)
     {

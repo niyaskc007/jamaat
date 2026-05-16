@@ -83,22 +83,50 @@ public class JamaatDbContext : IdentityDbContext<ApplicationUser, ApplicationRol
         // Apply all IEntityTypeConfiguration<> in this assembly
         builder.ApplyConfigurationsFromAssembly(typeof(JamaatDbContext).Assembly);
 
-        // Global tenant query filter on ITenantScoped entities
+        // Global query filters. EF Core 10 allows only ONE HasQueryFilter per entity, so we
+        // pick the right combined filter at model-build time based on the marker interfaces
+        // each entity implements:
+        //   ITenantScoped + ISoftDeletable -> tenant AND not-soft-deleted
+        //   ITenantScoped only             -> tenant only
+        //   ISoftDeletable only            -> not-soft-deleted only
+        // SoftDelete check uses DeletedAtUtc IS NULL rather than the legacy Member.IsDeleted
+        // bool so the filter applies uniformly to every soft-deletable entity.
         foreach (var entityType in builder.Model.GetEntityTypes())
         {
-            if (typeof(ITenantScoped).IsAssignableFrom(entityType.ClrType))
+            var tenant = typeof(ITenantScoped).IsAssignableFrom(entityType.ClrType);
+            var soft = typeof(ISoftDeletable).IsAssignableFrom(entityType.ClrType);
+            if (!tenant && !soft) continue;
+
+            var methodName = (tenant, soft) switch
             {
-                var method = typeof(JamaatDbContext)
-                    .GetMethod(nameof(ApplyTenantFilter), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
-                    .MakeGenericMethod(entityType.ClrType);
-                method.Invoke(this, [builder]);
-            }
+                (true, true)   => nameof(ApplyTenantAndSoftDeleteFilter),
+                (true, false)  => nameof(ApplyTenantFilter),
+                (false, true)  => nameof(ApplySoftDeleteFilter),
+                _              => throw new InvalidOperationException("unreachable"),
+            };
+            var method = typeof(JamaatDbContext)
+                .GetMethod(methodName, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                .MakeGenericMethod(entityType.ClrType);
+            method.Invoke(this, [builder]);
         }
     }
 
     private void ApplyTenantFilter<TEntity>(ModelBuilder builder) where TEntity : class, ITenantScoped
     {
         builder.Entity<TEntity>().HasQueryFilter(e => e.TenantId == _tenant.TenantId);
+    }
+
+    private void ApplyTenantAndSoftDeleteFilter<TEntity>(ModelBuilder builder)
+        where TEntity : class, ITenantScoped, ISoftDeletable
+    {
+        builder.Entity<TEntity>()
+            .HasQueryFilter(e => e.TenantId == _tenant.TenantId && e.DeletedAtUtc == null);
+    }
+
+    private void ApplySoftDeleteFilter<TEntity>(ModelBuilder builder)
+        where TEntity : class, ISoftDeletable
+    {
+        builder.Entity<TEntity>().HasQueryFilter(e => e.DeletedAtUtc == null);
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

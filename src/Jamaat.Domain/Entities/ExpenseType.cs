@@ -2,7 +2,7 @@ using Jamaat.Domain.Common;
 
 namespace Jamaat.Domain.Entities;
 
-public sealed class ExpenseType : AggregateRoot<Guid>, ITenantScoped, IAuditable
+public sealed class ExpenseType : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISoftDeletable
 {
     private ExpenseType() { }
 
@@ -28,6 +28,11 @@ public sealed class ExpenseType : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
+
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
 
     public void Update(string name, string? description, Guid? debitAccountId, bool requiresApproval, decimal? approvalThreshold, bool isActive)
     {

@@ -22,7 +22,7 @@ namespace Jamaat.Domain.Entities;
 ///   {{today}}                date of acceptance
 ///   {{jamaat_name}}          tenant name
 /// </summary>
-public sealed class CommitmentAgreementTemplate : AggregateRoot<Guid>, ITenantScoped, IAuditable
+public sealed class CommitmentAgreementTemplate : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISoftDeletable
 {
     private CommitmentAgreementTemplate() { }
 
@@ -53,6 +53,11 @@ public sealed class CommitmentAgreementTemplate : AggregateRoot<Guid>, ITenantSc
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
+
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
 
     public void Update(string name, string bodyMarkdown, string language, Guid? fundTypeId, bool isDefault, bool isActive)
     {

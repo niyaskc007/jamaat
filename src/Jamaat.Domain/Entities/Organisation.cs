@@ -5,7 +5,7 @@ namespace Jamaat.Domain.Entities;
 /// <summary>
 /// A community organisation or committee (e.g., Shababil Eidz-Zahabi, Tanzeem Committee, Zakereen, Alaqeeq).
 /// </summary>
-public sealed class Organisation : AggregateRoot<Guid>, ITenantScoped, IAuditable
+public sealed class Organisation : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISoftDeletable
 {
     private Organisation() { }
 
@@ -32,6 +32,11 @@ public sealed class Organisation : AggregateRoot<Guid>, ITenantScoped, IAuditabl
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
+
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
 
     public void Update(string name, string? nameArabic, string? category, string? notes, bool isActive)
     {
@@ -75,6 +80,11 @@ public sealed class MemberOrganisationMembership : Entity<Guid>, ITenantScoped, 
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
+
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
 
     public void Update(string role, DateOnly? startDate, DateOnly? endDate, string? notes, bool isActive)
     {

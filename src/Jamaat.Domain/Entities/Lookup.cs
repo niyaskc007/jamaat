@@ -6,7 +6,7 @@ namespace Jamaat.Domain.Entities;
 /// Generic per-tenant lookup list (e.g., SabilType, WajebaatType, NiyazType).
 /// Category groups the entries; Code is unique per (tenant, category).
 /// </summary>
-public sealed class Lookup : AggregateRoot<Guid>, ITenantScoped, IAuditable
+public sealed class Lookup : AggregateRoot<Guid>, ITenantScoped, IAuditable, ISoftDeletable
 {
     private Lookup() { }
 
@@ -36,6 +36,15 @@ public sealed class Lookup : AggregateRoot<Guid>, ITenantScoped, IAuditable
     public Guid? CreatedByUserId { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
     public Guid? UpdatedByUserId { get; private set; }
+
+    // ISoftDeletable. Public set is intentional: SoftDeleteService is the sole authorised
+    // mutator, and EF Core 10 requires public set for column mapping. A future refactor
+    // could push these behind a domain method per entity, but the cross-cutting infra
+    // payoff is small and the boilerplate is large.
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public Guid? DeletedByUserId { get; set; }
+    public string? DeletionReason { get; set; }
+    public DateTimeOffset? RetentionUntilUtc { get; set; }
 
     public void Update(string name, string? nameArabic, int sortOrder, string? notes, bool isActive)
     {
