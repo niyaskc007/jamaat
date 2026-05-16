@@ -110,23 +110,30 @@ public sealed class IntegrationsController(
         return Ok(new { ip, country = hit?.Country, city = hit?.City, found = hit is not null });
     }
 
-    /// One-shot backfill of LoginAttempt rows captured BEFORE the geolocation DB became
-    /// available. Iterates rows with non-null IP + null GeoCountry, runs the active lookup,
-    /// and saves the enriched country/city. Capped at <paramref name="max"/> rows so a giant
-    /// historical table doesn't tie up the connection. Returns counts so the admin can re-run
-    /// until processed=0.
+    /// One-shot backfill of LoginAttempt rows that have non-null IP but missing geo data.
+    /// Default mode (recheckCity=false): picks rows with null GeoCountry - useful right after
+    /// the .mmdb is first uploaded.
+    /// Recheck mode (recheckCity=true): picks rows that have a country but no city - useful
+    /// after upgrading from a Country-only .mmdb to a City .mmdb so historical rows get the
+    /// finer-grained location filled in.
+    /// Capped at <paramref name="max"/> rows per call so a large historical table doesn't tie
+    /// up the connection. Returns counts so the admin can re-run until processed=0.
     [HttpPost("geolocation/backfill")]
     public async Task<IActionResult> BackfillGeolocation(
         [FromServices] Jamaat.Infrastructure.Persistence.JamaatDbContext db,
         [FromQuery] int max = 500,
+        [FromQuery] bool recheckCity = false,
         CancellationToken ct = default)
     {
         if (!geoIface.IsConfigured)
             return BadRequest(new { error = "geo_not_configured", detail = "Upload a MaxMind .mmdb first." });
 
         var batch = Math.Clamp(max, 1, 5000);
-        var rows = await db.LoginAttempts
-            .Where(r => r.IpAddress != null && r.GeoCountry == null)
+        var query = recheckCity
+            ? db.LoginAttempts.Where(r => r.IpAddress != null && r.GeoCity == null)
+            : db.LoginAttempts.Where(r => r.IpAddress != null && r.GeoCountry == null);
+
+        var rows = await query
             .OrderByDescending(r => r.AttemptedAtUtc)
             .Take(batch)
             .ToListAsync(ct);
@@ -136,13 +143,20 @@ public sealed class IntegrationsController(
         {
             var hit = await geoIface.LookupAsync(r.IpAddress, ct);
             if (hit is null) continue;
+            // Only count as enriched when we actually added something new (avoids inflated
+            // counts when the DB has no city info for an IP - we'd otherwise loop forever
+            // re-saving the same null city).
+            var prevCountry = r.GeoCountry;
+            var prevCity = r.GeoCity;
             r.EnrichGeo(hit.Country, hit.City);
-            enriched++;
+            if (r.GeoCountry != prevCountry || r.GeoCity != prevCity) enriched++;
         }
         if (enriched > 0) await db.SaveChangesAsync(ct);
-        var remaining = await db.LoginAttempts
-            .CountAsync(r => r.IpAddress != null && r.GeoCountry == null, ct);
-        return Ok(new { processed = rows.Count, enriched, remaining });
+
+        var remaining = await (recheckCity
+            ? db.LoginAttempts.CountAsync(r => r.IpAddress != null && r.GeoCity == null, ct)
+            : db.LoginAttempts.CountAsync(r => r.IpAddress != null && r.GeoCountry == null, ct));
+        return Ok(new { processed = rows.Count, enriched, remaining, mode = recheckCity ? "recheck-city" : "fill-country" });
     }
 
     /// Upload a fresh MaxMind GeoLite2 database. Accepts either a raw .mmdb file or the official
@@ -157,6 +171,12 @@ public sealed class IntegrationsController(
         var name = file.FileName.ToLowerInvariant();
         var dir = ResolveAbsolute(geoOpts.Value.MaxMindDatabasePath);
         Directory.CreateDirectory(dir);
+
+        // The currently-loaded reader holds an exclusive read handle on its .mmdb file;
+        // an overwrite while it's open fails with "process cannot access the file...".
+        // Release the handle BEFORE writing, then reload after the new file is in place.
+        // Cache is cleared inside Release() so the next lookup goes against the new DB.
+        geoSvc.Release();
 
         try
         {
@@ -177,6 +197,9 @@ public sealed class IntegrationsController(
             }
             else
             {
+                // Re-arm the reader before bailing out so geo lookups keep working
+                // with whatever was there before.
+                geoSvc.Reload();
                 return BadRequest(new { error = "unsupported_format", message = "Upload a .mmdb, .tar.gz or .zip from MaxMind." });
             }
 
@@ -191,6 +214,10 @@ public sealed class IntegrationsController(
         }
         catch (Exception ex)
         {
+            // We released the reader before writing - if the write failed, try to
+            // re-load whatever .mmdb is still on disk so subsequent lookups keep
+            // working with the prior database instead of silently going dark.
+            try { geoSvc.Reload(); } catch { /* best effort */ }
             return StatusCode(500, new { error = "upload_failed", detail = ex.Message });
         }
     }

@@ -87,6 +87,22 @@ public sealed class MaxMindGeolocationService : IGeolocationService, IDisposable
         }
     }
 
+    /// Releases the underlying file handle without re-opening one. Call this BEFORE
+    /// overwriting the .mmdb on disk (e.g. during an admin upload), then call
+    /// <see cref="Reload"/> after the new file is in place. Without this step the
+    /// upload fails with "The process cannot access the file because it is being
+    /// used by another process" - DatabaseReader holds an exclusive read handle for
+    /// the lifetime of the instance.
+    public void Release()
+    {
+        lock (_loadLock)
+        {
+            _reader?.Dispose();
+            _reader = null;
+            _cache.Clear();
+        }
+    }
+
     private void EnsureLoaded()
     {
         if (_reader is not null) return;
