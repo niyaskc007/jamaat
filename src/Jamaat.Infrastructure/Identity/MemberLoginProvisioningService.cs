@@ -77,18 +77,33 @@ public sealed class MemberLoginProvisioningService(
     {
         await EnsureMemberRoleExistsAsync(tenant.TenantId);
 
-        // Compute set of ITS numbers that already have a login.
-        var hasLoginIts = await users.Users.Where(u => u.ItsNumber != null).Select(u => u.ItsNumber!).ToListAsync(ct);
-        var hasLoginSet = new HashSet<string>(hasLoginIts, StringComparer.Ordinal);
+        // Compute set of ITS numbers AND emails that already have a login. The email set
+        // is critical: a Member row with email X may have NO ApplicationUser of its own
+        // but a *different* member already has a user with the same email X. Calling
+        // UserManager.CreateAsync on that second member throws "Email already taken",
+        // which we catch as a warning - but each throw materialises a 25-line stack
+        // trace through Serilog. On staging with 269 Members and dozens of duplicate
+        // emails, the backfill loop took 10+ minutes (purely from exception logging)
+        // and exceeded IIS's startup timeout. Pre-checking both indexes turns a slow
+        // exception path into a fast hash-set hit.
+        var existingUsers = await users.Users.Select(u => new { u.ItsNumber, u.Email }).ToListAsync(ct);
+        var hasLoginSet = new HashSet<string>(existingUsers.Where(u => u.ItsNumber is not null).Select(u => u.ItsNumber!), StringComparer.Ordinal);
+        var takenEmails = new HashSet<string>(existingUsers.Where(u => !string.IsNullOrEmpty(u.Email)).Select(u => u.Email!), StringComparer.OrdinalIgnoreCase);
 
         var members = await db.Members.AsNoTracking()
             .Where(m => !m.IsDeleted)
             .ToListAsync(ct);
 
         var created = 0;
+        var skippedEmailCollision = 0;
         foreach (var m in members)
         {
             if (hasLoginSet.Contains(m.ItsNumber.Value)) continue;
+            if (!string.IsNullOrEmpty(m.Email) && takenEmails.Contains(m.Email))
+            {
+                skippedEmailCollision++;
+                continue;
+            }
             try
             {
                 var r = await ProvisionAsync(m, ct);
@@ -102,6 +117,8 @@ public sealed class MemberLoginProvisioningService(
         }
         if (created > 0)
             logger.LogInformation("Backfilled {Count} member logins", created);
+        if (skippedEmailCollision > 0)
+            logger.LogInformation("Backfill: skipped {Count} member(s) whose email is already used by a different ApplicationUser; manual reconciliation needed.", skippedEmailCollision);
         return created;
     }
 
