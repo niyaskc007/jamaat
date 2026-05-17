@@ -95,13 +95,13 @@ public sealed class MemberLoginProvisioningService(
             .ToListAsync(ct);
 
         var created = 0;
-        var skippedEmailCollision = 0;
+        var skipped = new List<(Guid Id, string Its, string? Email)>();
         foreach (var m in members)
         {
             if (hasLoginSet.Contains(m.ItsNumber.Value)) continue;
             if (!string.IsNullOrEmpty(m.Email) && takenEmails.Contains(m.Email))
             {
-                skippedEmailCollision++;
+                skipped.Add((m.Id, m.ItsNumber.Value, m.Email));
                 continue;
             }
             try
@@ -117,9 +117,46 @@ public sealed class MemberLoginProvisioningService(
         }
         if (created > 0)
             logger.LogInformation("Backfilled {Count} member logins", created);
-        if (skippedEmailCollision > 0)
-            logger.LogInformation("Backfill: skipped {Count} member(s) whose email is already used by a different ApplicationUser; manual reconciliation needed.", skippedEmailCollision);
+        if (skipped.Count > 0)
+        {
+            logger.LogInformation("Backfill: skipped {Count} member(s) whose email is already used by a different ApplicationUser; manual reconciliation needed.", skipped.Count);
+            await RaiseEmailCollisionAlertAsync(skipped, ct);
+        }
         return created;
+    }
+
+    /// One SystemAlert per startup if any Members were skipped during backfill because their
+    /// email already belongs to another ApplicationUser. Fingerprinted so re-firings update
+    /// the existing row (Repeat) rather than spamming a new one each deploy - SuperAdmin sees
+    /// it once on /admin/reliability and can reconcile from the listed members.
+    private async Task RaiseEmailCollisionAlertAsync(IReadOnlyList<(Guid Id, string Its, string? Email)> skipped, CancellationToken ct)
+    {
+        // Detail caps at 4000 chars on the SystemAlert entity; show up to 25 entries inline
+        // and let "+N more" hint at the rest. 25 is a comfortable fit (~100 chars per row).
+        const int maxInline = 25;
+        var inline = string.Join("\n", skipped.Take(maxInline).Select(s => $"  - {s.Its}  {s.Email}  ({s.Id:N})"));
+        var more = skipped.Count > maxInline ? $"\n  ... +{skipped.Count - maxInline} more" : string.Empty;
+        var detail = $"During the post-startup login backfill, {skipped.Count} member(s) were skipped because another ApplicationUser already has their email. " +
+                     $"These members will not be able to sign in until either the colliding user is reassigned or the member's Email is updated to a unique value.\n\n" +
+                     $"Affected (ITS  Email  MemberId):\n{inline}{more}";
+
+        const string fingerprint = "backfill.email.collision";
+        var now = DateTimeOffset.UtcNow;
+        var existing = await db.SystemAlerts.Where(a => a.Fingerprint == fingerprint)
+            .OrderByDescending(a => a.LastSeenAtUtc).FirstOrDefaultAsync(ct);
+
+        var title = $"Member-login backfill skipped {skipped.Count} member(s) due to duplicate emails";
+        if (existing is not null)
+        {
+            existing.Repeat(title, detail, recipientCount: 0, at: now);
+            db.SystemAlerts.Update(existing);
+        }
+        else
+        {
+            db.SystemAlerts.Add(SystemAlert.Open(fingerprint, kind: "data-quality", severity: "Warning",
+                title, detail, recipientCount: 0, at: now));
+        }
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task EnableLoginAsync(Guid userId, CancellationToken ct = default)

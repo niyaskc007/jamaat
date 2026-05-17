@@ -10,6 +10,7 @@ using Jamaat.Domain.Abstractions;
 using Jamaat.Domain.Common;
 using Jamaat.Domain.Entities;
 using Jamaat.Domain.Enums;
+using Jamaat.Infrastructure.Identity;
 using Jamaat.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -95,7 +96,7 @@ public sealed class DeletionService(
 
         var blockers = await ComputeBlockersAsync(entityType, id, ct);
         var cascades = await ComputeCascadesAsync(entityType, id, ct);
-        var redactions = new List<DeletionLine>(); // Phase 2 territory (AuditLog redaction-on-purge)
+        var redactions = await ComputeRedactionsAsync(entityType, id, ct);
 
         return new DeletionImpactDto(entityType, id, label, blockers, cascades, redactions);
     }
@@ -124,7 +125,15 @@ public sealed class DeletionService(
         entity.RetentionUntilUtc = now + RetentionWindow;
         // Member carries a legacy IsDeleted bool that pre-dates ISoftDeletable. Keep both
         // in sync for the one-release deprecation window (RULES.md §34 additive-migration).
-        if (entity is Member memberToDelete) memberToDelete.IsDeleted = true;
+        if (entity is Member memberToDelete)
+        {
+            memberToDelete.IsDeleted = true;
+            // A Member with a linked ApplicationUser shouldn't keep being able to sign in after
+            // SuperAdmin retired them. Pair the soft-delete with IsLoginAllowed=false. Restore
+            // re-enables it. The user row itself stays (so the audit trail of their past
+            // actions stays intact); only the login gate flips.
+            await RevokeLinkedLoginAsync(memberToDelete.ItsNumber.Value, revoke: true, ct);
+        }
 
         // Cascade children (e.g. SubSectors for a Sector). They share the same
         // RetentionUntilUtc so a restore brings the whole tree back.
@@ -157,7 +166,11 @@ public sealed class DeletionService(
         entity.DeletedByUserId = null;
         entity.DeletionReason = null;
         entity.RetentionUntilUtc = null;
-        if (entity is Member memberToRestore) memberToRestore.IsDeleted = false;
+        if (entity is Member memberToRestore)
+        {
+            memberToRestore.IsDeleted = false;
+            await RevokeLinkedLoginAsync(memberToRestore.ItsNumber.Value, revoke: false, ct);
+        }
         foreach (var child in await LoadCascadeChildrenAsync(entityType, id, ct, includeDeleted: true))
         {
             child.DeletedAtUtc = null;
@@ -186,11 +199,24 @@ public sealed class DeletionService(
         // Snapshot for the audit row BEFORE we remove from the context.
         await WriteAuditAsync("purge", entityType, id, entity.DeletionReason ?? "auto-purge", entity, ct);
 
-        // Cascade children first (FK direction).
+        // Cascade ISoftDeletable children first (FK direction). These shared the parent's
+        // soft-delete state and now go with the parent. Today only Sector -> SubSector.
         foreach (var child in await LoadCascadeChildrenAsync(entityType, id, ct, includeDeleted: true))
         {
             db.Remove(child);
         }
+        // Hard-delete-only children: rows that aren't ISoftDeletable but FK-reference the
+        // parent (MemberAsset, FamilyMemberLink, etc.). They never go through the trash;
+        // they live or die with their parent. Loaded fresh here because PurgeAsync is the
+        // only path that has to deal with them.
+        foreach (var child in await LoadPurgeCascadeAsync(entityType, id, ct))
+        {
+            db.Remove(child);
+        }
+        // Redact PII snapshots on rows that survive the purge (audit trail, ledger
+        // history). Plan §3b: keep the row, rewrite name/ITS to "<purged-yyyy-mm-dd>".
+        await RedactSurvivingSnapshotsAsync(entityType, id, ct);
+
         db.Remove((object)entity);
 
         try
@@ -422,12 +448,126 @@ public sealed class DeletionService(
     private async Task<IReadOnlyList<DeletionLine>> ComputeCascadesAsync(string entityType, Guid id, CancellationToken ct)
     {
         var lines = new List<DeletionLine>();
-        if (entityType == "Sector")
+        switch (entityType)
         {
-            var n = await db.SubSectors.IgnoreQueryFilters().CountAsync(x => x.SectorId == id && x.DeletedAtUtc == null, ct);
-            if (n > 0) lines.Add(new("sub-sector", n, $"{n} sub-sector(s) will be soft-deleted alongside this sector."));
+            case "Sector":
+                var subSectors = await db.SubSectors.IgnoreQueryFilters().CountAsync(x => x.SectorId == id && x.DeletedAtUtc == null, ct);
+                if (subSectors > 0) lines.Add(new("sub-sector", subSectors,
+                    $"{subSectors} sub-sector(s) will be soft-deleted alongside this sector."));
+                break;
+
+            case "Member":
+                // Owned-by-member kid tables. They aren't ISoftDeletable - they survive the soft-delete
+                // window (no separate restore concept for a member's asset records, etc.) but get
+                // hard-deleted alongside the Member on purge so no orphan rows survive.
+                var memberAssets = await db.MemberAssets.IgnoreQueryFilters().CountAsync(a => a.MemberId == id, ct);
+                if (memberAssets > 0) lines.Add(new("member-asset", memberAssets,
+                    $"{memberAssets} asset record(s) will be hard-deleted when the member is purged."));
+
+                var memberEducation = await db.MemberEducations.IgnoreQueryFilters().CountAsync(e => e.MemberId == id, ct);
+                if (memberEducation > 0) lines.Add(new("member-education", memberEducation,
+                    $"{memberEducation} education record(s) will be hard-deleted when the member is purged."));
+
+                var memberChangeReqs = await db.MemberChangeRequests.IgnoreQueryFilters().CountAsync(r => r.MemberId == id, ct);
+                if (memberChangeReqs > 0) lines.Add(new("member-change-request", memberChangeReqs,
+                    $"{memberChangeReqs} change-request(s) will be hard-deleted when the member is purged."));
+
+                var pushSubs = await db.PushSubscriptions.IgnoreQueryFilters().CountAsync(p => p.MemberId == id, ct);
+                if (pushSubs > 0) lines.Add(new("push-subscription", pushSubs,
+                    $"{pushSubs} push-notification subscription(s) will be hard-deleted when the member is purged."));
+
+                var orgMemberships = await db.MemberOrganisationMemberships.IgnoreQueryFilters().CountAsync(m => m.MemberId == id, ct);
+                if (orgMemberships > 0) lines.Add(new("org-membership", orgMemberships,
+                    $"{orgMemberships} organisation membership(s) will be hard-deleted when the member is purged."));
+                break;
+
+            case "Family":
+                // FamilyMemberLink rows tie a member into a household; they go when the household goes.
+                var familyLinks = await db.FamilyMemberLinks.IgnoreQueryFilters().CountAsync(l => l.FamilyId == id, ct);
+                if (familyLinks > 0) lines.Add(new("family-member-link", familyLinks,
+                    $"{familyLinks} family-member link(s) will be hard-deleted when the family is purged."));
+                break;
         }
         return lines;
+    }
+
+    /// Hard-delete-only children that FK-reference the parent. Loaded only at purge time -
+    /// during the soft-delete window these rows remain visible in their own queries (a member's
+    /// assets stay browsable so the operator can confirm what they're about to wipe). EF
+    /// cascade is intentionally NOT used in the schema because we want explicit, traceable
+    /// deletion through this code path rather than silent SQL CASCADE behaviour.
+    private async Task<List<object>> LoadPurgeCascadeAsync(string entityType, Guid id, CancellationToken ct)
+    {
+        var list = new List<object>();
+        switch (entityType)
+        {
+            case "Member":
+                list.AddRange(await db.MemberAssets.IgnoreQueryFilters().Where(a => a.MemberId == id).ToListAsync(ct));
+                list.AddRange(await db.MemberEducations.IgnoreQueryFilters().Where(e => e.MemberId == id).ToListAsync(ct));
+                list.AddRange(await db.MemberChangeRequests.IgnoreQueryFilters().Where(r => r.MemberId == id).ToListAsync(ct));
+                list.AddRange(await db.PushSubscriptions.IgnoreQueryFilters().Where(p => p.MemberId == id).ToListAsync(ct));
+                list.AddRange(await db.MemberOrganisationMemberships.IgnoreQueryFilters().Where(m => m.MemberId == id).ToListAsync(ct));
+                break;
+            case "Family":
+                list.AddRange(await db.FamilyMemberLinks.IgnoreQueryFilters().Where(l => l.FamilyId == id).ToListAsync(ct));
+                break;
+        }
+        return list;
+    }
+
+    /// Flip the linked ApplicationUser's IsLoginAllowed in lockstep with the Member's
+    /// soft-delete state. Looked up by ITS rather than relying on an FK because Member.Id
+    /// and ApplicationUser.Id are independent guids (one-to-one is by ITS). Silent no-op
+    /// if the member has no login - that's normal for members who were never provisioned.
+    private async Task RevokeLinkedLoginAsync(string itsNumber, bool revoke, CancellationToken ct)
+    {
+        var user = await db.Users.FirstOrDefaultAsync(u => u.ItsNumber == itsNumber, ct);
+        if (user is null) return;
+        // !revoke == we're restoring -> set IsLoginAllowed = true. revoke == soft-delete -> false.
+        var target = !revoke;
+        if (user.IsLoginAllowed == target) return; // idempotent
+        user.IsLoginAllowed = target;
+        logger.LogInformation("Linked login for ITS {Its}: IsLoginAllowed -> {Target} (Member {Action}).",
+            itsNumber, target, revoke ? "soft-deleted" : "restored");
+    }
+
+    /// Same shape as RedactSurvivingSnapshotsAsync but counts only - for the impact preview's
+    /// "Redactions" bucket. Surfaces in the UI so the SuperAdmin sees "12 receipts will have
+    /// the member name redacted on purge" before they confirm.
+    private async Task<IReadOnlyList<DeletionLine>> ComputeRedactionsAsync(string entityType, Guid id, CancellationToken ct)
+    {
+        var lines = new List<DeletionLine>();
+        if (entityType == "Member")
+        {
+            var receipts = await db.Receipts.IgnoreQueryFilters().CountAsync(r => r.MemberId == id, ct);
+            if (receipts > 0) lines.Add(new("receipt-snapshot", receipts,
+                $"{receipts} historical receipt(s) will keep their ledger entries on purge but have the member's name + ITS replaced with a <purged-YYYY-MM-DD> token."));
+        }
+        return lines;
+    }
+
+    /// Plan §3b: AuditLog / LoginAuditEntry / Receipt-snapshot fields keep their rows on purge
+    /// but get their PII rewritten to "<purged-yyyy-mm-dd>". Today this only handles the
+    /// Receipt.MemberNameSnapshot / Receipt.ItsNumberSnapshot fields - those are the only
+    /// snapshot columns in the schema that carry Member PII. Commitment / QarzanHasanaLoan /
+    /// EventRegistration don't carry name snapshots (they FK to the Member by id; the name
+    /// renders at read time from the live row). After purge those reads will resolve the
+    /// member id to null - the UI shows it as "(deleted)".
+    private async Task RedactSurvivingSnapshotsAsync(string entityType, Guid id, CancellationToken ct)
+    {
+        if (entityType != "Member") return;
+        var token = $"<purged-{clock.UtcNow:yyyy-MM-dd}>";
+        var receipts = await db.Receipts.IgnoreQueryFilters().Where(r => r.MemberId == id).ToListAsync(ct);
+        if (receipts.Count == 0) return;
+        // EF Property() shadow accessor is the only way to write to private setters from
+        // outside the aggregate without adding a domain method just for redaction.
+        foreach (var r in receipts)
+        {
+            db.Entry(r).Property(nameof(Receipt.MemberNameSnapshot)).CurrentValue = token;
+            db.Entry(r).Property(nameof(Receipt.ItsNumberSnapshot)).CurrentValue = token;
+        }
+        logger.LogInformation("Redacted MemberNameSnapshot/ItsNumberSnapshot on {Count} receipt(s) for purged member {MemberId}.",
+            receipts.Count, id);
     }
 
     /// Trash list rows for one entity type.
